@@ -93,13 +93,23 @@ Standardmäßig übernimmt der QA-Agent den Security-Quick-Check. Für sicherhei
 
 Direkt in dieser Session (kein Sub-Agent):
 
-1. **Branch** — Lies `conventions.branch_prefix` aus `project.json`
-2. **Commit** — Gezielt stagen, Conventional Commit:
+1. **Changelog aktualisieren** — Füge einen neuen Eintrag in `CHANGELOG.md` ein (direkt nach dem Kommentar `<!-- Neue Einträge werden hier eingefügt (neueste oben) -->`). Falls die Datei nicht existiert, überspringe diesen Schritt. Format:
+
+   ```markdown
+   ## [T--{NR}] {Ticket-Titel} — {YYYY-MM-DD}
+
+   **Bereiche:** {Backend | Frontend | DB | Shared | Mobile} (kommasepariert)
+
+   {2-4 Sätze: Was wurde geändert und warum. Fokus auf funktionale Änderungen, nicht Implementierungsdetails.}
+   ```
+
+2. **Branch** — Lies `conventions.branch_prefix` aus `project.json`
+3. **Commit** — Gezielt stagen (inkl. `CHANGELOG.md` falls geändert), Conventional Commit:
    `feat(#{ticket}): {englische Beschreibung}`
    `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
-3. **Push** — `git push -u origin {branch}`
-4. **PR** — `gh pr create` mit Summary + Test Plan
-5. **Notion** — Status auf "Ready to Review" setzen (IDs aus `project.json`)
+4. **Push** — `git push -u origin {branch}`
+5. **PR** — `gh pr create` mit Summary + Test Plan
+6. **Notion** — Status auf "Ready to Review" setzen (IDs aus `project.json`)
 
 **NICHT automatisch mergen.** Der PR bleibt offen bis der User ihn freigibt (via `/merge` oder "passt").
 
