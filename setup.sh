@@ -191,6 +191,24 @@ if [ "$MODE" = "update" ]; then
   # Pipeline runner
   diff_file "$FRAMEWORK_DIR/pipeline/run.sh" "$PROJECT_DIR/.pipeline/run.sh" ".pipeline/run.sh"
 
+  # Skills
+  for f in "$FRAMEWORK_DIR/skills/"*.md; do
+    fname=$(basename "$f")
+    diff_file "$f" "$PROJECT_DIR/.claude/skills/$fname" ".claude/skills/$fname"
+  done
+
+  # Check for removed skills
+  if [ -d "$PROJECT_DIR/.claude/skills" ]; then
+    for f in "$PROJECT_DIR/.claude/skills/"*.md; do
+      [ -f "$f" ] || continue
+      fname=$(basename "$f")
+      if [ ! -f "$FRAMEWORK_DIR/skills/$fname" ]; then
+        echo "  - .claude/skills/$fname (removed from framework)"
+        CHANGES=$((CHANGES + 1))
+      fi
+    done
+  fi
+
   # Settings
   diff_file "$FRAMEWORK_DIR/settings.json" "$PROJECT_DIR/.claude/settings.json" ".claude/settings.json"
 
@@ -240,6 +258,21 @@ if [ "$MODE" = "update" ]; then
   fi
   cp "$FRAMEWORK_DIR/commands/"*.md "$PROJECT_DIR/.claude/commands/"
   echo "  ✓ $(ls "$FRAMEWORK_DIR/commands/"*.md | wc -l | tr -d ' ') commands"
+
+  echo "Updating skills..."
+  if [ -d "$PROJECT_DIR/.claude/skills" ]; then
+    for f in "$PROJECT_DIR/.claude/skills/"*.md; do
+      [ -f "$f" ] || continue
+      fname=$(basename "$f")
+      if [ ! -f "$FRAMEWORK_DIR/skills/$fname" ]; then
+        rm "$f"
+        echo "  - $fname removed"
+      fi
+    done
+  fi
+  mkdir -p "$PROJECT_DIR/.claude/skills"
+  cp "$FRAMEWORK_DIR/skills/"*.md "$PROJECT_DIR/.claude/skills/"
+  echo "  ✓ $(ls "$FRAMEWORK_DIR/skills/"*.md | wc -l | tr -d ' ') skills"
 
   echo "Updating pipeline runner..."
   cp "$FRAMEWORK_DIR/pipeline/run.sh" "$PROJECT_DIR/.pipeline/run.sh"
@@ -340,8 +373,11 @@ cp "$FRAMEWORK_DIR/pipeline/run.sh" "$PROJECT_DIR/.pipeline/run.sh"
 chmod +x "$PROJECT_DIR/.pipeline/run.sh"
 echo "  ✓ .pipeline/run.sh"
 
-# --- Create skills directory ---
+# --- Copy skills ---
+echo "Installing skills..."
 mkdir -p "$PROJECT_DIR/.claude/skills"
+cp "$FRAMEWORK_DIR/skills/"*.md "$PROJECT_DIR/.claude/skills/"
+echo "  ✓ $(ls "$FRAMEWORK_DIR/skills/"*.md | wc -l | tr -d ' ') skills"
 
 # --- Generate project.json ---
 if [ "$OVERWRITE_CONFIG" != "N" ]; then
