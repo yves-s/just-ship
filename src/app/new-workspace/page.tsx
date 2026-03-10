@@ -62,23 +62,13 @@ export default function NewWorkspacePage() {
       return;
     }
 
-    const { data: workspace, error } = await supabase
-      .from("workspaces")
-      .insert({ name: data.name, slug: data.slug, created_by: user.id })
-      .select()
-      .single();
+    const { data: workspace, error } = await supabase.rpc("create_workspace", {
+      ws_name: data.name,
+      ws_slug: data.slug,
+    });
 
     if (error) {
       setServerError(error.message);
-      return;
-    }
-
-    const { error: memberError } = await supabase
-      .from("workspace_members")
-      .insert({ workspace_id: workspace.id, user_id: user.id, role: "owner" });
-
-    if (memberError) {
-      setServerError(memberError.message);
       return;
     }
 
@@ -118,7 +108,7 @@ export default function NewWorkspacePage() {
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="slug">URL slug</Label>
               <div className="flex items-center rounded-md border bg-muted/30 px-3 text-sm">
-                <span className="text-muted-foreground shrink-0">board.app/</span>
+                <span className="text-muted-foreground shrink-0">app.agentic-dev.xyz/</span>
                 <Input
                   id="slug"
                   type="text"
