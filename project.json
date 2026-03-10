@@ -1,0 +1,20 @@
+{
+  "name": "agentic-dev-board",
+  "description": "",
+  "stack": {},
+  "build": {
+    "web": "pnpm run build",
+    "test": "npx vitest run"
+  },
+  "paths": {},
+    "supabase": {
+    "project_id": "https://wsmnutkobalfrceavpxs.supabase.co",
+    "user_id": "",
+    "project_name": "Agentic Dev Board"
+  },
+  "conventions": {
+    "branch_prefix": "feature/",
+    "commit_format": "conventional",
+    "language": "de"
+  }
+}
