@@ -1,34 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { ExternalLink, GitBranch, Trash2 } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import * as SelectPrimitive from "@radix-ui/react-select";
+import {
+  CalendarDays,
+  Tag,
+  GitBranch,
+  ExternalLink,
+  Trash2,
+  Share2,
+  Check,
+  Activity,
+  Flag,
+  CircleDot,
+  FolderOpen,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import {
-  updateTicketSchema,
-  type UpdateTicketInput,
-} from "@/lib/validations/ticket";
 import { TICKET_STATUSES, TICKET_PRIORITIES } from "@/lib/constants";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { StatusBadge, PriorityBadge } from "@/components/shared/status-badge";
-import type { Ticket } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { useWorkspace } from "@/lib/workspace-context";
+import type { Ticket, Project } from "@/lib/types";
 
 interface TicketDetailSheetProps {
   ticket: Ticket | null;
@@ -37,21 +31,6 @@ interface TicketDetailSheetProps {
   onUpdated: (ticket: Ticket) => void;
   onDeleted: (id: string) => void;
 }
-
-const STATUS_LABELS: Record<string, string> = {
-  backlog: "Backlog",
-  ready_to_develop: "Ready",
-  in_progress: "In Progress",
-  in_review: "In Review",
-  done: "Done",
-  cancelled: "Cancelled",
-};
-
-const PRIORITY_LABELS: Record<string, string> = {
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-};
 
 const PIPELINE_STATUS_LABELS: Record<string, string> = {
   queued: "Queued",
@@ -67,6 +46,32 @@ const PIPELINE_STATUS_COLORS: Record<string, string> = {
   failed: "bg-red-100 text-red-700",
 };
 
+function autoResize(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = el.scrollHeight + "px";
+}
+
+function PropertyRow({
+  icon,
+  label,
+  children,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center min-h-[34px] rounded-md hover:bg-muted/40 transition-colors -mx-2 px-2">
+      <div className="flex items-center gap-2 w-40 shrink-0 py-1">
+        <span className="text-muted-foreground/60">{icon}</span>
+        <span className="text-sm text-muted-foreground">{label}</span>
+      </div>
+      <div className="flex-1 py-1">{children}</div>
+    </div>
+  );
+}
+
 export function TicketDetailSheet({
   ticket,
   open,
@@ -74,276 +79,450 @@ export function TicketDetailSheet({
   onUpdated,
   onDeleted,
 }: TicketDetailSheetProps) {
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const workspace = useWorkspace();
+  const [current, setCurrent] = useState<Ticket | null>(ticket);
+  const currentRef = useRef<Ticket | null>(ticket);
+  currentRef.current = current;
+  const [saving, setSaving] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
-  const { register, handleSubmit, setValue, watch, reset } =
-    useForm<UpdateTicketInput>({
-      resolver: zodResolver(updateTicketSchema) as never,
-      values: ticket
-        ? {
-            title: ticket.title,
-            body: ticket.body ?? undefined,
-            status: ticket.status,
-            priority: ticket.priority,
-            due_date: ticket.due_date ?? undefined,
-          }
-        : undefined,
-    });
-
-  async function onSubmit(data: UpdateTicketInput) {
-    if (!ticket) return;
-    setSaving(true);
+  useEffect(() => {
+    setCurrent(ticket);
+    setConfirmDelete(false);
     setSaveError(null);
+  }, [ticket]);
 
+  useEffect(() => {
+    if (!open) return;
+    const supabase = createClient();
+    supabase
+      .from("projects")
+      .select("*")
+      .eq("workspace_id", workspace.id)
+      .order("name")
+      .then(({ data }) => setProjects(data ?? []));
+  }, [open, workspace.id]);
+
+  useEffect(() => {
+    autoResize(titleRef.current);
+    autoResize(bodyRef.current);
+  }, [current?.id]);
+
+  async function saveField(field: string, value: unknown) {
+    if (!current) return;
+    setSaving(field);
+    setSaveError(null);
     const supabase = createClient();
     const { data: updated, error } = await supabase
       .from("tickets")
-      .update(data)
-      .eq("id", ticket.id)
+      .update({ [field]: value })
+      .eq("id", current.id)
       .select()
       .single();
-
-    setSaving(false);
-
+    setSaving(null);
     if (error) {
       setSaveError(error.message);
       return;
     }
+    const updatedTicket = { ...updated, project: currentRef.current?.project ?? null } as Ticket;
+    setCurrent(updatedTicket);
+    onUpdated(updatedTicket);
+  }
 
-    onUpdated(updated as Ticket);
+  function handleTitleBlur(e: React.FocusEvent<HTMLTextAreaElement>) {
+    const newTitle = e.target.value.trim();
+    if (newTitle && newTitle !== current?.title) {
+      saveField("title", newTitle);
+    }
+  }
+
+  function handleBodyBlur(e: React.FocusEvent<HTMLTextAreaElement>) {
+    const newBody = e.target.value || null;
+    if (newBody !== (current?.body ?? null)) {
+      saveField("body", newBody);
+    }
   }
 
   async function handleDelete() {
-    if (!ticket) return;
-
+    if (!current) return;
     if (!confirmDelete) {
       setConfirmDelete(true);
       return;
     }
-
     setDeleting(true);
     const supabase = createClient();
     const { error } = await supabase
       .from("tickets")
       .delete()
-      .eq("id", ticket.id);
-
+      .eq("id", current.id);
     setDeleting(false);
-
     if (error) {
       setSaveError(error.message);
       setConfirmDelete(false);
       return;
     }
-
-    onDeleted(ticket.id);
+    onDeleted(current.id);
     onOpenChange(false);
   }
 
-  function handleOpenChange(open: boolean) {
-    if (!open) {
+  function handleOpenChange(isOpen: boolean) {
+    if (!isOpen) {
       setConfirmDelete(false);
       setSaveError(null);
-      reset();
     }
-    onOpenChange(open);
+    onOpenChange(isOpen);
   }
 
-  if (!ticket) return null;
+  function handleCopyLink() {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  if (!current) return null;
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-2xl overflow-y-auto"
+        className="w-full sm:max-w-2xl flex flex-col p-0 gap-0 overflow-hidden"
       >
-        <SheetHeader className="pb-0">
-          <div className="flex items-start justify-between gap-4 pr-8">
-            <div className="flex flex-col gap-1">
-              <span className="font-mono text-xs text-muted-foreground">
-                T-{ticket.number}
-              </span>
-              <SheetTitle className="text-base leading-snug">
-                {ticket.title}
-              </SheetTitle>
-            </div>
+        <SheetTitle className="sr-only">{current.title}</SheetTitle>
+
+        {/* Header strip — T-number aligned with X close button */}
+        <div className="flex items-center px-8 h-12 shrink-0 pr-14">
+          <span className="font-mono text-xs text-muted-foreground">
+            T-{current.number}
+          </span>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {/* Title */}
+          <div className="px-8 pb-3">
+            <textarea
+              ref={titleRef}
+              key={current.id}
+              defaultValue={current.title}
+              onInput={(e) => autoResize(e.currentTarget)}
+              onBlur={handleTitleBlur}
+              placeholder="Untitled"
+              rows={1}
+              className="w-full resize-none bg-transparent text-2xl font-bold text-foreground placeholder:text-muted-foreground/40 outline-none overflow-hidden leading-snug"
+            />
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <StatusBadge status={ticket.status} />
-            <PriorityBadge priority={ticket.priority} />
-            {ticket.pipeline_status && (
-              <span
-                className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
-                  PIPELINE_STATUS_COLORS[ticket.pipeline_status] ??
-                  "bg-slate-100 text-slate-600"
-                }`}
+
+          {/* Properties */}
+          <div className="px-8 py-1">
+            <PropertyRow
+              icon={<FolderOpen className="h-3.5 w-3.5" />}
+              label="Project"
+            >
+              <SelectPrimitive.Root
+                value={current.project_id ?? "__none__"}
+                onValueChange={(val) => {
+                  const newProjectId = val === "__none__" ? null : val;
+                  const newProject = projects.find((p) => p.id === newProjectId) ?? null;
+                  setCurrent((c) =>
+                    c ? { ...c, project_id: newProjectId, project: newProject } : c
+                  );
+                  saveField("project_id", newProjectId);
+                }}
               >
-                Pipeline:{" "}
-                {PIPELINE_STATUS_LABELS[ticket.pipeline_status] ??
-                  ticket.pipeline_status}
-              </span>
+                <SelectPrimitive.Trigger className="outline-none flex items-center gap-1 rounded px-1 py-0.5 hover:bg-muted/60 focus:bg-muted/60 transition-colors text-sm">
+                  <SelectPrimitive.Value>
+                    {current.project ? (
+                      <span className="text-foreground">{current.project.name}</span>
+                    ) : (
+                      <span className="text-muted-foreground/50">No project</span>
+                    )}
+                  </SelectPrimitive.Value>
+                </SelectPrimitive.Trigger>
+                <SelectPrimitive.Portal>
+                  <SelectPrimitive.Content
+                    position="popper"
+                    sideOffset={4}
+                    className="bg-popover border rounded-lg shadow-lg p-1 z-[100] min-w-[200px]"
+                  >
+                    <SelectPrimitive.Viewport>
+                      <SelectPrimitive.Item
+                        value="__none__"
+                        className="flex items-center px-2 py-1.5 rounded-md cursor-default outline-none focus:bg-accent select-none text-sm text-muted-foreground"
+                      >
+                        <SelectPrimitive.ItemText>No project</SelectPrimitive.ItemText>
+                      </SelectPrimitive.Item>
+                      {projects.map((p) => (
+                        <SelectPrimitive.Item
+                          key={p.id}
+                          value={p.id}
+                          className="flex items-center px-2 py-1.5 rounded-md cursor-default outline-none focus:bg-accent select-none text-sm"
+                        >
+                          <SelectPrimitive.ItemText>{p.name}</SelectPrimitive.ItemText>
+                        </SelectPrimitive.Item>
+                      ))}
+                    </SelectPrimitive.Viewport>
+                  </SelectPrimitive.Content>
+                </SelectPrimitive.Portal>
+              </SelectPrimitive.Root>
+            </PropertyRow>
+
+            <PropertyRow
+              icon={<CircleDot className="h-3.5 w-3.5" />}
+              label="Status"
+            >
+              <SelectPrimitive.Root
+                value={current.status}
+                onValueChange={(val) => {
+                  setCurrent((c) =>
+                    c ? { ...c, status: val as Ticket["status"] } : c
+                  );
+                  saveField("status", val);
+                }}
+              >
+                <SelectPrimitive.Trigger className="outline-none flex items-center gap-1 rounded px-1 py-0.5 hover:bg-muted/60 focus:bg-muted/60 transition-colors">
+                  <StatusBadge status={current.status} />
+                </SelectPrimitive.Trigger>
+                <SelectPrimitive.Portal>
+                  <SelectPrimitive.Content
+                    position="popper"
+                    sideOffset={4}
+                    className="bg-popover border rounded-lg shadow-lg p-1 z-[100] min-w-[160px]"
+                  >
+                    <SelectPrimitive.Viewport>
+                      {TICKET_STATUSES.map((s) => (
+                        <SelectPrimitive.Item
+                          key={s}
+                          value={s}
+                          className="flex items-center px-2 py-1.5 rounded-md cursor-default outline-none focus:bg-accent select-none"
+                        >
+                          <SelectPrimitive.ItemText>
+                            <StatusBadge status={s} />
+                          </SelectPrimitive.ItemText>
+                        </SelectPrimitive.Item>
+                      ))}
+                    </SelectPrimitive.Viewport>
+                  </SelectPrimitive.Content>
+                </SelectPrimitive.Portal>
+              </SelectPrimitive.Root>
+            </PropertyRow>
+
+            <PropertyRow
+              icon={<Flag className="h-3.5 w-3.5" />}
+              label="Priority"
+            >
+              <SelectPrimitive.Root
+                value={current.priority}
+                onValueChange={(val) => {
+                  setCurrent((c) =>
+                    c ? { ...c, priority: val as Ticket["priority"] } : c
+                  );
+                  saveField("priority", val);
+                }}
+              >
+                <SelectPrimitive.Trigger className="outline-none flex items-center gap-1 rounded px-1 py-0.5 hover:bg-muted/60 focus:bg-muted/60 transition-colors">
+                  <PriorityBadge priority={current.priority} />
+                </SelectPrimitive.Trigger>
+                <SelectPrimitive.Portal>
+                  <SelectPrimitive.Content
+                    position="popper"
+                    sideOffset={4}
+                    className="bg-popover border rounded-lg shadow-lg p-1 z-[100] min-w-[120px]"
+                  >
+                    <SelectPrimitive.Viewport>
+                      {TICKET_PRIORITIES.map((p) => (
+                        <SelectPrimitive.Item
+                          key={p}
+                          value={p}
+                          className="flex items-center px-2 py-1.5 rounded-md cursor-default outline-none focus:bg-accent select-none"
+                        >
+                          <SelectPrimitive.ItemText>
+                            <PriorityBadge priority={p} />
+                          </SelectPrimitive.ItemText>
+                        </SelectPrimitive.Item>
+                      ))}
+                    </SelectPrimitive.Viewport>
+                  </SelectPrimitive.Content>
+                </SelectPrimitive.Portal>
+              </SelectPrimitive.Root>
+            </PropertyRow>
+
+            <PropertyRow
+              icon={<CalendarDays className="h-3.5 w-3.5" />}
+              label="Due date"
+            >
+              <input
+                type="date"
+                key={current.id + "-date"}
+                defaultValue={current.due_date ?? ""}
+                onBlur={(e) => {
+                  const val = e.target.value || null;
+                  if (val !== (current.due_date ?? null)) {
+                    saveField("due_date", val);
+                  }
+                }}
+                className="bg-transparent text-sm text-foreground outline-none rounded px-1 py-0.5 hover:bg-muted/60 focus:bg-muted/60 cursor-pointer transition-colors"
+              />
+            </PropertyRow>
+
+            {current.pipeline_status && (
+              <PropertyRow
+                icon={<Activity className="h-3.5 w-3.5" />}
+                label="Pipeline"
+              >
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium",
+                    PIPELINE_STATUS_COLORS[current.pipeline_status] ??
+                      "bg-slate-100 text-slate-600"
+                  )}
+                >
+                  {PIPELINE_STATUS_LABELS[current.pipeline_status] ??
+                    current.pipeline_status}
+                </span>
+              </PropertyRow>
             )}
-          </div>
-        </SheetHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5 px-6 pb-6">
-          {saveError && (
-            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {saveError}
-            </p>
-          )}
+            {current.branch && (
+              <PropertyRow
+                icon={<GitBranch className="h-3.5 w-3.5" />}
+                label="Branch"
+              >
+                <code className="font-mono text-xs text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
+                  {current.branch}
+                </code>
+              </PropertyRow>
+            )}
 
-          {/* Branch / Preview URL */}
-          {(ticket.branch || ticket.preview_url) && (
-            <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
-              {ticket.branch && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <GitBranch className="h-3.5 w-3.5 shrink-0" />
-                  <code className="font-mono">{ticket.branch}</code>
-                </div>
-              )}
-              {ticket.preview_url && (
+            {current.preview_url && (
+              <PropertyRow
+                icon={<ExternalLink className="h-3.5 w-3.5" />}
+                label="Preview"
+              >
                 <a
-                  href={ticket.preview_url}
+                  href={current.preview_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-xs text-primary hover:underline"
+                  className="text-xs text-primary hover:underline truncate max-w-[300px] inline-block"
                 >
-                  <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                  {ticket.preview_url}
+                  {current.preview_url}
                 </a>
-              )}
-            </div>
-          )}
+              </PropertyRow>
+            )}
 
-          {/* Edit fields */}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="sheet-title">Title</Label>
-            <Input id="sheet-title" {...register("title")} />
+            {current.tags && current.tags.length > 0 && (
+              <PropertyRow
+                icon={<Tag className="h-3.5 w-3.5" />}
+                label="Tags"
+              >
+                <div className="flex flex-wrap gap-1">
+                  {current.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs text-muted-foreground"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </PropertyRow>
+            )}
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="sheet-body">Description</Label>
-            <Textarea
-              id="sheet-body"
-              rows={5}
+          {/* Divider */}
+          <div className="h-px bg-border mx-6 my-3" />
+
+          {/* Description */}
+          <div className="px-8 pb-4">
+            <textarea
+              ref={bodyRef}
+              key={current.id + "-body"}
+              defaultValue={current.body ?? ""}
+              onInput={(e) => autoResize(e.currentTarget)}
+              onBlur={handleBodyBlur}
               placeholder="Add a description…"
-              {...register("body")}
+              rows={4}
+              className="w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground/40 outline-none leading-relaxed min-h-[120px]"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label>Status</Label>
-              <Select
-                value={watch("status")}
-                onValueChange={(val) =>
-                  setValue("status", val as UpdateTicketInput["status"])
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TICKET_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {STATUS_LABELS[s]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label>Priority</Label>
-              <Select
-                value={watch("priority")}
-                onValueChange={(val) =>
-                  setValue("priority", val as UpdateTicketInput["priority"])
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TICKET_PRIORITIES.map((p) => (
-                    <SelectItem key={p} value={p}>
-                      {PRIORITY_LABELS[p]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="sheet-due">Due date</Label>
-            <Input
-              id="sheet-due"
-              type="date"
-              {...register("due_date")}
-            />
-          </div>
-
-          {/* Summary */}
-          {ticket.summary && (
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wide">
-                Summary
-              </Label>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                {ticket.summary}
-              </p>
-            </div>
+          {current.summary && (
+            <>
+              <div className="h-px bg-border mx-6 my-2" />
+              <div className="px-8 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">
+                  Summary
+                </div>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                  {current.summary}
+                </p>
+              </div>
+            </>
           )}
 
-          {/* Test results */}
-          {ticket.test_results && (
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wide">
-                Test results
-              </Label>
-              <pre className="rounded-md bg-muted px-3 py-2 text-xs font-mono overflow-auto whitespace-pre-wrap">
-                {ticket.test_results}
-              </pre>
-            </div>
+          {current.test_results && (
+            <>
+              <div className="h-px bg-border mx-6 my-2" />
+              <div className="px-8 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">
+                  Test results
+                </div>
+                <pre className="rounded-md bg-muted px-3 py-2 text-xs font-mono overflow-auto whitespace-pre-wrap">
+                  {current.test_results}
+                </pre>
+              </div>
+            </>
           )}
 
-          {/* Tags */}
-          {ticket.tags && ticket.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {ticket.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs text-muted-foreground"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
+          <div className="h-6" />
+        </div>
+
+        {/* Bottom action bar */}
+        <div className="flex items-center gap-3 px-6 py-3 border-t shrink-0">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleCopyLink}
+            className="gap-2"
+          >
+            {copied ? (
+              <Check className="h-4 w-4 text-emerald-500" />
+            ) : (
+              <Share2 className="h-4 w-4" />
+            )}
+            {copied ? "Copied!" : "Copy link"}
+          </Button>
+
+          <div className="flex-1" />
+
+          {saving && (
+            <span className="text-xs text-muted-foreground animate-pulse">
+              Saving…
+            </span>
           )}
 
-          <div className="flex items-center justify-between pt-2">
-            <Button
-              type="button"
-              variant={confirmDelete ? "destructive" : "ghost"}
-              size="sm"
-              onClick={handleDelete}
-              disabled={deleting}
-              className="gap-1.5 text-muted-foreground hover:text-destructive"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              {confirmDelete ? "Confirm delete" : "Delete ticket"}
-            </Button>
+          {saveError && (
+            <span className="text-xs text-destructive">{saveError}</span>
+          )}
 
-            <Button type="submit" disabled={saving} size="sm">
-              {saving ? "Saving…" : "Save changes"}
-            </Button>
-          </div>
-        </form>
+          <Button
+            type="button"
+            variant={confirmDelete ? "destructive" : "outline"}
+            size="sm"
+            onClick={handleDelete}
+            disabled={deleting}
+            className="gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            {confirmDelete ? "Confirm delete" : "Delete"}
+          </Button>
+        </div>
       </SheetContent>
     </Sheet>
   );

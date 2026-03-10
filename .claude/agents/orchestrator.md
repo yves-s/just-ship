@@ -57,6 +57,10 @@ Lies project.json für Pfade und Stack-Details.
 ## Datei 2: ...
 ```
 
+**Bei Frontend-Agents** immer den Design-Modus explizit angeben:
+- Neue Seite/Feature ohne bestehendes Design System → `## Design-Modus: Greenfield` (creative-design Skill)
+- Bestehende Komponente erweitern → `## Design-Modus: Bestehend` (design + frontend-design Skills)
+
 **Parallelisierung:**
 - Wenn Schema-Änderung nötig UND Code darauf aufbaut → data-engineer ZUERST, dann Rest parallel
 - Sonst → alle parallel

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { TicketListView } from "@/components/tickets/ticket-list-view";
 import type { Ticket } from "@/lib/types";
@@ -29,9 +30,11 @@ export default async function TicketsPage({
   }
 
   return (
-    <TicketListView
-      initialTickets={tickets}
-      workspaceId={workspace?.id ?? ""}
-    />
+    <Suspense>
+      <TicketListView
+        initialTickets={tickets}
+        workspaceId={workspace?.id ?? ""}
+      />
+    </Suspense>
   );
 }

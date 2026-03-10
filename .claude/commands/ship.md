@@ -19,7 +19,7 @@ Commit → Push → PR. Merged wird erst nach Freigabe via `/merge`.
 
 ## Konfiguration
 
-Lies `project.json`. Supabase-Schritte NUR wenn `supabase.project_id` gesetzt ist.
+Lies `project.json`. Pipeline-Schritte NUR wenn `pipeline.project_id` gesetzt ist.
 
 ## Trigger
 
@@ -64,11 +64,15 @@ EOF
 
 SOFORT WEITER ZU SCHRITT 4.
 
-### 4. Supabase-Status auf "in_review" (nur wenn konfiguriert)
+### 4. Pipeline-Status auf "in_review" (nur wenn konfiguriert)
 
-Via `mcp__claude_ai_Supabase__execute_sql`:
+Via `mcp__claude_ai_Supabase__execute_sql` mit `pipeline.project_id`:
 ```sql
-UPDATE public.tickets SET status = 'in_review' WHERE number = {N} RETURNING number, title, status;
+UPDATE public.tickets
+SET status = 'in_review'
+WHERE number = {N}
+  AND workspace_id = '{pipeline.workspace_id}'
+RETURNING number, title, status;
 ```
 
 SOFORT WEITER ZU SCHRITT 5.
@@ -78,7 +82,7 @@ SOFORT WEITER ZU SCHRITT 5.
 ```
 ✓ Shipped: feat(#{ticket}): {Beschreibung}
   PR: {url}
-  Supabase: in_review (falls konfiguriert)
+  Board: in_review (falls konfiguriert)
 
 → Nach Review: "passt" oder /merge zum Mergen
 ```

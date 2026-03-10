@@ -118,4 +118,8 @@ src/
 
 **"passt"**, **"done"**, **"fertig"**, **"klappt"**, **"sieht gut aus"** → automatisch `/merge` ausführen
 
+**"Ticket: ..."**, **"schreib ein Ticket"**, **"erstell ein Ticket"**, **"neues Ticket:"** → `ticket-writer` Skill ausführen (Ticket ERSTELLEN in Supabase — NICHT `/ticket` starten, NICHT nur im Chat ausgeben)
+
 **Wichtig:** `/ship` und `/merge` laufen **vollständig autonom** — keine Rückfragen bei Commit, Push, PR oder Merge. Der User hat seine Freigabe bereits gegeben.
+
+**Wichtig:** `Ticket: ...` (ohne `/`) bedeutet IMMER Ticket anlegen via `ticket-writer` Skill. `/ticket` (mit `/`) bedeutet IMMER ein bestehendes Ticket aufnehmen und implementieren.

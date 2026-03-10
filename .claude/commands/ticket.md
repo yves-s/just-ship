@@ -10,15 +10,20 @@ Nimm ein Ticket auf und starte den autonomen Entwicklungsflow.
 
 ## Konfiguration
 
-Lies `project.json` für Konventionen:
-- `conventions.branch_prefix` — Branch-Prefix (z.B. "feature/")
+Lies `project.json` für Konventionen.
 
-**Supabase (optional):** Falls `supabase.project_id` in `project.json` gesetzt ist:
-- `supabase.project_id` — Supabase Project ID
-- `supabase.user_id` — Pipeline User-ID (UUID)
-- `supabase.project_name` — Projektname für Ticket-Filterung
+**Branch-Prefix:** Wird aus dem Ticket-Inhalt abgeleitet — NICHT aus der Config:
+- Tags/Titel enthalten "bug", "fix", "fehler" → `fix/`
+- Tags/Titel enthalten "chore", "refactor", "cleanup", "deps" → `chore/`
+- Tags/Titel enthalten "docs" → `docs/`
+- Alles andere → `feature/`
 
-Falls `supabase.project_id` **leer oder nicht vorhanden** ist: Alle Supabase-Schritte in diesem Command überspringen. Ticket-Infos werden dann per `$ARGUMENTS` übergeben.
+**Pipeline (optional):** Falls `pipeline.project_id` in `project.json` gesetzt ist:
+- `pipeline.project_id` — Supabase Project ID des Agentic Dev Boards
+- `pipeline.project_name` — Projektname für Ticket-Filterung
+- `pipeline.workspace_id` — Workspace ID für Multi-Tenancy-Scoping
+
+Falls `pipeline.project_id` **leer oder nicht vorhanden** ist: Alle Supabase-Schritte in diesem Command überspringen. Ticket-Infos werden dann per `$ARGUMENTS` übergeben.
 
 ## WICHTIGSTE REGEL
 
@@ -37,37 +42,44 @@ Falls kein Argument: Suche nach Tickets mit Status "ready_to_develop".
 1. Nummer extrahieren: `T--162` → `162`
 2. Via `mcp__claude_ai_Supabase__execute_sql`:
    ```sql
-   SELECT * FROM public.tickets WHERE number = 162;
+   SELECT * FROM public.tickets
+   WHERE number = 162
+     AND workspace_id = '{pipeline.workspace_id}';
    ```
-   Mit `project_id` aus `supabase.project_id` in project.json.
+   Mit `project_id` aus `pipeline.project_id` in project.json.
 
 **Bei fehlendem Argument (Suche nach "ready_to_develop"):**
 
-Falls `supabase.project_name` gesetzt ist:
+Falls `pipeline.project_name` gesetzt ist:
 ```sql
 SELECT number, title, body, priority, tags
 FROM public.tickets
 WHERE status = 'ready_to_develop'
-  AND project_id = (SELECT id FROM public.projects WHERE name = '{project_name}')
+  AND workspace_id = '{pipeline.workspace_id}'
+  AND project_id = (
+    SELECT id FROM public.projects
+    WHERE name = '{pipeline.project_name}'
+      AND workspace_id = '{pipeline.workspace_id}'
+  )
 ORDER BY
   CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END,
   created_at ASC
 LIMIT 5;
 ```
 
-Falls `supabase.project_name` null ist:
+Falls `pipeline.project_name` null ist:
 ```sql
 SELECT number, title, body, priority, tags
 FROM public.tickets
 WHERE status = 'ready_to_develop'
-  AND project_id IS NULL
+  AND workspace_id = '{pipeline.workspace_id}'
 ORDER BY
   CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END,
   created_at ASC
 LIMIT 5;
 ```
 
-Via `mcp__claude_ai_Supabase__execute_sql` mit `project_id` aus project.json.
+Via `mcp__claude_ai_Supabase__execute_sql` mit `project_id` aus `pipeline.project_id` in project.json.
 
 ### 2. Ticket auswählen
 
@@ -77,17 +89,21 @@ Via `mcp__claude_ai_Supabase__execute_sql` mit `project_id` aus project.json.
 
 ### 3. Status auf "in_progress" + Feature-Branch
 
-**Falls Supabase konfiguriert — PFLICHT, NICHT ÜBERSPRINGEN:**
+**Falls Pipeline konfiguriert — PFLICHT, NICHT ÜBERSPRINGEN:**
 
 Via `mcp__claude_ai_Supabase__execute_sql`:
 ```sql
-UPDATE public.tickets SET status = 'in_progress', branch = '{branch}' WHERE number = {N} RETURNING number, title, status;
+UPDATE public.tickets
+SET status = 'in_progress', branch = '{branch}'
+WHERE number = {N}
+  AND workspace_id = '{pipeline.workspace_id}'
+RETURNING number, title, status;
 ```
 Warte auf die Bestätigung, dass das Update erfolgreich war, bevor du weitermachst.
 
 ```bash
 git checkout main && git pull origin main
-git checkout -b {branch_prefix}{ticket-nummer}-{kurzbeschreibung}
+git checkout -b {abgeleiteter-prefix}/{ticket-nummer}-{kurzbeschreibung}
 ```
 
 ### 4. Planung (SELBST, kein Planner-Agent)
@@ -139,6 +155,6 @@ NICHT fragen ob committed/gepusht werden soll.
 ### Checkliste vor Abschluss
 
 Bevor du den Workflow als fertig meldest, prüfe:
-- [ ] **Falls Supabase konfiguriert:** Status wurde auf "in_progress" gesetzt (Schritt 3)
-- [ ] **Falls Supabase konfiguriert:** Status wurde auf "in_review" gesetzt (Schritt 8 via `/ship`)
-Falls ein Supabase-Status-Update fehlt und Supabase konfiguriert ist: **JETZT nachholen**, nicht überspringen.
+- [ ] **Falls Pipeline konfiguriert:** Status wurde auf "in_progress" gesetzt (Schritt 3)
+- [ ] **Falls Pipeline konfiguriert:** Status wurde auf "in_review" gesetzt (Schritt 8 via `/ship`)
+Falls ein Status-Update fehlt und Pipeline konfiguriert ist: **JETZT nachholen**, nicht überspringen.

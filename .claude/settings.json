@@ -11,5 +11,13 @@
       "mcp__claude_ai_Vercel__*",
       "mcp__claude_ai_n8n__*"
     ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|Bash",
+        "command": "sh .claude/scripts/devboard-hook.sh tool_use \"$CLAUDE_TOOL_NAME\" \"$CLAUDE_FILE_PATH\""
+      }
+    ]
   }
 }

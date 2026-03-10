@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Search, Ticket as TicketIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import type { Ticket } from "@/lib/types";
 import type { TicketStatus } from "@/lib/constants";
 import { TICKET_STATUSES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
 interface TicketListViewProps {
   initialTickets: Ticket[];
@@ -42,12 +42,28 @@ export function TicketListView({
   workspaceId,
 }: TicketListViewProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<TicketStatus | "all">("all");
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+
+  // Open ticket from URL deeplink on mount
+  useEffect(() => {
+    const ticketParam = searchParams.get("ticket");
+    if (ticketParam) {
+      const num = parseInt(ticketParam.replace("T-", ""), 10);
+      const ticket = tickets.find((t) => t.number === num);
+      if (ticket) {
+        setSelectedTicket(ticket);
+        setSheetOpen(true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filtered = useMemo(() => {
     return tickets.filter((t) => {
@@ -64,6 +80,20 @@ export function TicketListView({
   function handleRowClick(ticket: Ticket) {
     setSelectedTicket(ticket);
     setSheetOpen(true);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("ticket", `T-${ticket.number}`);
+    router.replace(`${pathname}?${params.toString()}`);
+  }
+
+  function handleSheetOpenChange(open: boolean) {
+    setSheetOpen(open);
+    if (!open) {
+      setSelectedTicket(null);
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("ticket");
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
+    }
   }
 
   function handleUpdated(updated: Ticket) {
@@ -75,8 +105,10 @@ export function TicketListView({
 
   function handleDeleted(id: string) {
     setTickets((prev) => prev.filter((t) => t.id !== id));
-    setSheetOpen(false);
-    setSelectedTicket(null);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("ticket");
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname);
   }
 
   function handleCreated(ticket: Ticket) {
@@ -206,7 +238,7 @@ export function TicketListView({
       <TicketDetailSheet
         ticket={selectedTicket}
         open={sheetOpen}
-        onOpenChange={setSheetOpen}
+        onOpenChange={handleSheetOpenChange}
         onUpdated={handleUpdated}
         onDeleted={handleDeleted}
       />

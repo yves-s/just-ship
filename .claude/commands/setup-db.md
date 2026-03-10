@@ -1,93 +1,115 @@
 ---
 name: setup-db
-description: Supabase-Datenbank einrichten — Tabellen erstellen, Projekt anlegen, project.json konfigurieren
+description: Projekt mit dem Agentic Dev Board verbinden — Workspace & Projekt anlegen, project.json konfigurieren
 disable-model-invocation: true
 ---
 
-# /setup-db — Supabase-Datenbank einrichten
+# /setup-db — Agentic Dev Board verbinden
 
-Richtet die Supabase-Datenbank für Ticket-Management ein.
+Verbindet dieses Projekt mit dem Agentic Dev Board. Legt Workspace und Projekt an falls nötig, schreibt alles automatisch in `project.json`.
 
 ## Voraussetzungen
 
-- Supabase-Integration in Claude aktiviert: Settings → Integrations → Supabase
-- Ein Supabase-Projekt existiert bereits
+Supabase MCP muss in Claude Code verbunden sein:
+→ Claude Code Settings → Integrations → Supabase → Connect
+
+Falls nicht verbunden: Erkläre dem User wie er das aktiviert, dann abbrechen.
 
 ## Ausführung
 
 ### 1. Bestehende Konfiguration prüfen
 
-Lies `project.json` und prüfe ob `supabase.project_id` bereits gesetzt ist.
+Lies `project.json`. Falls `pipeline.project_id` bereits gesetzt ist:
+- Zeige: "Pipeline bereits konfiguriert: Projekt '{pipeline.project_name}' in Workspace {pipeline.workspace_id}"
+- Frage: "Neu konfigurieren? (j/N)"
+- Falls nein: abbrechen
 
-**Falls bereits komplett konfiguriert** (project_id, user_id und project_name vorhanden):
-- Sage: "Supabase ist bereits konfiguriert (Projekt: {project_name}). Migration erneut ausführen?"
-- Falls der User bestätigt: weiter mit Schritt 3 (nur Migration)
-- Falls nicht: abbrechen
+### 2. Supabase-Projekt des Dev Boards wählen
 
-### 2. Supabase-Projekt auswählen
+Rufe `mcp__claude_ai_Supabase__list_projects` auf.
 
-Falls `supabase.project_id` leer ist:
+Falls mehrere Projekte: Liste aufzeigen, User wählen lassen.
+Falls nur eines: Automatisch nehmen.
 
-1. `mcp__claude_ai_Supabase__list_projects` aufrufen
-2. Projekte auflisten und User wählen lassen
-3. Project-ID merken
+Merke die `project_id`.
 
-### 3. Migration ausführen
+### 3. Workspace auswählen oder anlegen
 
-Lies die SQL-Migration aus dem Framework:
-- Datei: Finde die `migrations/001_create_tables.sql` im Framework-Verzeichnis (gleiche Ebene wie `commands/`)
-- Lies den Inhalt der Datei
-
-Führe die Migration via `mcp__claude_ai_Supabase__apply_migration` aus mit:
-- `project_id`: die gewählte Supabase Project-ID
-- `name`: "001_create_tables"
-- `query`: der SQL-Inhalt der Migrationsdatei
-
-### 4. Projekt anlegen
-
-Frage: "Projektname für Ticket-Filterung? (leer = kein Projekt-Filter)"
-
-Falls ein Name angegeben wird:
+Via `mcp__claude_ai_Supabase__execute_sql`:
 ```sql
-INSERT INTO public.projects (name)
-VALUES ('{projekt_name}')
-ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+SELECT id, name, slug FROM public.workspaces ORDER BY created_at ASC;
+```
+
+**Falls Workspaces vorhanden:** Liste anzeigen + Option "Neuen Workspace anlegen"
+
+**Falls User einen bestehenden wählt:** Diese `workspace_id` verwenden.
+
+**Falls User neuen Workspace anlegt:**
+```sql
+INSERT INTO public.workspaces (name, slug)
+VALUES ('{name}', '{slug}')
+RETURNING id, name, slug;
+```
+Slug = name in lowercase, Leerzeichen → Bindestriche, nur a-z 0-9 -.
+
+### 4. Projekt auswählen oder anlegen
+
+```sql
+SELECT id, name FROM public.projects
+WHERE workspace_id = '{workspace_id}'
+ORDER BY name;
+```
+
+**Falls Projekte vorhanden:** Liste anzeigen + Option "Neues Projekt anlegen"
+
+**Falls User ein bestehendes wählt:** Diese `project_id` und `project_name` verwenden.
+
+**Falls User neues Projekt anlegt:**
+Frage: "Projektname:"
+```sql
+INSERT INTO public.projects (workspace_id, name)
+VALUES ('{workspace_id}', '{name}')
 RETURNING id, name;
 ```
-Via `mcp__claude_ai_Supabase__execute_sql` ausführen.
 
-Falls kein Name: `project_name` bleibt `null`.
+### 5. API Key anlegen (optional)
 
-### 5. User-ID generieren
+Frage: "API Key für Agent-Event-Hooks generieren? (empfohlen) (J/n)"
 
-Generiere eine zufällige UUID als Pipeline-Identifier:
-```bash
-python3 -c "import uuid; print(uuid.uuid4())"
+Falls ja:
+```sql
+INSERT INTO public.api_keys (workspace_id, name, key_hash, key_prefix, created_by)
+VALUES (
+  '{workspace_id}',
+  '{project_name} Pipeline',
+  encode(digest(gen_random_uuid()::text, 'sha256'), 'hex'),
+  'adb_',
+  (SELECT id FROM auth.users LIMIT 1)
+)
+RETURNING id, key_prefix;
 ```
 
-Diese UUID identifiziert die Pipeline-Instanz (nicht ein Auth-User).
+Hinweis: Der vollständige API Key kann nur im Board-UI unter Settings → API Keys eingesehen werden.
 
-### 6. project.json aktualisieren
+### 6. project.json schreiben
 
-Schreibe folgende Werte in `project.json` unter `supabase`:
+Schreibe folgende Werte in `project.json` unter `pipeline`:
 ```json
-"supabase": {
+"pipeline": {
   "project_id": "{supabase_project_id}",
-  "user_id": "{generierte_uuid}",
-  "project_name": "{projekt_name_oder_null}"
+  "project_name": "{projekt_name}",
+  "workspace_id": "{workspace_id}"
 }
 ```
-
-Falls ein alter `notion`-Block existiert: beibehalten (Legacy), aber Supabase-Block hinzufügen/aktualisieren.
 
 ### 7. Bestätigung
 
 ```
-DB eingerichtet.
+Pipeline verbunden.
 
-  Supabase-Projekt: {project_id}
-  Pipeline User-ID: {user_id}
-  Projektname: {project_name || "(kein Filter)"}
+  Board-Projekt : {project_name}
+  Workspace     : {workspace_name}
+  Supabase      : {project_id}
 
 /ticket funktioniert jetzt.
 ```
