@@ -7,10 +7,13 @@
     "test": "npx vitest run"
   },
   "paths": {},
-    "supabase": {
-    "project_id": "https://wsmnutkobalfrceavpxs.supabase.co",
-    "user_id": "",
-    "project_name": "Agentic Dev Board"
+  "supabase": {
+    "project_id": "wsmnutkobalfrceavpxs"
+  },
+  "pipeline": {
+    "project_id": "wsmnutkobalfrceavpxs",
+    "project_name": "Agentic Dev Board",
+    "workspace_id": "421dffa5-5f2e-44a8-bdc1-7e0f31a87149"
   },
   "conventions": {
     "branch_prefix": "feature/",
