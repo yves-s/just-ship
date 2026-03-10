@@ -165,7 +165,7 @@ export function TicketListView({
                   className="border-b cursor-pointer hover:bg-muted/50 transition-colors"
                 >
                   <td className="px-6 py-3 font-mono text-xs text-muted-foreground">
-                    #{ticket.number}
+                    T-{ticket.number}
                   </td>
                   <td className="px-3 py-3 font-medium max-w-xs">
                     <div className="flex flex-col gap-1">

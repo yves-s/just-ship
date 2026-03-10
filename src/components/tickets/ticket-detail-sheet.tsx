@@ -164,7 +164,7 @@ export function TicketDetailSheet({
           <div className="flex items-start justify-between gap-4 pr-8">
             <div className="flex flex-col gap-1">
               <span className="font-mono text-xs text-muted-foreground">
-                #{ticket.number}
+                T-{ticket.number}
               </span>
               <SheetTitle className="text-base leading-snug">
                 {ticket.title}

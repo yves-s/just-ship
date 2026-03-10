@@ -78,7 +78,7 @@ export function TicketCard({
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-1.5">
             <span className="font-mono text-[10px] text-muted-foreground">
-              #{ticket.number}
+              T-{ticket.number}
             </span>
             {agentActive && (
               <span
