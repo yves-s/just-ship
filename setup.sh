@@ -190,8 +190,9 @@ if [ "$MODE" = "update" ]; then
     done
   fi
 
-  # Pipeline runner
+  # Pipeline
   diff_file "$FRAMEWORK_DIR/pipeline/run.sh" "$PROJECT_DIR/.pipeline/run.sh" ".pipeline/run.sh"
+  diff_file "$FRAMEWORK_DIR/pipeline/send-event.sh" "$PROJECT_DIR/.pipeline/send-event.sh" ".pipeline/send-event.sh"
 
   # Skills (framework skills only — project-specific skills are never touched)
   for f in "$FRAMEWORK_DIR/skills/"*.md; do
@@ -268,10 +269,12 @@ if [ "$MODE" = "update" ]; then
   chmod +x "$PROJECT_DIR/.claude/scripts/"*.py 2>/dev/null || true
   echo "  ✓ scripts"
 
-  echo "Updating pipeline runner..."
+  echo "Updating pipeline..."
   cp "$FRAMEWORK_DIR/pipeline/run.sh" "$PROJECT_DIR/.pipeline/run.sh"
-  chmod +x "$PROJECT_DIR/.pipeline/run.sh"
+  cp "$FRAMEWORK_DIR/pipeline/send-event.sh" "$PROJECT_DIR/.pipeline/send-event.sh"
+  chmod +x "$PROJECT_DIR/.pipeline/"*.sh
   echo "  ✓ .pipeline/run.sh"
+  echo "  ✓ .pipeline/send-event.sh"
 
   echo "Updating settings..."
   cp "$FRAMEWORK_DIR/settings.json" "$PROJECT_DIR/.claude/settings.json"
@@ -328,11 +331,13 @@ cp "$FRAMEWORK_DIR/commands/"*.md "$PROJECT_DIR/.claude/commands/"
 echo "  ✓ $(ls "$FRAMEWORK_DIR/commands/"*.md | wc -l | tr -d ' ') commands"
 
 # --- Copy pipeline runner ---
-echo "Installing pipeline runner..."
+echo "Installing pipeline..."
 mkdir -p "$PROJECT_DIR/.pipeline"
 cp "$FRAMEWORK_DIR/pipeline/run.sh" "$PROJECT_DIR/.pipeline/run.sh"
-chmod +x "$PROJECT_DIR/.pipeline/run.sh"
+cp "$FRAMEWORK_DIR/pipeline/send-event.sh" "$PROJECT_DIR/.pipeline/send-event.sh"
+chmod +x "$PROJECT_DIR/.pipeline/"*.sh
 echo "  ✓ .pipeline/run.sh"
+echo "  ✓ .pipeline/send-event.sh"
 
 # --- Copy skills ---
 echo "Installing skills..."
@@ -410,8 +415,8 @@ echo ""
 echo "Next steps:"
 echo "  1. Edit CLAUDE.md        — Architektur, Konventionen, Domain-Wissen"
 echo "  2. Edit project.json     — Stack, Build-Commands, Pfade anpassen"
-echo "  3. Run /setup-db         — In Claude Code öffnen und /setup-db ausführen"
-echo "                             (verbindet Projekt mit Agentic Dev Board)"
+echo "  3. Run /setup-pipeline   — In Claude Code öffnen und /setup-pipeline ausführen"
+echo "                             (Stack erkennen, Config befüllen, Dev Board verbinden)"
 echo "  4. .claude/skills/       — Eigene Skills hinzufügen (optional)"
 echo ""
 echo "Framework updaten:"

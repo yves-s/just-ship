@@ -7,7 +7,7 @@ A portable multi-agent system for autonomous software development with Claude Co
 A framework of generic agents, commands, and a pipeline runner that can be installed into any project. It provides:
 
 - **7 specialized agents** (Orchestrator, Backend, Frontend, Data-Engineer, DevOps, QA, Security)
-- **4 slash-commands** (`/ticket`, `/ship`, `/merge`, `/setup-db`)
+- **4 slash-commands** (`/ticket`, `/ship`, `/merge`, `/setup-pipeline`)
 - **Pipeline runner** for VPS/CI execution
 - **Supabase integration** for ticket management
 - **Update mechanism** with version tracking and dry-run preview
@@ -24,11 +24,12 @@ cd /path/to/your/project
 # 3. Run setup (interactive)
 ~/agentic-dev-pipeline/setup.sh
 
-# 4. Customize CLAUDE.md (architecture, conventions)
-# 5. Fill out project.json (stack, paths, Supabase config)
-
-# 6. Start working
+# 4. Open in Claude Code and run /setup-pipeline
+#    (auto-detects stack, fills project.json, connects Dev Board)
 claude
+> /setup-pipeline
+
+# 5. Start working
 > /ticket
 ```
 
@@ -111,7 +112,7 @@ agentic-dev-pipeline/
 │   ├── ticket.md           # Ticket → autonomous workflow → PR
 │   ├── ship.md             # Commit + push + PR
 │   ├── merge.md            # Squash merge after approval
-│   └── setup-db.md         # Supabase schema setup
+│   └── setup-pipeline.md   # Project config + Dev Board setup
 ├── skills/                 # Framework skills (auto-deployed)
 │   ├── brainstorming.md
 │   ├── writing-plans.md

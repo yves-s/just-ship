@@ -49,36 +49,21 @@ Falls kein Argument: Suche nach Tickets mit Status "ready_to_develop".
    Mit `project_id` aus `pipeline.project_id` in project.json.
 
 **Bei fehlendem Argument (Suche nach "ready_to_develop"):**
-
-Falls `pipeline.project_name` gesetzt ist:
+Lies `pipeline.project_name` und `pipeline.workspace_id` aus `project.json` und setze sie direkt in die Query ein:
 ```sql
 SELECT number, title, body, priority, tags
 FROM public.tickets
 WHERE status = 'ready_to_develop'
   AND workspace_id = '{pipeline.workspace_id}'
-  AND project_id = (
-    SELECT id FROM public.projects
-    WHERE name = '{pipeline.project_name}'
-      AND workspace_id = '{pipeline.workspace_id}'
+  AND (
+    project_id = (SELECT id FROM public.projects WHERE name = '{pipeline.project_name}' AND workspace_id = '{pipeline.workspace_id}')
+    OR project_id IS NULL
   )
 ORDER BY
   CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END,
   created_at ASC
 LIMIT 5;
 ```
-
-Falls `pipeline.project_name` null ist:
-```sql
-SELECT number, title, body, priority, tags
-FROM public.tickets
-WHERE status = 'ready_to_develop'
-  AND workspace_id = '{pipeline.workspace_id}'
-ORDER BY
-  CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END,
-  created_at ASC
-LIMIT 5;
-```
-
 Via `mcp__claude_ai_Supabase__execute_sql` mit `project_id` aus `pipeline.project_id` in project.json.
 
 ### 2. Ticket auswählen
@@ -87,20 +72,33 @@ Via `mcp__claude_ai_Supabase__execute_sql` mit `project_id` aus `pipeline.projec
 - **Eines:** Automatisch nehmen
 - **Keines:** User informieren
 
-### 3. Status auf "in_progress" + Feature-Branch
+### 3. Status auf "in_progress" + Feature-Branch + Agent-Event
 
-**Falls Pipeline konfiguriert — PFLICHT, NICHT ÜBERSPRINGEN:**
+**Falls Pipeline konfiguriert — PFLICHT, NICHT ÜBERSPRINGEN. Alle 3 Aktionen ausführen:**
 
-Via `mcp__claude_ai_Supabase__execute_sql`:
+**3a) Event senden** (sofort, damit das Board den aktiven Agent anzeigt):
+```bash
+bash .pipeline/send-event.sh {N} orchestrator agent_started
+```
+
+**3b) Status updaten + Projekt zuordnen** via `mcp__claude_ai_Supabase__execute_sql`.
+Die Werte `{pipeline.project_name}` und `{pipeline.workspace_id}` stehen in `project.json` → Lies sie dort aus und setze sie direkt ein:
 ```sql
 UPDATE public.tickets
-SET status = 'in_progress', branch = '{branch}'
+SET status = 'in_progress',
+    branch = '{branch}',
+    project_id = COALESCE(project_id, (
+      SELECT id FROM public.projects
+      WHERE name = '{pipeline.project_name}'
+        AND workspace_id = '{pipeline.workspace_id}'
+    ))
 WHERE number = {N}
   AND workspace_id = '{pipeline.workspace_id}'
 RETURNING number, title, status;
 ```
 Warte auf die Bestätigung, dass das Update erfolgreich war, bevor du weitermachst.
 
+**3c) Feature-Branch erstellen:**
 ```bash
 git checkout main && git pull origin main
 git checkout -b {abgeleiteter-prefix}/{ticket-nummer}-{kurzbeschreibung}
@@ -116,6 +114,18 @@ Lies `project.json` für Pfade und Stack-Details.
 
 ### 5. Implementierung (parallel wo möglich)
 
+**Für JEDEN Agent-Spawn (PFLICHT falls Pipeline konfiguriert):**
+
+```
+VOR Agent-Start:   bash .pipeline/send-event.sh {N} {agent-type} agent_started
+                   Ausgabe: ▶ [{agent-type}] — {was der Agent macht}
+
+NACH Agent-Ende:   bash .pipeline/send-event.sh {N} {agent-type} completed
+                   Ausgabe: ✓ [{agent-type}] abgeschlossen
+```
+
+`{agent-type}` = `frontend`, `backend`, `data-engineer`, `qa`, `devops`, `security`
+
 Spawne Agents via Task-Tool mit konkreten Instruktionen:
 
 | Agent | `model` | Wann |
@@ -128,17 +138,21 @@ Spawne Agents via Task-Tool mit konkreten Instruktionen:
 
 ### 6. Build-Check (Bash, kein Agent)
 
+Ausgabe: `▶ build-check — {build command}`
 Lies Build-Commands aus `project.json` und führe sie aus.
-Nur bei Build-Fehlern: DevOps-Agent mit `model: "haiku"` spawnen.
+Nur bei Build-Fehlern: `▶ devops — Build-Fehler beheben` und DevOps-Agent mit `model: "haiku"` spawnen.
 
 **NICHT STOPPEN.** Zeige dem User NICHT die Build-Ergebnisse und warte NICHT auf Antwort. SOFORT weiter zu Schritt 7.
 
 ### 7. Review (ein Agent)
 
+Ausgabe: `▶ qa — Acceptance Criteria & Security prüfen`
 Ein QA-Agent mit `model: "haiku"`:
 - Acceptance Criteria gegen Code prüfen
 - Security-Quick-Check (Secrets, RLS, Auth, Input Validation)
 - Bei Problemen: direkt fixen
+
+Ausgabe nach Abschluss: `✓ qa abgeschlossen`
 
 **NICHT STOPPEN.** SOFORT weiter zu Schritt 8.
 

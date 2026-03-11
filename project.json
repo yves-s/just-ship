@@ -1,0 +1,28 @@
+{
+  "name": "agentic-dev-pipeline",
+  "description": "Portables Multi-Agent-Framework für autonome Softwareentwicklung mit Claude Code",
+  "stack": {
+    "language": "bash",
+    "package_manager": "none"
+  },
+  "build": {
+    "web": "echo 'No build step'",
+    "test": "echo 'No tests'"
+  },
+  "paths": {},
+  "supabase": {
+    "project_id": "wsmnutkobalfrceavpxs"
+  },
+  "pipeline": {
+    "project_id": "wsmnutkobalfrceavpxs",
+    "project_name": "Agentic Dev Pipeline",
+    "workspace_id": "421dffa5-5f2e-44a8-bdc1-7e0f31a87149",
+    "api_url": "https://app.agentic-dev.xyz",
+    "api_key": "adp_ab18e0605f4e9a09cebf4cbcdd8675b62bf1f070072a194b6cd330fea0e1311e"
+  },
+  "conventions": {
+    "branch_prefix": "feature/",
+    "commit_format": "conventional",
+    "language": "de"
+  }
+}

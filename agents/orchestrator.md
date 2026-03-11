@@ -31,6 +31,13 @@ Lies `project.json` für Stack, Build-Commands, Pfade und Supabase-Config.
 
 ### Phase 2: Implementierung (Agents mit konkreten Instruktionen)
 
+**Für JEDEN Agent-Spawn (PFLICHT falls `pipeline` in project.json konfiguriert):**
+
+```
+VOR Agent-Start:   bash .pipeline/send-event.sh {N} {agent-type} agent_started
+NACH Agent-Ende:   bash .pipeline/send-event.sh {N} {agent-type} completed
+```
+
 Spawne Agents mit **exakten Code-Änderungen** im Prompt — nicht "lies die Spec".
 
 **Agent-Auswahl (nur was nötig ist):**
