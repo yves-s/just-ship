@@ -237,11 +237,9 @@ When in doubt: if the ticket has no clear urgency signal, default to `medium`.
 
 ## Output and Delivery
 
-Write tickets in clean Markdown by default. After writing, ask the user where to deliver: Pipeline (Supabase), Notion, or Markdown only.
+### Pipeline (Supabase) — Primary & Automatic
 
-### Pipeline (Supabase) — Primary
-
-When `project.json` has `pipeline.project_id` set, the ticket can be created directly in the project's ticket system.
+**CRITICAL:** When `project.json` has `pipeline.project_id` set, insert the ticket into Supabase IMMEDIATELY after writing. Do NOT ask the user for confirmation or where to deliver. Just do it.
 
 Read `project.json` to get `pipeline.project_id`, `pipeline.workspace_id`, and `pipeline.project_name`. Then insert via `mcp__claude_ai_Supabase__execute_sql`:
 
@@ -261,17 +259,22 @@ VALUES (
 RETURNING number, title, status;
 ```
 
-Use `project_id` from `pipeline.project_id` in `project.json` as the Supabase project.
+**MUST rules for the INSERT:**
+- **`body` MUST contain the full ticket Markdown** — the complete structured content (Problem, Desired Behavior, Acceptance Criteria, Out of Scope, etc.) as written above. NEVER leave body empty or NULL.
+- **`project_id` MUST use the subquery** to look up the project by `pipeline.project_name`. NEVER omit the project_id column or set it to NULL.
+- **`workspace_id` MUST be set** from `pipeline.workspace_id`.
+
+Use `project_id` from `pipeline.project_id` in `project.json` as the Supabase project for the MCP tool call.
 
 After a successful insert, confirm with: `✓ Ticket T-{number} created: {title}`
 
-### Notion — Secondary
+### Fallback — Only when no pipeline.project_id
 
-Use `mcp__claude_ai_Notion__notion-search` to find the target database, then `mcp__claude_ai_Notion__notion-create-pages` to create the ticket as a page. Apply Status, Priority, and Type as Notion properties if the database schema supports them.
+Only if there is no `project.json` or no `pipeline.project_id`, ask the user where to deliver: Pipeline (Supabase), Notion, or Markdown only.
 
-### Other tools (Linear, Jira, GitHub Issues)
+**Notion:** Use `mcp__claude_ai_Notion__notion-search` to find the target database, then `mcp__claude_ai_Notion__notion-create-pages` to create the ticket as a page.
 
-Adapt the Markdown output to the tool's conventions — content principles stay the same.
+**Other tools (Linear, Jira, GitHub Issues):** Adapt the Markdown output to the tool's conventions.
 
 ## Common Pitfalls
 
@@ -294,7 +297,10 @@ Adapt the Markdown output to the tool's conventions — content principles stay 
 8. Check: is the ticket too big? If yes, suggest a split
 9. Choose a clear, action-oriented title last (titles are easier to write after the body)
 10. Set properties: status, priority, type
-11. Ask the user where to deliver: Pipeline (Supabase), Notion, or Markdown only
+11. **Deliver the ticket** (see Output and Delivery section):
+    - Read `project.json`. If `pipeline.project_id` is set → insert directly into Supabase. No confirmation needed — just insert.
+    - Ensure `body` contains the full ticket Markdown and `project_id` uses the subquery.
+    - If no `project.json` or no `pipeline.project_id` → ask the user where to deliver.
 
 ## Full Example
 

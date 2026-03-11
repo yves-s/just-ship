@@ -477,7 +477,7 @@ export function TicketDetailSheet({
           <div className="h-px bg-border mx-6 my-3" />
 
           {/* Description */}
-          <div className="px-8 pb-4">
+          <div className="px-8 pb-4 flex-1">
             {editingBody ? (
               <textarea
                 ref={bodyRef}
@@ -486,20 +486,20 @@ export function TicketDetailSheet({
                 onInput={(e) => autoResize(e.currentTarget)}
                 onBlur={handleBodyBlur}
                 placeholder="Add a description…"
-                rows={4}
-                className="w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground/40 outline-none overflow-hidden leading-relaxed"
+                rows={8}
+                className="w-full min-h-[240px] resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground/40 outline-none overflow-hidden leading-relaxed"
               />
             ) : current.body ? (
               <div
                 onClick={() => setEditingBody(true)}
-                className="cursor-text rounded-md hover:bg-muted/30 transition-colors -mx-2 px-2 py-1"
+                className="cursor-text rounded-md hover:bg-muted/30 transition-colors -mx-2 px-2 py-1 min-h-[240px]"
               >
                 <MarkdownRenderer content={current.body} />
               </div>
             ) : (
               <div
                 onClick={() => setEditingBody(true)}
-                className="cursor-text text-sm text-muted-foreground/40 rounded-md hover:bg-muted/30 transition-colors -mx-2 px-2 py-1"
+                className="cursor-text text-sm text-muted-foreground/40 rounded-md hover:bg-muted/30 transition-colors -mx-2 px-2 py-1 min-h-[240px]"
               >
                 Add a description…
               </div>

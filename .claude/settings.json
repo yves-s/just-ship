@@ -15,7 +15,7 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Edit|Write|Bash",
+        "matcher": "Edit|Write|Bash|Read|Glob|Grep",
         "command": "sh .claude/scripts/devboard-hook.sh tool_use \"$CLAUDE_TOOL_NAME\" \"$CLAUDE_FILE_PATH\""
       }
     ]

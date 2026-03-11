@@ -1,7 +1,7 @@
 # CLAUDE.md – agentic-dev-board Project Instructions
 
 > Dieses Dokument wird von Claude Code automatisch gelesen.
-> Projektspezifische Konfiguration (Supabase-Config, Build-Commands, Pfade) liegt in `project.json`.
+> Projektspezifische Konfiguration (Stack, Build-Commands, Pfade, Pipeline-Verbindung) liegt in `project.json`.
 
 ---
 
@@ -39,27 +39,32 @@ Dieses Repo nutzt ein Multi-Agent-System. Ob lokal oder auf dem Server:
 1. **Arbeite autonom** — keine interaktiven Fragen, keine manuellen Bestätigungen
 2. **Plane selbst** — kein Planner-Agent, keine Spec-Datei. Lies betroffene Dateien direkt und gib Agents konkrete Instruktionen
 3. **Wenn unklar:** Konservative Lösung wählen, nicht raten
-4. **Commit + PR** am Ende des Workflows → Supabase "in_review"
+4. **Commit + PR** am Ende des Workflows → Board-Status "in_review"
 5. **Merge erst nach Freigabe** — User sagt "passt"/"merge" oder `/merge`
 
-## Ticket-Workflow (Supabase)
+## Ticket-Workflow (Agentic Dev Board)
 
-> Nur aktiv wenn `supabase.project_id` in `project.json` gesetzt ist. Ohne Supabase werden diese Schritte übersprungen.
+> Nur aktiv wenn `pipeline.project_id` in `project.json` gesetzt ist. Ohne Pipeline-Config werden diese Schritte übersprungen.
 
-Falls Supabase konfiguriert ist, sind Status-Updates **PFLICHT**:
+Falls Pipeline konfiguriert ist, sind Status-Updates **PFLICHT**:
 
-| Workflow-Schritt | Supabase-Status | Wann |
+| Workflow-Schritt | Board-Status | Wann |
 |---|---|---|
-| `/ticket` — Ticket aufnehmen | **`in_progress`** | Sofort nach Ticket-Auswahl, VOR dem Coding |
+| `/ticket` — Ticket schreiben | — | Erstellt ein neues Ticket im Board |
+| `/develop` — Ticket implementieren | **`in_progress`** | Sofort nach Ticket-Auswahl, VOR dem Coding |
 | `/ship` — PR erstellen | **`in_review`** | Nach PR-Erstellung |
 | `/merge` — PR mergen | **`done`** | Nach erfolgreichem Merge |
 
-Status-Updates via `mcp__claude_ai_Supabase__execute_sql`:
+Status-Updates via `mcp__claude_ai_Supabase__execute_sql` mit `pipeline.project_id`:
 ```sql
-UPDATE public.tickets SET status = '{status}' WHERE number = {N} RETURNING number, title, status;
+UPDATE public.tickets
+SET status = '{status}'
+WHERE number = {N}
+  AND workspace_id = '{pipeline.workspace_id}'
+RETURNING number, title, status;
 ```
 
-**Überspringe KEINEN dieser Schritte.** Falls ein Supabase-Update fehlschlägt, versuche es erneut oder informiere den User.
+**Überspringe KEINEN dieser Schritte.** Falls ein Update fehlschlägt, versuche es erneut oder informiere den User.
 
 ---
 
@@ -118,8 +123,4 @@ src/
 
 **"passt"**, **"done"**, **"fertig"**, **"klappt"**, **"sieht gut aus"** → automatisch `/merge` ausführen
 
-**"Ticket: ..."**, **"schreib ein Ticket"**, **"erstell ein Ticket"**, **"neues Ticket:"** → `ticket-writer` Skill ausführen (Ticket ERSTELLEN in Supabase — NICHT `/ticket` starten, NICHT nur im Chat ausgeben)
-
 **Wichtig:** `/ship` und `/merge` laufen **vollständig autonom** — keine Rückfragen bei Commit, Push, PR oder Merge. Der User hat seine Freigabe bereits gegeben.
-
-**Wichtig:** `Ticket: ...` (ohne `/`) bedeutet IMMER Ticket anlegen via `ticket-writer` Skill. `/ticket` (mit `/`) bedeutet IMMER ein bestehendes Ticket aufnehmen und implementieren.
