@@ -38,7 +38,7 @@ WorkingDirectory=/home/claude-dev
 EnvironmentFile=/home/claude-dev/.env
 EnvironmentFile=/home/claude-dev/.env.%i
 
-ExecStart=/home/claude-dev/worker.sh
+ExecStart=/usr/bin/npx tsx /home/claude-dev/%i/.pipeline/worker.ts
 
 # Logging (zusätzlich zu journald)
 StandardOutput=append:/home/claude-dev/pipeline-logs/worker-%i.log

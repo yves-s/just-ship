@@ -17,12 +17,15 @@
 # Framework files (overwritten on update):
 #   .claude/agents/*          Agent definitions
 #   .claude/commands/*        Slash commands
-#   .claude/skills/<name>.md  Framework skills (only framework-owned files)
+#   .claude/skills/<name>.md  Pipeline-specific skills (8 skills)
 #   .claude/scripts/*         Utility scripts (for skills)
 #   .claude/settings.json     Permissions
-#   .pipeline/run.sh          Pipeline runner
+#   .pipeline/*               Pipeline runner (TypeScript SDK)
 #   .claude/.pipeline-version Version tracking
 #   .claude/.template-hash    Template change detection
+#
+# External plugins (installed, not copied):
+#   superpowers               TDD, debugging, code review, planning (via plugin)
 #
 # Project files (NEVER overwritten):
 #   CLAUDE.md                 Project-specific instructions
@@ -105,7 +108,7 @@ MISSING=0
 check_prereq "claude" || MISSING=1
 check_prereq "git" || MISSING=1
 check_prereq "gh" || MISSING=1
-check_prereq "python3" || echo "  ~ python3 optional (config parsing in run.sh)"
+check_prereq "node" || MISSING=1
 
 if [ "$MISSING" -eq 1 ]; then
   echo ""
@@ -193,12 +196,41 @@ if [ "$MODE" = "update" ]; then
 
   # Pipeline
   diff_file "$FRAMEWORK_DIR/pipeline/run.sh" "$PROJECT_DIR/.pipeline/run.sh" ".pipeline/run.sh"
-  diff_file "$FRAMEWORK_DIR/pipeline/send-event.sh" "$PROJECT_DIR/.pipeline/send-event.sh" ".pipeline/send-event.sh"
+  diff_file "$FRAMEWORK_DIR/pipeline/run.ts" "$PROJECT_DIR/.pipeline/run.ts" ".pipeline/run.ts"
+  diff_file "$FRAMEWORK_DIR/pipeline/worker.ts" "$PROJECT_DIR/.pipeline/worker.ts" ".pipeline/worker.ts"
+  diff_file "$FRAMEWORK_DIR/pipeline/package.json" "$PROJECT_DIR/.pipeline/package.json" ".pipeline/package.json"
+  for f in "$FRAMEWORK_DIR/pipeline/lib/"*.ts; do
+    fname=$(basename "$f")
+    diff_file "$f" "$PROJECT_DIR/.pipeline/lib/$fname" ".pipeline/lib/$fname"
+  done
+  # Check for removed files
+  if [ -f "$PROJECT_DIR/.pipeline/send-event.sh" ]; then
+    echo "  - .pipeline/send-event.sh (replaced by SDK hooks)"
+    CHANGES=$((CHANGES + 1))
+  fi
+  if [ -f "$PROJECT_DIR/.claude/scripts/devboard-hook.sh" ]; then
+    echo "  - .claude/scripts/devboard-hook.sh (replaced by SDK hooks)"
+    CHANGES=$((CHANGES + 1))
+  fi
 
   # Skills (framework skills only — project-specific skills are never touched)
   for f in "$FRAMEWORK_DIR/skills/"*.md; do
     fname=$(basename "$f")
     diff_file "$f" "$PROJECT_DIR/.claude/skills/$fname" ".claude/skills/$fname"
+  done
+
+  # Check for removed skills (only framework-owned skills, not project-specific ones)
+  REMOVED_SKILLS=(
+    brainstorming.md dispatching-parallel-agents.md executing-plans.md
+    finishing-a-development-branch.md receiving-code-review.md requesting-code-review.md
+    subagent-driven-development.md systematic-debugging.md test-driven-development.md
+    using-git-worktrees.md verification-before-completion.md writing-plans.md
+  )
+  for fname in "${REMOVED_SKILLS[@]}"; do
+    if [ -f "$PROJECT_DIR/.claude/skills/$fname" ]; then
+      echo "  - .claude/skills/$fname (replaced by superpowers plugin)"
+      CHANGES=$((CHANGES + 1))
+    fi
   done
 
   # Scripts
@@ -262,8 +294,31 @@ if [ "$MODE" = "update" ]; then
 
   echo "Updating skills..."
   mkdir -p "$PROJECT_DIR/.claude/skills"
+  # Remove skills now provided by superpowers plugin
+  for fname in "${REMOVED_SKILLS[@]}"; do
+    if [ -f "$PROJECT_DIR/.claude/skills/$fname" ]; then
+      rm "$PROJECT_DIR/.claude/skills/$fname"
+      echo "  - $fname (replaced by superpowers plugin)"
+    fi
+  done
   cp "$FRAMEWORK_DIR/skills/"*.md "$PROJECT_DIR/.claude/skills/"
   echo "  ✓ $(ls "$FRAMEWORK_DIR/skills/"*.md | wc -l | tr -d ' ') framework skills (project-specific skills untouched)"
+
+  # Install superpowers plugin if not already installed
+  echo "Checking superpowers plugin..."
+  if claude plugin list 2>/dev/null | grep -q "superpowers"; then
+    echo "  ✓ superpowers plugin already installed"
+  else
+    echo "  Installing superpowers plugin..."
+    claude plugin marketplace add obra/superpowers-marketplace 2>/dev/null || true
+    if claude plugin install superpowers@superpowers-marketplace --scope user 2>/dev/null; then
+      echo "  ✓ superpowers plugin installed (user scope)"
+    else
+      echo "  ⚠ superpowers plugin install failed — install manually:"
+      echo "    claude plugin marketplace add obra/superpowers-marketplace"
+      echo "    claude plugin install superpowers@superpowers-marketplace --scope user"
+    fi
+  fi
 
   echo "Updating scripts..."
   mkdir -p "$PROJECT_DIR/.claude/scripts"
@@ -273,11 +328,24 @@ if [ "$MODE" = "update" ]; then
   echo "  ✓ scripts"
 
   echo "Updating pipeline..."
+  # Copy all pipeline files
   cp "$FRAMEWORK_DIR/pipeline/run.sh" "$PROJECT_DIR/.pipeline/run.sh"
-  cp "$FRAMEWORK_DIR/pipeline/send-event.sh" "$PROJECT_DIR/.pipeline/send-event.sh"
-  chmod +x "$PROJECT_DIR/.pipeline/"*.sh
-  echo "  ✓ .pipeline/run.sh"
-  echo "  ✓ .pipeline/send-event.sh"
+  cp "$FRAMEWORK_DIR/pipeline/run.ts" "$PROJECT_DIR/.pipeline/run.ts"
+  cp "$FRAMEWORK_DIR/pipeline/worker.ts" "$PROJECT_DIR/.pipeline/worker.ts"
+  cp "$FRAMEWORK_DIR/pipeline/package.json" "$PROJECT_DIR/.pipeline/package.json"
+  cp "$FRAMEWORK_DIR/pipeline/tsconfig.json" "$PROJECT_DIR/.pipeline/tsconfig.json"
+  mkdir -p "$PROJECT_DIR/.pipeline/lib"
+  cp "$FRAMEWORK_DIR/pipeline/lib/"*.ts "$PROJECT_DIR/.pipeline/lib/"
+  chmod +x "$PROJECT_DIR/.pipeline/"*.sh 2>/dev/null || true
+  # Cleanup removed files
+  rm -f "$PROJECT_DIR/.pipeline/send-event.sh"
+  rm -f "$PROJECT_DIR/.claude/scripts/devboard-hook.sh"
+  # Install dependencies
+  if [ -f "$PROJECT_DIR/.pipeline/package.json" ]; then
+    echo "  Installing pipeline dependencies..."
+    (cd "$PROJECT_DIR/.pipeline" && npm install --production 2>/dev/null)
+  fi
+  echo "  ✓ .pipeline/ (SDK pipeline)"
 
   echo "Updating settings..."
   cp "$FRAMEWORK_DIR/settings.json" "$PROJECT_DIR/.claude/settings.json"
@@ -318,11 +386,14 @@ if [ "$MODE" = "update" ]; then
   echo "  ~ project.json"
   echo "  ~ .claude/skills/*"
 
+  echo ""
   if [ "$TEMPLATES_CHANGED" = true ]; then
-    echo ""
-    echo "  ⚠  CLAUDE.md Template hat sich geändert."
-    echo "     Öffne Claude Code und führe /update-pipeline aus,"
+    echo "  ⚠  Templates haben sich geändert!"
+    echo "     Führe /update-pipeline in Claude Code aus,"
     echo "     um CLAUDE.md und project.json abzugleichen."
+  else
+    echo "  → Führe /update-pipeline in Claude Code aus,"
+    echo "    um neue Config-Felder zu übernehmen."
   fi
 
   echo ""
@@ -365,18 +436,34 @@ echo "  ✓ $(ls "$FRAMEWORK_DIR/commands/"*.md | wc -l | tr -d ' ') commands"
 
 # --- Copy pipeline runner ---
 echo "Installing pipeline..."
-mkdir -p "$PROJECT_DIR/.pipeline"
+mkdir -p "$PROJECT_DIR/.pipeline/lib"
 cp "$FRAMEWORK_DIR/pipeline/run.sh" "$PROJECT_DIR/.pipeline/run.sh"
-cp "$FRAMEWORK_DIR/pipeline/send-event.sh" "$PROJECT_DIR/.pipeline/send-event.sh"
-chmod +x "$PROJECT_DIR/.pipeline/"*.sh
-echo "  ✓ .pipeline/run.sh"
-echo "  ✓ .pipeline/send-event.sh"
+cp "$FRAMEWORK_DIR/pipeline/run.ts" "$PROJECT_DIR/.pipeline/run.ts"
+cp "$FRAMEWORK_DIR/pipeline/worker.ts" "$PROJECT_DIR/.pipeline/worker.ts"
+cp "$FRAMEWORK_DIR/pipeline/package.json" "$PROJECT_DIR/.pipeline/package.json"
+cp "$FRAMEWORK_DIR/pipeline/tsconfig.json" "$PROJECT_DIR/.pipeline/tsconfig.json"
+cp "$FRAMEWORK_DIR/pipeline/lib/"*.ts "$PROJECT_DIR/.pipeline/lib/"
+chmod +x "$PROJECT_DIR/.pipeline/"*.sh 2>/dev/null || true
+echo "  Installing pipeline dependencies..."
+(cd "$PROJECT_DIR/.pipeline" && npm install --production 2>/dev/null)
+echo "  ✓ .pipeline/ (SDK pipeline)"
 
 # --- Copy skills ---
 echo "Installing skills..."
 mkdir -p "$PROJECT_DIR/.claude/skills"
 cp "$FRAMEWORK_DIR/skills/"*.md "$PROJECT_DIR/.claude/skills/"
-echo "  ✓ $(ls "$FRAMEWORK_DIR/skills/"*.md | wc -l | tr -d ' ') skills"
+echo "  ✓ $(ls "$FRAMEWORK_DIR/skills/"*.md | wc -l | tr -d ' ') pipeline skills"
+
+# --- Install superpowers plugin ---
+echo "Installing superpowers plugin..."
+claude plugin marketplace add obra/superpowers-marketplace 2>/dev/null || true
+if claude plugin install superpowers@superpowers-marketplace --scope user 2>/dev/null; then
+  echo "  ✓ superpowers plugin (TDD, debugging, code review, planning)"
+else
+  echo "  ⚠ superpowers plugin install failed — install manually:"
+  echo "    claude plugin marketplace add obra/superpowers-marketplace"
+  echo "    claude plugin install superpowers@superpowers-marketplace --scope user"
+fi
 
 # --- Copy scripts ---
 echo "Installing scripts..."
@@ -451,13 +538,12 @@ echo "  Setup complete → $FRAMEWORK_VERSION"
 echo "================================================"
 echo ""
 echo "Next steps:"
-echo "  1. Run /setup-pipeline   — In Claude Code öffnen und /setup-pipeline ausführen"
-echo "                             (Stack erkennen, Config befüllen, Dev Board verbinden)"
-echo "  2. .claude/skills/       — Eigene Skills hinzufügen (optional)"
+echo "  1. Neue Claude Code Session öffnen (wichtig — bestehende Sessions"
+echo "     kennen die neuen Commands noch nicht)"
+echo "  2. /setup-pipeline ausführen (erkennt den Stack automatisch,"
+echo "     befüllt die Config und verbindet das Dev Board)"
+echo "  3. .claude/skills/ — Eigene Skills hinzufügen (optional)"
 echo ""
 echo "Framework updaten:"
 echo "  $(basename "$FRAMEWORK_DIR")/setup.sh --update"
-echo ""
-echo "Pipeline (VPS/CI):"
-echo "  .pipeline/run.sh <TICKET_ID> <TICKET_TITLE> [DESCRIPTION]"
 echo ""
