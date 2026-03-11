@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { Copy, Check, ArrowRight } from "lucide-react";
+import { Copy, Check, ArrowRight, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { useSlugCheck } from "@/lib/hooks/use-slug-check";
 import { createClient } from "@/lib/supabase/client";
 import { createWorkspaceSchema, type CreateWorkspaceInput } from "@/lib/validations/workspace";
 import {
@@ -46,6 +47,14 @@ export default function NewWorkspacePage() {
   });
 
   const nameValue = watch("name") ?? "";
+  const slugValue = watch("slug") ?? "";
+  const { isChecking, isAvailable, suggestion } = useSlugCheck(slugValue);
+
+  const handleApplySuggestion = useCallback(() => {
+    if (suggestion) {
+      setValue("slug", suggestion, { shouldValidate: true });
+    }
+  }, [suggestion, setValue]);
 
   function handleNameChange(e: React.ChangeEvent<HTMLInputElement>) {
     const name = e.target.value;
@@ -215,14 +224,37 @@ export default function NewWorkspacePage() {
                   className="border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
                   {...register("slug")}
                 />
+                {slugValue.length >= 2 && (
+                  <span className="shrink-0 ml-1">
+                    {isChecking ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    ) : isAvailable === true ? (
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    ) : isAvailable === false ? (
+                      <AlertCircle className="h-4 w-4 text-destructive" />
+                    ) : null}
+                  </span>
+                )}
               </div>
               {errors.slug && (
                 <p className="text-xs text-destructive">{errors.slug.message}</p>
               )}
+              {isAvailable === false && suggestion && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-destructive">Slug already taken.</span>
+                  <button
+                    type="button"
+                    className="text-primary underline underline-offset-2 hover:text-primary/80"
+                    onClick={handleApplySuggestion}
+                  >
+                    Use &quot;{suggestion}&quot; instead?
+                  </button>
+                </div>
+              )}
             </div>
             <Button
               type="submit"
-              disabled={isSubmitting || !nameValue.trim()}
+              disabled={isSubmitting || !nameValue.trim() || isAvailable === false}
               className="w-full"
             >
               {isSubmitting ? "Creating…" : "Create workspace"}
