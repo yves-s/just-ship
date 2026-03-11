@@ -25,7 +25,24 @@ Colors, spacing, typography, border-radius, shadows — all from the design syst
 2. Read `project.json` for paths to design tokens or theme files
 3. Find existing components that solve a similar problem — reuse patterns
 
-## Design Token Usage
+## Token Architecture — Three Layers
+
+Tokens are structured in three layers. Never skip a layer.
+
+```
+Primitive (raw values)       →  --color-blue-600: #2563EB;
+    ↓
+Semantic (purpose aliases)   →  --color-primary: var(--color-blue-600);
+    ↓
+Component (scoped to UI)     →  --button-bg: var(--color-primary);
+```
+
+**Why three layers:**
+- Primitive → Semantic: enables theme switching (light/dark) without touching components
+- Semantic → Component: enables per-component overrides without breaking the system
+- Changing `--color-blue-600` updates every semantic and component token that references it
+
+### Token Usage
 
 | Wrong | Right |
 |-------|-------|
@@ -33,6 +50,7 @@ Colors, spacing, typography, border-radius, shadows — all from the design syst
 | `padding: 16px` | `p-4` / `spacing.md` / `var(--spacing-4)` |
 | `font-size: 14px` | `text-sm` / `typography.body` |
 | `border-radius: 8px` | `rounded-lg` / `var(--radius-md)` |
+| `var(--color-blue-600)` in component | `var(--button-bg)` — use component token |
 
 ## Component States — All Required
 

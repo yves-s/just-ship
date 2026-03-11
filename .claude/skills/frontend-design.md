@@ -22,7 +22,7 @@ Read the project's token/theme file before writing a single line:
 
 Before creating a new component, check:
 1. Does a component already exist for this use case?
-2. Can an existing component be extended?
+2. Can an existing component be extended via shadcn/ui? (`npx shadcn@latest add <component>`)
 3. What's the closest existing implementation to reference?
 
 ## Step 3: Implement — Component Checklist
@@ -73,6 +73,62 @@ Check:
 - No console errors/warnings for your changes
 - Responsive layout at 375px, 768px, 1280px breakpoints
 
+## shadcn/ui Patterns
+
+When the project uses shadcn/ui (check `components/ui/` or `components.json`):
+
+**Adding components:**
+```bash
+npx shadcn@latest add button card dialog form input select
+```
+
+**Form validation (zod + react-hook-form):**
+```tsx
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import * as z from "zod"
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form"
+
+const schema = z.object({
+  email: z.string().email(),
+  name: z.string().min(2)
+})
+
+export function MyForm() {
+  const form = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: { email: "", name: "" }
+  })
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField control={form.control} name="email" render={({ field }) => (
+          <FormItem>
+            <FormLabel>Email</FormLabel>
+            <FormControl><Input type="email" {...field} /></FormControl>
+            <FormMessage />
+          </FormItem>
+        )} />
+      </form>
+    </Form>
+  )
+}
+```
+
+**Dark mode (next-themes):**
+```tsx
+// layout.tsx — wrap app
+import { ThemeProvider } from "next-themes"
+<ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+  {children}
+</ThemeProvider>
+
+// Use semantic colors — they switch automatically:
+// bg-background, text-foreground, text-muted-foreground, bg-card, border
+// Never use bg-white/bg-black — use bg-background instead
+```
+
 ## Anti-Patterns
 
 - `any` type — forbidden without comment explaining why
@@ -80,3 +136,5 @@ Check:
 - Missing error state — always implement
 - Business logic in components — extract to hooks
 - `console.log` left in — remove before committing
+- `bg-white dark:bg-gray-900` — use `bg-background` (semantic token)
+- Building custom components when shadcn/ui has one — check first

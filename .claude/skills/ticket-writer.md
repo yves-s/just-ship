@@ -252,6 +252,7 @@ VALUES (
   ARRAY['{tag1}', '{tag2}'],
   'backlog',            -- default; use 'ready_to_develop' only if ACs are complete and unambiguous
   '{pipeline.workspace_id}',
+  -- ⚠ NIEMALS weglassen! Immer project_id per Subquery setzen:
   (SELECT id FROM public.projects
    WHERE name = '{pipeline.project_name}'
      AND workspace_id = '{pipeline.workspace_id}')
@@ -259,14 +260,13 @@ VALUES (
 RETURNING number, title, status;
 ```
 
-**MUST rules for the INSERT:**
-- **`body` MUST contain the full ticket Markdown** — the complete structured content (Problem, Desired Behavior, Acceptance Criteria, Out of Scope, etc.) as written above. NEVER leave body empty or NULL.
-- **`project_id` MUST use the subquery** to look up the project by `pipeline.project_name`. NEVER omit the project_id column or set it to NULL.
-- **`workspace_id` MUST be set** from `pipeline.workspace_id`.
+### ⚠ HARD RULES — Verstoß = fehlerhaftes Ticket
 
-Use `project_id` from `pipeline.project_id` in `project.json` as the Supabase project for the MCP tool call.
-
-After a successful insert, confirm with: `✓ Ticket T-{number} erstellt: {title}` (use the `T-` prefix with the number from `RETURNING number`, NEVER use `#`)
+1. **`project_id` ist PFLICHT.** Immer die Subquery `(SELECT id FROM public.projects WHERE name = ...)` verwenden. NIEMALS weglassen, NIEMALS NULL setzen.
+2. **`workspace_id` ist PFLICHT.** Wert aus `pipeline.workspace_id` in `project.json`.
+3. **`body` ist PFLICHT.** Vollständiges Ticket-Markdown (Problem, Desired Behavior, ACs, Out of Scope). NIEMALS leer oder NULL.
+4. **Supabase-Projekt:** `pipeline.project_id` aus `project.json` als Supabase project_id für den MCP Tool Call verwenden.
+5. **Bestätigung MUSS `T-` Prefix verwenden:** `✓ Ticket T-{number} erstellt: {title}` — das `number` kommt aus `RETURNING`. **NIEMALS `#` verwenden.** Falsch: `#272`. Richtig: `T-272`.
 
 ### Fallback — Only when no pipeline.project_id
 
