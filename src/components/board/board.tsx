@@ -20,6 +20,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { BOARD_COLUMNS, TICKETS_PER_COLUMN_PAGE } from "@/lib/constants";
 import type { TicketStatus, TicketPriority } from "@/lib/constants";
 import type { Ticket, Project, WorkspaceMember } from "@/lib/types";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BoardColumn } from "./board-column";
 import { BoardGroupRow, type ProjectGroup } from "./board-group-row";
@@ -535,6 +536,38 @@ export function Board({
                   />
                 );
               })}
+
+              {/* Load-more row for grouped view — one button per column */}
+              <div className="flex gap-4 mt-2">
+                {visibleColumns.map((col) => {
+                  const colTickets = getTicketsForColumn(col.status);
+                  const totalCount = columnCounts[col.status] ?? colTickets.length;
+                  const hasMore = colTickets.length < totalCount;
+                  const loading = loadingMore[col.status] ?? false;
+
+                  return (
+                    <div key={col.status} className="w-72 shrink-0 flex justify-center">
+                      {hasMore && (
+                        <button
+                          type="button"
+                          onClick={() => loadMore(col.status)}
+                          disabled={loading}
+                          className="flex items-center gap-1.5 rounded-lg py-2 px-3 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
+                        >
+                          {loading ? (
+                            <>
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Laden…
+                            </>
+                          ) : (
+                            `Mehr laden (${colTickets.length}/${totalCount})`
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ) : (
             <div className="flex h-full gap-4 p-6">
