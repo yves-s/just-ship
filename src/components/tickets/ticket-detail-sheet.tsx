@@ -242,7 +242,7 @@ export function TicketDetailSheet({
           </Tooltip>
         </div>
 
-        <div className="flex-1 overflow-y-auto flex flex-col">
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
           {/* Title */}
           <div className="px-8 pb-3">
             <textarea
