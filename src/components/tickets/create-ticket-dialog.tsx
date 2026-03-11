@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
@@ -9,6 +9,7 @@ import {
   type CreateTicketInput,
 } from "@/lib/validations/ticket";
 import { TICKET_STATUSES, TICKET_PRIORITIES } from "@/lib/constants";
+import type { TicketStatus } from "@/lib/constants";
 import {
   Dialog,
   DialogContent,
@@ -27,13 +28,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Ticket } from "@/lib/types";
+import type { Ticket, Project } from "@/lib/types";
 
 interface CreateTicketDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workspaceId: string;
   onCreated: (ticket: Ticket) => void;
+  projects?: Project[];
+  defaultProjectId?: string | null;
+  defaultStatus?: TicketStatus;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -56,6 +60,9 @@ export function CreateTicketDialog({
   onOpenChange,
   workspaceId,
   onCreated,
+  projects = [],
+  defaultProjectId,
+  defaultStatus,
 }: CreateTicketDialogProps) {
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -63,6 +70,7 @@ export function CreateTicketDialog({
     register,
     handleSubmit,
     setValue,
+    watch,
     reset,
     formState: { errors, isSubmitting },
   } = useForm<CreateTicketInput>({
@@ -71,8 +79,24 @@ export function CreateTicketDialog({
       status: "backlog",
       priority: "medium",
       tags: [],
+      project_id: null,
     },
   });
+
+  // Apply dynamic defaults when dialog opens
+  useEffect(() => {
+    if (open) {
+      if (defaultStatus) {
+        setValue("status", defaultStatus);
+      }
+      if (defaultProjectId !== undefined) {
+        setValue("project_id", defaultProjectId ?? null);
+      }
+    }
+  }, [open, defaultStatus, defaultProjectId, setValue]);
+
+  const watchedStatus = watch("status") ?? defaultStatus ?? "backlog";
+  const watchedProjectId = watch("project_id");
 
   async function onSubmit(data: CreateTicketInput) {
     setServerError(null);
@@ -86,7 +110,7 @@ export function CreateTicketDialog({
         tags: data.tags ?? [],
         assigned_agents: [],
       })
-      .select()
+      .select("*, project:projects(id, name, description, workspace_id, created_at, updated_at)")
       .single();
 
     if (error) {
@@ -147,7 +171,7 @@ export function CreateTicketDialog({
             <div className="flex flex-col gap-1.5">
               <Label>Status</Label>
               <Select
-                defaultValue="backlog"
+                value={watchedStatus}
                 onValueChange={(val) =>
                   setValue("status", val as CreateTicketInput["status"])
                 }
@@ -186,6 +210,30 @@ export function CreateTicketDialog({
               </Select>
             </div>
           </div>
+
+          {projects.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <Label>Project</Label>
+              <Select
+                value={watchedProjectId ?? "none"}
+                onValueChange={(val) =>
+                  setValue("project_id", val === "none" ? null : val)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No project" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No project</SelectItem>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="due_date">Due date</Label>

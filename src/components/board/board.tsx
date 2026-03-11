@@ -18,13 +18,58 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { BOARD_COLUMNS } from "@/lib/constants";
 import type { TicketStatus, TicketPriority } from "@/lib/constants";
 import type { Ticket, Project, WorkspaceMember } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { BoardColumn } from "./board-column";
+import { BoardGroupRow, type ProjectGroup } from "./board-group-row";
 import { TicketCard } from "./ticket-card";
 import { TicketDetailSheet } from "@/components/tickets/ticket-detail-sheet";
+import { CreateTicketDialog } from "@/components/tickets/create-ticket-dialog";
 import { AgentPanel } from "./agent-panel";
 import { useAgentActivity } from "@/lib/hooks/use-agent-activity";
 import { BoardToolbar } from "./board-toolbar";
 import { useBoardFilters } from "@/lib/hooks/use-board-filters";
+
+const COLUMN_DOT: Record<TicketStatus, string> = {
+  backlog: "bg-slate-400",
+  ready_to_develop: "bg-sky-500",
+  in_progress: "bg-amber-500",
+  in_review: "bg-violet-500",
+  done: "bg-emerald-500",
+  cancelled: "bg-red-400",
+};
+
+function buildProjectGroups(
+  tickets: Ticket[],
+  projects: Project[]
+): ProjectGroup[] {
+  const map = new Map<string, ProjectGroup>();
+
+  for (const ticket of tickets) {
+    const key = ticket.project_id ?? "none";
+    if (!map.has(key)) {
+      const projectName =
+        ticket.project?.name ??
+        projects.find((p) => p.id === ticket.project_id)?.name ??
+        null;
+      map.set(key, {
+        projectId: ticket.project_id,
+        projectName,
+        tickets: [],
+      });
+    }
+    map.get(key)!.tickets.push(ticket);
+  }
+
+  const noProject = map.get("none");
+  const withProject = Array.from(map.values())
+    .filter((g) => g.projectId !== null)
+    .sort((a, b) => (a.projectName ?? "").localeCompare(b.projectName ?? ""));
+
+  const result: ProjectGroup[] = [];
+  if (noProject) result.push(noProject);
+  result.push(...withProject);
+  return result;
+}
 
 const PRIORITY_ORDER: Record<TicketPriority, number> = {
   high: 3,
@@ -54,6 +99,11 @@ export function Board({
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [addTicketDialog, setAddTicketDialog] = useState<{
+    open: boolean;
+    status: TicketStatus;
+    projectId: string | null;
+  }>({ open: false, status: "backlog", projectId: null });
 
   const { filters, updateFilters } = useBoardFilters(workspaceSlug);
 
@@ -136,6 +186,21 @@ export function Board({
     return BOARD_COLUMNS.filter((col) => filters.statuses.includes(col.status));
   }, [filters.statuses]);
 
+  // Build project groups for grouped layout
+  const projectGroups = useMemo(() => {
+    if (!filters.groupByProject) return [];
+    return buildProjectGroups(filteredTickets, projects);
+  }, [filteredTickets, projects, filters.groupByProject]);
+
+  // Helper to extract status from droppable id (handles compound ids like "backlog__project-123")
+  function getStatusFromDroppableId(id: string): TicketStatus | undefined {
+    if (id.includes("__")) {
+      const status = id.split("__")[0] as TicketStatus;
+      return BOARD_COLUMNS.find((col) => col.status === status)?.status;
+    }
+    return BOARD_COLUMNS.find((col) => col.status === id)?.status;
+  }
+
   function getTicketsForColumn(status: TicketStatus): Ticket[] {
     return filteredTickets.filter((t) => t.status === status);
   }
@@ -155,10 +220,8 @@ export function Board({
     const activeTicket = tickets.find((t) => t.id === activeId);
     if (!activeTicket) return;
 
-    // Determine the target column
-    const targetStatus = BOARD_COLUMNS.find(
-      (col) => col.status === overId
-    )?.status;
+    // Determine the target column (supports compound ids like "backlog__project-123")
+    const targetStatus = getStatusFromDroppableId(overId);
     const overTicket = tickets.find((t) => t.id === overId);
     const targetCol = targetStatus ?? overTicket?.status;
 
@@ -234,6 +297,15 @@ export function Board({
     setSelectedTicket(updated);
   }
 
+  function handleAddTicket(status: TicketStatus, projectId: string | null) {
+    setAddTicketDialog({ open: true, status, projectId });
+  }
+
+  function handleTicketAdded(ticket: Ticket) {
+    setTickets((prev) => [ticket, ...prev]);
+    setAddTicketDialog((prev) => ({ ...prev, open: false }));
+  }
+
   function handleDeleted(id: string) {
     setTickets((prev) => prev.filter((t) => t.id !== id));
     const params = new URLSearchParams(searchParams.toString());
@@ -263,20 +335,63 @@ export function Board({
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex h-full gap-4 p-6">
-            {visibleColumns.map((col) => (
-              <BoardColumn
-                key={col.status}
-                status={col.status}
-                label={col.label}
-                tickets={getTicketsForColumn(col.status)}
-                onTicketClick={handleTicketClick}
-                isAgentActive={isActive}
-                getAgentActivity={getActivity}
-                groupByProject={filters.groupByProject}
-              />
-            ))}
-          </div>
+          {filters.groupByProject ? (
+            <div className="h-full p-6 min-w-fit">
+              {/* Column headers — sticky top */}
+              <div className="flex gap-4 mb-4 sticky top-0 z-10 bg-background pb-2">
+                {visibleColumns.map((col) => {
+                  const count = filteredTickets.filter(
+                    (t) => t.status === col.status
+                  ).length;
+                  return (
+                    <div
+                      key={col.status}
+                      className="w-72 shrink-0 flex items-center gap-2 px-1"
+                    >
+                      <span
+                        className={cn(
+                          "h-2.5 w-2.5 rounded-full shrink-0",
+                          COLUMN_DOT[col.status] ?? "bg-slate-400"
+                        )}
+                      />
+                      <span className="text-sm font-medium">{col.label}</span>
+                      <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground font-medium">
+                        {count}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Project group rows */}
+              {projectGroups.map((group) => (
+                <BoardGroupRow
+                  key={group.projectId ?? "none"}
+                  group={group}
+                  columns={visibleColumns}
+                  onTicketClick={handleTicketClick}
+                  isAgentActive={isActive}
+                  getAgentActivity={getActivity}
+                  onAddTicket={handleAddTicket}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="flex h-full gap-4 p-6">
+              {visibleColumns.map((col) => (
+                <BoardColumn
+                  key={col.status}
+                  status={col.status}
+                  label={col.label}
+                  tickets={getTicketsForColumn(col.status)}
+                  onTicketClick={handleTicketClick}
+                  isAgentActive={isActive}
+                  getAgentActivity={getActivity}
+                  onAddTicket={handleAddTicket}
+                />
+              ))}
+            </div>
+          )}
 
           <DragOverlay>
             {activeTicket && (
@@ -296,6 +411,18 @@ export function Board({
         onOpenChange={handleSheetOpenChange}
         onUpdated={handleUpdated}
         onDeleted={handleDeleted}
+      />
+
+      <CreateTicketDialog
+        open={addTicketDialog.open}
+        onOpenChange={(open) =>
+          setAddTicketDialog((prev) => ({ ...prev, open }))
+        }
+        workspaceId={workspaceId}
+        onCreated={handleTicketAdded}
+        projects={projects}
+        defaultStatus={addTicketDialog.status}
+        defaultProjectId={addTicketDialog.projectId}
       />
     </>
   );
