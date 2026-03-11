@@ -241,7 +241,7 @@ export function TicketListView({
                   </td>
                   <td className="px-3 py-3 font-medium max-w-xs">
                     <div className="flex flex-col gap-1">
-                      <span className="truncate">{ticket.title}</span>
+                      <span className="line-clamp-2">{ticket.title}</span>
                       {ticket.tags && ticket.tags.length > 0 && (
                         <div className="flex gap-1">
                           {ticket.tags.slice(0, 3).map((tag) => (
