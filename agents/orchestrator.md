@@ -63,10 +63,12 @@ Lies project.json für Pfade und Stack-Details.
 - Neue Seite/Feature ohne bestehendes Design System → `## Design-Modus: Greenfield` (creative-design Skill)
 - Bestehende Komponente erweitern → `## Design-Modus: Bestehend` (design + frontend-design Skills)
 
-**Parallelisierung:**
+**Parallelisierung (WICHTIG — spart 50%+ Zeit):**
+- **Mehrere Agent-Tool-Calls in EINER Response = parallele Ausführung.** Das SDK spawnt sie automatisch gleichzeitig.
 - Wenn Schema-Änderung nötig UND Code darauf aufbaut → data-engineer ZUERST, dann Rest parallel
-- Sonst → alle parallel
+- Sonst → frontend + backend + andere **in einer einzigen Response** spawnen
 - **Im Zweifel: parallel.** Agents arbeiten auf verschiedenen Dateien.
+- Beispiel: Ein Ticket braucht DB-Migration + API-Route + UI → data-engineer zuerst, dann backend + frontend gleichzeitig in einer Response
 
 ### Phase 3: Build-Check (Bash, kein Agent)
 
