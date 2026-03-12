@@ -10,6 +10,7 @@ interface AgentActivity {
   agent_type: string;
   event_type: string;
   created_at: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ActiveAgent {
@@ -17,11 +18,13 @@ export interface ActiveAgent {
   agent_type: string;
   event_type: string;
   created_at: string;
-  status: "running" | "completed" | "failed";
+  status: "running" | "completed" | "failed" | "log";
+  metadata?: Record<string, unknown>;
 }
 
-function deriveStatus(eventType: string): "running" | "completed" | "failed" {
+function deriveStatus(eventType: string): "running" | "completed" | "failed" | "log" {
   const lower = eventType.toLowerCase();
+  if (lower === "log") return "log";
   if (
     lower.includes("complet") ||
     lower.includes("done") ||
@@ -83,13 +86,15 @@ export function useAgentActivity(workspaceId: string, ticketIds?: string[]) {
     const now = Date.now();
     const result: ActiveAgent[] = [];
     for (const [, activity] of activityMap) {
-      if (now - new Date(activity.created_at).getTime() < ACTIVITY_WINDOW_MS) {
+      const isLog = activity.event_type === "log";
+      if (isLog || now - new Date(activity.created_at).getTime() < ACTIVITY_WINDOW_MS) {
         result.push({
           ticket_id: activity.ticket_id,
           agent_type: activity.agent_type,
           event_type: activity.event_type,
           created_at: activity.created_at,
           status: deriveStatus(activity.event_type),
+          metadata: activity.metadata,
         });
       }
     }
@@ -105,19 +110,22 @@ export function useAgentActivity(workspaceId: string, ticketIds?: string[]) {
       .from("task_events")
       .select("*")
       .in("ticket_id", ticketIds)
-      .gte("created_at", cutoff)
+      .or(`created_at.gte.${cutoff},event_type.eq.log`)
       .order("created_at", { ascending: true })
       .then(({ data }) => {
         if (!data?.length) return;
         setActivityMap((prev) => {
           const next = new Map(prev);
           for (const event of data as TaskEvent[]) {
-            const key = `${event.ticket_id}::${event.agent_type}`;
+            const key = event.event_type === "log"
+              ? `${event.ticket_id}::log::${event.id}`
+              : `${event.ticket_id}::${event.agent_type}`;
             next.set(key, {
               ticket_id: event.ticket_id,
               agent_type: event.agent_type,
               event_type: event.event_type,
               created_at: event.created_at,
+              metadata: event.metadata,
             });
           }
           return next;
@@ -141,7 +149,9 @@ export function useAgentActivity(workspaceId: string, ticketIds?: string[]) {
         },
         (payload) => {
           const event = payload.new as TaskEvent;
-          const key = `${event.ticket_id}::${event.agent_type}`;
+          const key = event.event_type === "log"
+            ? `${event.ticket_id}::log::${event.id}`
+            : `${event.ticket_id}::${event.agent_type}`;
           setActivityMap((prev) => {
             const next = new Map(prev);
             next.set(key, {
@@ -149,6 +159,7 @@ export function useAgentActivity(workspaceId: string, ticketIds?: string[]) {
               agent_type: event.agent_type,
               event_type: event.event_type,
               created_at: event.created_at,
+              metadata: event.metadata,
             });
             return next;
           });
@@ -163,6 +174,7 @@ export function useAgentActivity(workspaceId: string, ticketIds?: string[]) {
         let changed = false;
         const next = new Map(prev);
         for (const [key, activity] of next) {
+          if (activity.event_type === "log") continue;
           if (
             now - new Date(activity.created_at).getTime() >=
             ACTIVITY_WINDOW_MS

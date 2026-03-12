@@ -62,6 +62,7 @@ export const EVENT_TYPES = [
   "agent_completed",
   "agent_spawned",
   "tool_use",
+  "log",
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];

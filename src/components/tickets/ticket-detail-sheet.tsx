@@ -15,6 +15,7 @@ import {
   Flag,
   CircleDot,
   FolderOpen,
+  FileText,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { TICKET_STATUSES, TICKET_PRIORITIES } from "@/lib/constants";
@@ -113,6 +114,62 @@ export function TicketDetailSheet({
       .order("name")
       .then(({ data }) => setProjects(data ?? []));
   }, [open, workspace.id]);
+
+  const [logEvents, setLogEvents] = useState<{ id: string; message: string; agent_type: string; created_at: string }[]>([]);
+
+  useEffect(() => {
+    if (!open || !current) return;
+    const supabase = createClient();
+
+    // Load existing log events
+    supabase
+      .from("task_events")
+      .select("*")
+      .eq("ticket_id", current.id)
+      .eq("event_type", "log")
+      .order("created_at", { ascending: true })
+      .then(({ data }) => {
+        if (data) {
+          setLogEvents(data.map((e: Record<string, unknown>) => ({
+            id: e.id as string,
+            message: ((e.metadata as Record<string, unknown>)?.message as string) ?? "",
+            agent_type: e.agent_type as string,
+            created_at: e.created_at as string,
+          })));
+        }
+      });
+
+    // Subscribe to new log events for this ticket
+    const channel = supabase
+      .channel(`log-events-${current.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "task_events",
+          filter: `ticket_id=eq.${current.id}`,
+        },
+        (payload) => {
+          const event = payload.new as Record<string, unknown>;
+          if (event.event_type !== "log") return;
+          setLogEvents((prev) => [
+            ...prev,
+            {
+              id: event.id as string,
+              message: ((event.metadata as Record<string, unknown>)?.message as string) ?? "",
+              agent_type: event.agent_type as string,
+              created_at: event.created_at as string,
+            },
+          ]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [open, current?.id]);
 
   useEffect(() => {
     autoResize(bodyRef.current);
@@ -526,6 +583,43 @@ export function TicketDetailSheet({
                 <pre className="rounded-md bg-muted px-3 py-2 text-xs font-mono overflow-auto whitespace-pre-wrap">
                   {current.test_results}
                 </pre>
+              </div>
+            </>
+          )}
+
+          {logEvents.length > 0 && (
+            <>
+              <div className="h-px bg-border mx-6 my-2" />
+              <div className="px-8 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">
+                  Activity
+                </div>
+                <div className="space-y-2">
+                  {logEvents.map((event) => (
+                    <div
+                      key={event.id}
+                      className="flex items-start gap-2.5 text-sm"
+                    >
+                      <FileText className="h-3.5 w-3.5 mt-0.5 text-blue-500 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-foreground">{event.message}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[10px] text-muted-foreground/60">
+                            {new Date(event.created_at).toLocaleString("de-DE", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground/40">
+                            {event.agent_type}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </>
           )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Bot, CheckCircle2, XCircle, Loader2, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ActiveAgent } from "@/lib/hooks/use-agent-activity";
 import type { Ticket } from "@/lib/types";
@@ -23,6 +23,10 @@ const STATUS_CONFIG = {
   failed: {
     Icon: XCircle,
     className: "text-red-500",
+  },
+  log: {
+    Icon: FileText,
+    className: "text-blue-500",
   },
 } as const;
 
@@ -94,6 +98,11 @@ export function AgentPanel({
                 {ticket && (
                   <span className="font-mono text-muted-foreground">
                     T-{ticket.number}
+                  </span>
+                )}
+                {agent.status === "log" && !!agent.metadata?.message && (
+                  <span className="text-muted-foreground truncate max-w-[200px]">
+                    {String(agent.metadata!.message)}
                   </span>
                 )}
                 <Icon className={cn("h-3 w-3 shrink-0", className)} />
