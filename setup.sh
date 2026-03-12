@@ -19,7 +19,8 @@
 #   .claude/commands/*        Slash commands
 #   .claude/skills/<name>.md  Pipeline-specific skills (8 skills)
 #   .claude/scripts/*         Utility scripts (for skills)
-#   .claude/settings.json     Permissions
+#   .claude/hooks/*           Event streaming hooks (SessionStart, SubagentStart/Stop, SessionEnd)
+#   .claude/settings.json     Permissions + hook configuration
 #   .pipeline/*               Pipeline runner (TypeScript SDK)
 #   .claude/.pipeline-version Version tracking
 #   .claude/.template-hash    Template change detection
@@ -253,6 +254,13 @@ if [ "$MODE" = "update" ]; then
     diff_file "$f" "$PROJECT_DIR/.claude/scripts/$fname" ".claude/scripts/$fname"
   done
 
+  # Hooks
+  for f in "$FRAMEWORK_DIR/.claude/hooks/"*.sh; do
+    [ -f "$f" ] || continue
+    fname=$(basename "$f")
+    diff_file "$f" "$PROJECT_DIR/.claude/hooks/$fname" ".claude/hooks/$fname"
+  done
+
   # Settings
   diff_file "$FRAMEWORK_DIR/settings.json" "$PROJECT_DIR/.claude/settings.json" ".claude/settings.json"
 
@@ -339,6 +347,12 @@ if [ "$MODE" = "update" ]; then
   chmod +x "$PROJECT_DIR/.claude/scripts/"*.sh 2>/dev/null || true
   chmod +x "$PROJECT_DIR/.claude/scripts/"*.py 2>/dev/null || true
   echo "  ✓ scripts"
+
+  echo "Updating hooks..."
+  mkdir -p "$PROJECT_DIR/.claude/hooks"
+  cp "$FRAMEWORK_DIR/.claude/hooks/"*.sh "$PROJECT_DIR/.claude/hooks/" 2>/dev/null || true
+  chmod +x "$PROJECT_DIR/.claude/hooks/"*.sh 2>/dev/null || true
+  echo "  ✓ hooks (event streaming)"
 
   echo "Updating pipeline..."
   # Copy all pipeline files
@@ -486,6 +500,13 @@ cp "$FRAMEWORK_DIR/.claude/scripts/"* "$PROJECT_DIR/.claude/scripts/" 2>/dev/nul
 chmod +x "$PROJECT_DIR/.claude/scripts/"*.sh 2>/dev/null || true
 chmod +x "$PROJECT_DIR/.claude/scripts/"*.py 2>/dev/null || true
 echo "  ✓ scripts"
+
+# --- Copy hooks ---
+echo "Installing hooks..."
+mkdir -p "$PROJECT_DIR/.claude/hooks"
+cp "$FRAMEWORK_DIR/.claude/hooks/"*.sh "$PROJECT_DIR/.claude/hooks/" 2>/dev/null || true
+chmod +x "$PROJECT_DIR/.claude/hooks/"*.sh 2>/dev/null || true
+echo "  ✓ hooks (event streaming)"
 
 # --- Generate project.json ---
 if [ "$OVERWRITE_CONFIG" != "N" ]; then
