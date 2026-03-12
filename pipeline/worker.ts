@@ -102,6 +102,13 @@ async function claimTicket(number: number): Promise<boolean> {
   return (result?.length ?? 0) > 0;
 }
 
+async function completeTicket(number: number, branch: string): Promise<void> {
+  await supabasePatch(
+    `/rest/v1/tickets?number=eq.${number}`,
+    { pipeline_status: "done", status: "in_review", branch }
+  );
+}
+
 async function failTicket(number: number, reason: string): Promise<void> {
   await supabasePatch(
     `/rest/v1/tickets?number=eq.${number}`,
@@ -133,7 +140,9 @@ async function runTicketPipeline(ticket: Ticket): Promise<void> {
     throw new Error(`Pipeline failed (exit code: ${result.exitCode})`);
   }
 
-  log(`Pipeline completed: T--${ticket.number} → ${result.branch}`);
+  // Update ticket status to in_review
+  await completeTicket(ticket.number, result.branch);
+  log(`Pipeline completed: T--${ticket.number} → ${result.branch} (status: in_review)`);
 }
 
 // --- Graceful shutdown ---

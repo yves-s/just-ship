@@ -3,6 +3,7 @@ import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { execSync } from "node:child_process";
 import { loadProjectConfig, parseCliArgs, type TicketArgs } from "./lib/config.ts";
 import { loadAgents, loadOrchestratorPrompt } from "./lib/load-agents.ts";
+import { loadMcpTools } from "./lib/mcp-tools.ts";
 import { createEventHooks, postPipelineEvent, type EventConfig } from "./lib/event-hooks.ts";
 
 // --- Exported pipeline function (used by worker.ts) ---
@@ -93,7 +94,7 @@ Branch ist bereits erstellt: ${branchName}`;
         model: "opus",
         permissionMode: "bypassPermissions",
         allowDangerouslySkipPermissions: true,
-        allowedTools: ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent"],
+        allowedTools: ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", ...loadMcpTools(projectDir)],
         agents,
         hooks,
         maxTurns: 200,
