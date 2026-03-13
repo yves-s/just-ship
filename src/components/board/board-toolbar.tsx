@@ -1,6 +1,6 @@
 "use client";
 
-import { X, SlidersHorizontal, ArrowUpDown, Layers, Search } from "lucide-react";
+import { X, SlidersHorizontal, ArrowUpDown, Layers, Search, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useRef, useEffect } from "react";
@@ -39,6 +39,8 @@ interface BoardToolbarProps {
   onChange: (filters: BoardFilterState) => void;
   projects: Project[];
   members: WorkspaceMember[];
+  onCreateProject?: () => void;
+  onSetupProject?: (project: Project) => void;
 }
 
 export function BoardToolbar({
@@ -46,6 +48,8 @@ export function BoardToolbar({
   onChange,
   projects,
   members,
+  onCreateProject,
+  onSetupProject,
 }: BoardToolbarProps) {
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -351,6 +355,19 @@ export function BoardToolbar({
           >
             <X className="h-3 w-3" />
             Reset
+          </Button>
+        )}
+
+        {/* Create project button */}
+        {onCreateProject && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={onCreateProject}
+            title="Create project"
+          >
+            <Plus className="h-4 w-4" />
           </Button>
         )}
       </div>
