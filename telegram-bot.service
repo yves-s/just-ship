@@ -1,0 +1,56 @@
+# =============================================================================
+# telegram-bot.service — systemd Unit for Telegram Bot
+#
+# Installation:
+#   sudo cp telegram-bot.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now telegram-bot
+#
+# Voraussetzung:
+#   /home/claude-dev/.env              # Globale Keys (ANTHROPIC_API_KEY, OPENAI_API_KEY)
+#   /home/claude-dev/.env.telegram-bot # Bot-spezifische Config
+#
+# Bot-Config (.env.telegram-bot):
+#   TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
+#   SUPABASE_URL=https://xxx.supabase.co
+#   SUPABASE_SERVICE_KEY=eyJ...
+#   WORKSPACE_ID=421dffa5-...
+# =============================================================================
+
+[Unit]
+Description=Agentic Dev Telegram Bot
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=claude-dev
+Group=claude-dev
+WorkingDirectory=/home/claude-dev/agentic-dev-pipeline/telegram-bot
+
+# Globale Keys + bot-spezifische Config
+EnvironmentFile=/home/claude-dev/.env
+EnvironmentFile=/home/claude-dev/.env.telegram-bot
+
+ExecStart=/usr/bin/npx tsx bot.ts
+
+# Logging
+StandardOutput=append:/home/claude-dev/pipeline-logs/telegram-bot.log
+StandardError=append:/home/claude-dev/pipeline-logs/telegram-bot.log
+
+# Automatischer Neustart
+Restart=always
+RestartSec=10s
+
+# Sicherheit
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Ressourcen-Limits
+LimitNOFILE=65536
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target

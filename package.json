@@ -1,0 +1,17 @@
+{
+  "name": "agentic-dev-telegram-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file=.env --import=tsx/esm bot.ts",
+    "dev": "node --env-file=.env --import=tsx/esm --watch bot.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "@supabase/supabase-js": "^2.49.0",
+    "openai": "^4.96.0",
+    "telegraf": "^4.16.0",
+    "tsx": "^4.0.0"
+  }
+}
