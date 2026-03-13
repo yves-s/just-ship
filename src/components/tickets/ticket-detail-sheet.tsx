@@ -16,6 +16,11 @@ import {
   CircleDot,
   FolderOpen,
   FileText,
+  Play,
+  CheckCircle2,
+  XCircle,
+  Zap,
+  Wrench,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { TICKET_STATUSES, TICKET_PRIORITIES } from "@/lib/constants";
@@ -54,6 +59,23 @@ function autoResize(el: HTMLTextAreaElement | null) {
   if (!el) return;
   el.style.height = "auto";
   el.style.height = el.scrollHeight + "px";
+}
+
+function EventIcon({ eventType }: { eventType: string }) {
+  switch (eventType) {
+    case "agent_started":
+      return <Play className="h-3.5 w-3.5 mt-0.5 text-blue-500 shrink-0" />;
+    case "agent_completed":
+      return <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 text-emerald-500 shrink-0" />;
+    case "agent_spawned":
+      return <Zap className="h-3.5 w-3.5 mt-0.5 text-violet-500 shrink-0" />;
+    case "tool_use":
+      return <Wrench className="h-3.5 w-3.5 mt-0.5 text-amber-500 shrink-0" />;
+    case "log":
+      return <FileText className="h-3.5 w-3.5 mt-0.5 text-slate-400 shrink-0" />;
+    default:
+      return <XCircle className="h-3.5 w-3.5 mt-0.5 text-red-500 shrink-0" />;
+  }
 }
 
 function PropertyRow({
@@ -115,23 +137,23 @@ export function TicketDetailSheet({
       .then(({ data }) => setProjects(data ?? []));
   }, [open, workspace.id]);
 
-  const [logEvents, setLogEvents] = useState<{ id: string; message: string; agent_type: string; created_at: string }[]>([]);
+  const [events, setEvents] = useState<{ id: string; event_type: string; message: string; agent_type: string; created_at: string }[]>([]);
 
   useEffect(() => {
     if (!open || !current) return;
     const supabase = createClient();
 
-    // Load existing log events
+    // Load existing events
     supabase
       .from("task_events")
       .select("*")
       .eq("ticket_id", current.id)
-      .eq("event_type", "log")
       .order("created_at", { ascending: true })
       .then(({ data }) => {
         if (data) {
-          setLogEvents(data.map((e: Record<string, unknown>) => ({
+          setEvents(data.map((e: Record<string, unknown>) => ({
             id: e.id as string,
+            event_type: e.event_type as string,
             message: ((e.metadata as Record<string, unknown>)?.message as string) ?? "",
             agent_type: e.agent_type as string,
             created_at: e.created_at as string,
@@ -139,9 +161,9 @@ export function TicketDetailSheet({
         }
       });
 
-    // Subscribe to new log events for this ticket
+    // Subscribe to new events for this ticket
     const channel = supabase
-      .channel(`log-events-${current.id}`)
+      .channel(`task-events-${current.id}`)
       .on(
         "postgres_changes",
         {
@@ -152,11 +174,11 @@ export function TicketDetailSheet({
         },
         (payload) => {
           const event = payload.new as Record<string, unknown>;
-          if (event.event_type !== "log") return;
-          setLogEvents((prev) => [
+          setEvents((prev) => [
             ...prev,
             {
               id: event.id as string,
+              event_type: event.event_type as string,
               message: ((event.metadata as Record<string, unknown>)?.message as string) ?? "",
               agent_type: event.agent_type as string,
               created_at: event.created_at as string,
@@ -587,22 +609,31 @@ export function TicketDetailSheet({
             </>
           )}
 
-          {logEvents.length > 0 && (
-            <>
-              <div className="h-px bg-border mx-6 my-2" />
-              <div className="px-8 py-3">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">
-                  Activity
-                </div>
+          {/* Activity / Event Timeline */}
+          <>
+            <div className="h-px bg-border mx-6 my-2" />
+            <div className="px-8 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">
+                Activity
+              </div>
+              {events.length === 0 ? (
+                <p className="text-sm text-muted-foreground/40">No activity yet</p>
+              ) : (
                 <div className="space-y-2">
-                  {logEvents.map((event) => (
+                  {events.map((event) => (
                     <div
                       key={event.id}
                       className="flex items-start gap-2.5 text-sm"
                     >
-                      <FileText className="h-3.5 w-3.5 mt-0.5 text-blue-500 shrink-0" />
+                      <EventIcon eventType={event.event_type} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-foreground">{event.message}</p>
+                        <p className="text-foreground">
+                          {event.message || (
+                            <span className="text-muted-foreground">
+                              {event.agent_type} — {event.event_type.replace(/_/g, " ")}
+                            </span>
+                          )}
+                        </p>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-[10px] text-muted-foreground/60">
                             {new Date(event.created_at).toLocaleString("de-DE", {
@@ -620,9 +651,9 @@ export function TicketDetailSheet({
                     </div>
                   ))}
                 </div>
-              </div>
-            </>
-          )}
+              )}
+            </div>
+          </>
 
           <div className="h-6" />
         </div>
