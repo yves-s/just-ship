@@ -1,35 +1,8 @@
-import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { SettingsNav } from "@/components/settings/settings-nav";
 
 interface SettingsLayoutProps {
   children: React.ReactNode;
   params: Promise<{ slug: string }>;
-}
-
-async function SettingsNav({ slug }: { slug: string }) {
-  const navItems = [
-    { label: "General", href: `/${slug}/settings` },
-    { label: "Projects", href: `/${slug}/settings/projects` },
-    { label: "Members", href: `/${slug}/settings/members` },
-    { label: "API Keys", href: `/${slug}/settings/api-keys` },
-  ];
-
-  return (
-    <nav className="flex flex-col gap-1 w-48 shrink-0">
-      {navItems.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          className={cn(
-            "rounded-md px-3 py-2 text-sm font-medium transition-colors",
-            "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-          )}
-        >
-          {item.label}
-        </Link>
-      ))}
-    </nav>
-  );
 }
 
 export default async function SettingsLayout({
@@ -46,7 +19,7 @@ export default async function SettingsLayout({
       <div className="flex flex-1 overflow-auto">
         <div className="flex w-full max-w-4xl gap-8 px-6 py-6 mx-auto">
           <SettingsNav slug={slug} />
-          <div className="flex-1">{children}</div>
+          <div className="flex-1 min-w-0">{children}</div>
         </div>
       </div>
     </div>

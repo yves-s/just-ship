@@ -9,11 +9,19 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Terminal, Pencil, Trash2 } from "lucide-react";
+import { Terminal, Pencil, Trash2, Plus, ArrowRightLeft, MoreHorizontal } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { MoveProjectDialog } from "./move-project-dialog";
 import { EditProjectDialog } from "./edit-project-dialog";
 import { DeleteProjectDialog } from "./delete-project-dialog";
 import { ProjectSetupDialog } from "@/components/board/project-setup-dialog";
+import { CreateProjectDialog } from "@/components/board/create-project-dialog";
 import { createClient } from "@/lib/supabase/client";
 import type { Project, ApiKey } from "@/lib/types";
 
@@ -38,6 +46,7 @@ export function ProjectsSettingsView({
   const [apiKey, setApiKey] = useState<ApiKey | null>(null);
   const [plaintextKey, setPlaintextKey] = useState<string | null>(null);
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
 
   function handleMoved() {
     if (!moveDialogProject) return;
@@ -56,6 +65,11 @@ export function ProjectsSettingsView({
     if (!deleteProject) return;
     setProjectsList((prev) => prev.filter((p) => p.id !== deleteProject.id));
     setDeleteProject(null);
+  }
+
+  function handleCreated(project: Project) {
+    setProjectsList((prev) => [...prev, project]);
+    setCreateProjectOpen(false);
   }
 
   const ensureApiKey = useCallback(async () => {
@@ -109,11 +123,17 @@ export function ProjectsSettingsView({
   return (
     <>
       <Card>
-        <CardHeader>
-          <CardTitle>Projects</CardTitle>
-          <CardDescription>
-            Manage projects in this workspace.
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Projects</CardTitle>
+            <CardDescription>
+              Manage projects in this workspace.
+            </CardDescription>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setCreateProjectOpen(true)}>
+            <Plus className="h-4 w-4" />
+            New project
+          </Button>
         </CardHeader>
         <CardContent className="p-0">
           {projectsList.length === 0 ? (
@@ -125,12 +145,12 @@ export function ProjectsSettingsView({
               {projectsList.map((project) => (
                 <li
                   key={project.id}
-                  className="flex items-center gap-3 px-6 py-3"
+                  className="flex items-center gap-3 px-6 py-4"
                 >
-                  <div className="flex flex-1 flex-col">
-                    <span className="text-sm font-medium">{project.name}</span>
+                  <div className="flex flex-1 flex-col min-w-0">
+                    <span className="text-sm font-medium truncate">{project.name}</span>
                     {project.description && (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs text-muted-foreground truncate">
                         {project.description}
                       </span>
                     )}
@@ -143,27 +163,28 @@ export function ProjectsSettingsView({
                     <Terminal className="h-3.5 w-3.5 mr-1.5" />
                     Connect
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setMoveDialogProject(project)}
-                  >
-                    Move
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setEditProject(project)}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setDeleteProject(project)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setEditProject(project)}>
+                        <Pencil />
+                        Rename
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setMoveDialogProject(project)}>
+                        <ArrowRightLeft />
+                        Move to workspace
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem variant="destructive" onClick={() => setDeleteProject(project)}>
+                        <Trash2 />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </li>
               ))}
             </ul>
@@ -220,6 +241,13 @@ export function ProjectsSettingsView({
           onDeleted={handleDeleted}
         />
       )}
+
+      <CreateProjectDialog
+        open={createProjectOpen}
+        onOpenChange={setCreateProjectOpen}
+        workspaceId={workspaceId}
+        onCreated={handleCreated}
+      />
     </>
   );
 }
