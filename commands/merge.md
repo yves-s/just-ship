@@ -23,7 +23,11 @@ Falls du den Drang hast eine Frage zu stellen: **UNTERDRÜCKE IHN** und mach ein
 
 ## Konfiguration
 
-Lies `project.json`. Supabase-Schritte NUR wenn `supabase.project_id` gesetzt ist.
+Lies `project.json`. Bestimme den Pipeline-Modus:
+
+1. **Board API** (bevorzugt): Falls `pipeline.api_url` UND `pipeline.api_key` gesetzt → Board REST API verwenden
+2. **Legacy Supabase MCP**: Falls nur `pipeline.project_id` gesetzt (ohne `api_url`/`api_key`) → `execute_sql` verwenden, Warnung ausgeben: "Kein Board API konfiguriert. Nutze Legacy Supabase MCP. Fuehre /setup-pipeline aus um zu upgraden."
+3. **Standalone**: Falls weder Board API noch `pipeline.project_id` konfiguriert → Pipeline-Schritte überspringen
 
 ## Trigger
 
@@ -89,9 +93,18 @@ git checkout main && git pull origin main
 
 SOFORT WEITER ZU SCHRITT 6.
 
-### 6. Supabase-Status auf "done" (nur wenn konfiguriert)
+### 6. Pipeline-Status auf "done" (nur wenn konfiguriert)
 
-Via `mcp__claude_ai_Supabase__execute_sql`:
+**Board API (bevorzugt):** Via Bash curl:
+```bash
+curl -s -X PATCH -H "X-Pipeline-Key: {pipeline.api_key}" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "done", "summary": "{pr_summary}"}' \
+  "{pipeline.api_url}/api/tickets/{N}"
+```
+Hinweis: `summary` wird mitgesendet damit das Board eine Zusammenfassung des abgeschlossenen Tickets anzeigt.
+
+**Legacy Supabase MCP (Fallback):** Via `mcp__claude_ai_Supabase__execute_sql`:
 ```sql
 UPDATE public.tickets SET status = 'done', summary = '{summary}' WHERE number = {N} RETURNING number, title, status;
 ```
@@ -104,7 +117,7 @@ SOFORT WEITER ZU SCHRITT 7.
 ✓ Merged: feat(#{ticket}): {Beschreibung}
   PR: {url}
   Branch: {branch} → deleted
-  Supabase: done (falls konfiguriert)
+  Board: done (falls konfiguriert)
 ```
 
 ## Fehlerbehandlung
