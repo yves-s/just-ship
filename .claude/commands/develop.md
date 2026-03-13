@@ -170,18 +170,33 @@ Spawne Agents via Agent-Tool mit konkreten Instruktionen:
 
 Ausgabe: `▶ build-check — {build command}`
 Lies Build-Commands aus `project.json` und führe sie aus.
-Nur bei Build-Fehlern: `▶ devops — Build-Fehler beheben` und DevOps-Agent mit `model: "haiku"` spawnen.
+Nur bei Build-Fehlern:
+```bash
+bash .claude/scripts/send-event.sh {N} devops agent_started
+```
+Ausgabe: `▶ devops — Build-Fehler beheben` und DevOps-Agent mit `model: "haiku"` spawnen.
+Nach DevOps-Agent:
+```bash
+bash .claude/scripts/send-event.sh {N} devops completed
+```
 
 **NICHT STOPPEN.** Zeige dem User NICHT die Build-Ergebnisse und warte NICHT auf Antwort. SOFORT weiter zu Schritt 7.
 
 ### 7. Review (ein Agent)
 
+```bash
+bash .claude/scripts/send-event.sh {N} qa agent_started
+```
 Ausgabe: `▶ qa — Acceptance Criteria & Security prüfen`
+
 Ein QA-Agent mit `model: "haiku"`:
 - Acceptance Criteria gegen Code prüfen
 - Security-Quick-Check (Secrets, RLS, Auth, Input Validation)
 - Bei Problemen: direkt fixen
 
+```bash
+bash .claude/scripts/send-event.sh {N} qa completed
+```
 Ausgabe nach Abschluss: `✓ qa abgeschlossen`
 
 **NICHT STOPPEN.** SOFORT weiter zu Schritt 8.

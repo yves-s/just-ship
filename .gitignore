@@ -43,3 +43,6 @@ next-env.d.ts
 # pipeline
 .pipeline/node_modules/
 .claude/.active-ticket
+
+# Pipeline config (contains API keys — do not commit)
+project.json
