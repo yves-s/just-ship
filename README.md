@@ -11,6 +11,7 @@ Multi-Tenant-SaaS-Dashboard für KI-gestütztes Ticket- und Projektmanagement. Z
 - **Kanban Board** mit Drag & Drop (@dnd-kit), Echtzeit-Agent-Indikatoren und farbigen Spalten
 - **Ticket-Management** mit Priorities, Tags, Projektzuordnung und Markdown-Beschreibungen
 - **Multi-Workspace** Architektur mit Einladungen und Rollen (Owner/Member)
+- **Project Setup Flow** — Projekt erstellen, API Key generieren, Connect-Command kopieren, Pipeline verbinden
 - **Pipeline API** (REST) für programmatischen Zugriff durch KI-Agenten
 - **Realtime Updates** via Supabase Subscriptions auf Agent-Events
 - **Activity Timeline** pro Ticket — zeigt Agent-Aktionen chronologisch
@@ -82,6 +83,10 @@ src/
 │   │   ├── tickets/     # Ticket-Liste
 │   │   └── settings/    # Settings, Members, API Keys
 │   └── api/             # REST API Routes
+│       ├── tickets/     # PATCH /api/tickets/[number], POST /api/tickets
+│       ├── projects/    # GET/POST /api/projects
+│       ├── events/      # POST /api/events
+│       └── workspace/   # API Key management (regenerate)
 ├── components/
 │   ├── board/           # Board, Column, TicketCard, AgentPanel
 │   ├── tickets/         # CreateDialog, DetailSheet, ListView
@@ -100,41 +105,59 @@ src/
 
 ## Pipeline API
 
-KI-Agenten (Claude Code, agentic-dev-pipeline) nutzen die REST API für Ticket-Operationen.
+KI-Agenten (Claude Code, agentic-dev-pipeline) nutzen die REST API für Ticket- und Projekt-Operationen.
 
-**Auth:** `Authorization: Bearer adp_<key>`
+**Auth:** `X-Pipeline-Key: adp_<key>`
 
 ```bash
-# Tickets auflisten
-curl -H "Authorization: Bearer adp_..." \
-  https://app.agentic-dev.xyz/api/v1/pipeline/<slug>/tickets
-
-# Ticket updaten
-curl -X PATCH -H "Authorization: Bearer adp_..." \
+# Ticket updaten (Status, Summary)
+curl -X PATCH -H "X-Pipeline-Key: adp_..." \
+  -H "Content-Type: application/json" \
   -d '{"status": "in_progress"}' \
-  https://app.agentic-dev.xyz/api/v1/pipeline/<slug>/tickets/<id>
+  https://app.agentic-dev.xyz/api/tickets/<number>
+
+# Ticket erstellen
+curl -X POST -H "X-Pipeline-Key: adp_..." \
+  -H "Content-Type: application/json" \
+  -d '{"title": "...", "body": "...", "priority": "medium", "project_id": "<uuid>"}' \
+  https://app.agentic-dev.xyz/api/tickets
 
 # Agent Event loggen
-curl -X POST -H "Authorization: Bearer adp_..." \
+curl -X POST -H "X-Pipeline-Key: adp_..." \
+  -H "Content-Type: application/json" \
   -d '{"ticket_number": 123, "agent_type": "orchestrator", "event_type": "agent_started"}' \
   https://app.agentic-dev.xyz/api/events
+
+# Projekte auflisten
+curl -H "X-Pipeline-Key: adp_..." \
+  https://app.agentic-dev.xyz/api/projects
+
+# Projekt erstellen
+curl -X POST -H "X-Pipeline-Key: adp_..." \
+  -H "Content-Type: application/json" \
+  -d '{"name": "My Project"}' \
+  https://app.agentic-dev.xyz/api/projects
 ```
 
 ---
 
 ## Agentic Workflow
 
-Repos binden sich via `project.json` an das Board:
+Repos binden sich via `project.json` an das Board. Die vollständige Config wird beim Projekt-Setup generiert:
 
 ```json
 {
   "pipeline": {
-    "project_id": "...",
+    "project_id": "<board-project-uuid>",
     "project_name": "Mein Projekt",
-    "workspace_id": "..."
+    "workspace_id": "<workspace-uuid>",
+    "api_url": "https://app.agentic-dev.xyz",
+    "api_key": "adp_..."
   }
 }
 ```
+
+**Setup-Flow:** Workspace erstellen → Projekt auf dem Board erstellen → Connect-Command kopieren → in Claude Code ausführen (`/setup-pipeline --board ... --key ... --project ...`). Der Setup-Dialog zeigt auch eine Installationsanleitung für Erstnutzer.
 
 Claude Code Commands:
 
