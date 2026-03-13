@@ -125,6 +125,66 @@ systemctl status agentic-dev-pipeline@mein-projekt
 
 ---
 
+## Schritt 6: Start-Trigger Server (optional)
+
+Neben dem Polling-Worker gibt es optional einen HTTP-Server fuer Push-Trigger. Das Board kann direkt `POST /api/launch` aufrufen, um einen Ticket-Workflow sofort zu starten -- ohne auf den naechsten Poll-Zyklus zu warten.
+
+### `.env.{slug}` ergaenzen
+
+Zusaetzlich zu den bestehenden Variablen:
+
+```bash
+# Server (optional)
+PIPELINE_SERVER_KEY=adp_dein-secret-key-hier
+PORT=3001
+```
+
+### Server starten
+
+```bash
+# systemd Unit kopieren (einmalig)
+sudo cp agentic-dev-pipeline-server@.service /etc/systemd/system/
+sudo systemctl daemon-reload
+
+# Server aktivieren
+sudo systemctl enable --now agentic-dev-pipeline-server@mein-projekt
+
+# Logs live
+journalctl -fu agentic-dev-pipeline-server@mein-projekt
+
+# Status
+systemctl status agentic-dev-pipeline-server@mein-projekt
+```
+
+### Pipeline per HTTP triggern
+
+```bash
+curl -X POST http://localhost:3001/api/launch \
+  -H "Content-Type: application/json" \
+  -H "X-Pipeline-Key: adp_dein-secret-key-hier" \
+  -d '{"ticket_number": 267}'
+```
+
+Response (202):
+```json
+{"status":"queued","ticket_number":267,"message":"Pipeline started"}
+```
+
+### Health-Check
+
+```bash
+curl http://localhost:3001/health
+```
+
+Response (200):
+```json
+{"status":"ok","running_count":0}
+```
+
+> **Tipp:** Worker und Server koennen parallel laufen. Der Server startet Pipelines sofort bei eingehenden Requests, der Worker pollt weiterhin als Fallback.
+
+---
+
 ## Mehrere Projekte
 
 Für jedes Projekt eine separate `.env.{slug}` und einen separaten Service:
