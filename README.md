@@ -1,8 +1,8 @@
 # Just Ship
 
-**From ticket to merge. Autonomously.**
+**From ticket to ship. Autonomously.**
 
-A portable multi-agent framework for autonomous software development. Ship complex projects from ticket to merge — fully autonomous. Install it into any project, write tickets, and watch them turn into pull requests. Built on [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and the [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk).
+A portable multi-agent framework for autonomous software development. Ship complex projects from ticket to ship — fully autonomous. Install it into any project, write tickets, and watch them turn into pull requests. Built on [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and the [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk).
 
 ---
 
@@ -66,13 +66,12 @@ claude
 |---------|-------------|------------|
 | `/ticket` | Write a structured ticket (bug, feature, improvement, spike) | No |
 | `/develop` | Pick next ticket, implement end-to-end, create PR | Yes |
-| `/ship` | Commit + push + PR + board status "in_review" | Yes |
-| `/merge` | Squash merge + delete branch + board status "done" | Yes |
+| `/ship` | Commit + push + PR + squash merge + board status "done" | Yes |
 | `/status` | Show current ticket, branch, and changes | -- |
 | `/setup-pipeline` | Auto-detect stack, configure project, connect Dev Board | Interactive |
 | `/update-pipeline` | Sync project files after framework update | Interactive |
 
-**Conversational triggers:** Saying "passt", "done", "fertig", or "sieht gut aus" automatically executes `/merge`.
+**Conversational triggers:** Saying "passt", "done", "fertig", or "sieht gut aus" automatically executes `/ship`.
 
 ---
 
@@ -97,9 +96,9 @@ Sub-agents run in parallel where possible (e.g., backend + frontend simultaneous
 ```
 /ticket --- writes ticket to Board API -----------------.
                                                         |
-/develop -- picks ticket -- implements -- /ship ---.    |
+/develop -- picks ticket -- implements -- creates PR     |
                                                    |    |
-              "passt" or /merge -------------------|    |
+              "passt" or /ship --------------------|    |
                                                    v    |
                                           squash merge  |
                                           delete branch |
@@ -180,7 +179,6 @@ just-ship/
 │   ├── ticket.md
 │   ├── develop.md
 │   ├── ship.md
-│   ├── merge.md
 │   ├── status.md
 │   ├── setup-pipeline.md
 │   └── update-pipeline.md
@@ -354,7 +352,7 @@ The **[Just Ship Board](https://board.just-ship.io)** is the visual companion fo
 3. Run it in Claude Code: `/setup-pipeline --board https://board.just-ship.io --key <key> --project <uuid>`
 4. This writes `api_url`, `api_key`, and `project_id` to `project.json`
 
-Commands (`/ticket`, `/develop`, `/ship`, `/merge`) auto-detect the Board config and use it for ticket operations and status updates.
+Commands (`/ticket`, `/develop`, `/ship`) auto-detect the Board config and use it for ticket operations and status updates.
 
 ### Event Streaming
 

@@ -145,7 +145,7 @@ Board erstellt Ticket
                                       │  in_review    │
                                       └──────────────┘
                                               │
-                                      "passt" / /merge
+                                      "passt" / /ship
                                               │
                                               ▼
                                       ┌──────────────┐
@@ -158,8 +158,7 @@ Board erstellt Ticket
 | Command | Aktion | SQL |
 |---------|--------|-----|
 | `/ticket T-123` | Ticket laden, Status -> `in_progress` | `UPDATE tickets SET status = 'in_progress' WHERE number = 123` |
-| `/ship` | Commit -> Push -> PR, Status -> `in_review` | `UPDATE tickets SET status = 'in_review' WHERE number = 123` |
-| `/merge` | Merge PR, Status -> `done` | `UPDATE tickets SET status = 'done' WHERE number = 123` |
+| `/ship` | Commit -> Push -> PR -> Merge, Status -> `done` | `UPDATE tickets SET status = 'done' WHERE number = 123` |
 | `/status` | Zeigt aktive Tickets fuer dieses Projekt | `SELECT ... WHERE status = 'in_progress' AND project_id = (...)` |
 
 Alle SQL-Calls gehen via `mcp__claude_ai_Supabase__execute_sql` mit `project_id` aus `pipeline.project_id`.

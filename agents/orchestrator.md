@@ -137,7 +137,7 @@ Standardmäßig übernimmt der QA-Agent den Security-Quick-Check. Für sicherhei
 5. **PR** — `gh pr create` mit Summary + Test Plan
 6. **Supabase** — Status auf "in_review" setzen via `mcp__claude_ai_Supabase__execute_sql`: `UPDATE public.tickets SET status = 'in_review' WHERE number = {N} RETURNING number, title, status` (nur wenn `supabase.project_id` in `project.json` gesetzt)
 
-**NICHT automatisch mergen.** Der PR bleibt offen bis der User ihn freigibt (via `/merge` oder "passt").
+**NICHT automatisch mergen.** Der PR bleibt offen bis der User ihn freigibt (via `/ship` oder "passt").
 
 ## Token-Spar-Regeln
 

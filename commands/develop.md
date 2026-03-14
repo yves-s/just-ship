@@ -214,7 +214,7 @@ NICHT den Skill `finishing-a-development-branch` aufrufen.
 NICHT dem User Optionen präsentieren.
 NICHT fragen ob committed/gepusht werden soll.
 
-**NICHT automatisch mergen.** Der PR bleibt offen bis der User ihn freigibt (via `/merge` oder "passt").
+**NICHT automatisch mergen.** Der PR bleibt offen bis der User ihn freigibt (via `/ship` oder "passt").
 
 ### Checkliste vor Abschluss
 

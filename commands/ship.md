@@ -1,21 +1,25 @@
 ---
 name: ship
-description: Commit, Push, PR erstellen, Supabase "in_review". Vollständig autonom, NULL Rückfragen.
+description: Alles abschliessen — commit, push, PR, merge, zurück auf main. Vollständig autonom, NULL Rückfragen.
 disable-model-invocation: true
 ---
 
-# /ship — PR erstellen (ohne Merge)
+# /ship — ALLES abschliessen, ein Befehl
 
-Commit → Push → PR. Merged wird erst nach Freigabe via `/merge`.
+Vom uncommitted Code bis zum gemergten PR auf main. **Ein Befehl, keine Unterbrechung.**
 
 ## WICHTIGSTE REGEL
 
-**DU DARFST NICHT STOPPEN ODER FRAGEN.** Führe ALLE Schritte 1-5 hintereinander aus. Kein "Soll ich...?", kein "Möchtest du...?". EINFACH ALLES DURCHLAUFEN.
+**DU DARFST NICHT STOPPEN ODER FRAGEN.** Führe ALLE Schritte 1-7 hintereinander aus. Kein "Soll ich...?", kein "Möchtest du...?", kein "Ich habe committed, soll ich jetzt pushen?". EINFACH ALLES DURCHLAUFEN.
+
+Falls du den Drang hast eine Frage zu stellen: **UNTERDRÜCKE IHN** und mach einfach den nächsten Schritt.
 
 ## NICHT verwenden
 
 - NICHT den Skill `finishing-a-development-branch` aufrufen
 - NICHT den User nach Optionen fragen
+- NICHT nach Bestätigung fragen
+- NICHT zwischen Schritten stoppen
 
 ## Konfiguration
 
@@ -30,15 +34,20 @@ Lies `project.json`. Bestimme den Pipeline-Modus:
 ## Trigger
 
 - `/ship`
-- Phase 5 des Orchestrator-Workflows
+- "passt", "done", "sieht gut aus", "klappt", "fertig", "ship it", "mach zu"
 
 ## Ablauf — ALLE Schritte ohne Pause durchführen
 
-### 1. Commit
+### 1. Commit (falls nötig)
 
 ```bash
+git status
+```
+
+Falls uncommitted changes:
+```bash
 git add <betroffene-dateien>
-git commit -m "feat(#{ticket}): {kurze englische Beschreibung}
+git commit -m "feat(#{ticket}): {englische Beschreibung}
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 ```
@@ -53,10 +62,10 @@ git push -u origin $(git branch --show-current)
 
 SOFORT WEITER ZU SCHRITT 3.
 
-### 3. PR erstellen
+### 3. PR erstellen (falls keiner existiert)
 
 ```bash
-gh pr create --title "feat(#{ticket}): {Beschreibung}" --body "$(cat <<'EOF'
+gh pr view 2>/dev/null || gh pr create --title "feat(#{ticket}): {Beschreibung}" --body "$(cat <<'EOF'
 ## Summary
 - {Bullet Points}
 
@@ -70,42 +79,62 @@ EOF
 
 SOFORT WEITER ZU SCHRITT 4.
 
-### 4. Pipeline-Status auf "in_review" (nur wenn konfiguriert)
+### 4. Merge
+
+```bash
+gh pr merge --squash --delete-branch
+```
+
+SOFORT WEITER ZU SCHRITT 5.
+
+### 5. Zurück auf main
+
+```bash
+git checkout main && git pull origin main
+```
+
+SOFORT WEITER ZU SCHRITT 6.
+
+### 6. Pipeline-Status auf "done" (nur wenn konfiguriert)
 
 **Board API (bevorzugt):** Via Bash curl:
 ```bash
 curl -s -X PATCH -H "X-Pipeline-Key: {pipeline.api_key}" \
   -H "Content-Type: application/json" \
-  -d '{"status": "in_review"}' \
+  -d '{"status": "done", "summary": "{pr_summary}"}' \
   "{pipeline.api_url}/api/tickets/{N}"
 ```
+Hinweis: `summary` wird mitgesendet damit das Board eine Zusammenfassung des abgeschlossenen Tickets anzeigt.
 
 **Legacy Supabase MCP (Fallback):** Via `mcp__claude_ai_Supabase__execute_sql`:
 ```sql
-UPDATE public.tickets
-SET status = 'in_review'
-WHERE number = {N}
-  AND workspace_id = '{pipeline.workspace_id}'
-RETURNING number, title, status;
+UPDATE public.tickets SET status = 'done', summary = '{summary}' WHERE number = {N} AND workspace_id = '{pipeline.workspace_id}' RETURNING number, title, status;
 ```
 
-SOFORT WEITER ZU SCHRITT 5.
+SOFORT WEITER ZU SCHRITT 7.
 
-### 5. Bestätigung (EINZIGE Ausgabe an den User)
+### 7. Bestätigung (EINZIGE Ausgabe an den User)
 
 ```
 ✓ Shipped: feat(#{ticket}): {Beschreibung}
   PR: {url}
-  Board: in_review (falls konfiguriert)
-
-→ Nach Review: "passt" oder /merge zum Mergen
+  Branch: {branch} → deleted
+  Board: done (falls konfiguriert)
 ```
+
+## Fehlerbehandlung
+
+- **Pre-Commit Hook Failure:** Fixen, NEUEN Commit, weiter
+- **Push rejected:** `git pull --rebase origin {branch}`, dann nochmal pushen
+- **Merge-Konflikte:** NUR DANN dem User zeigen — das ist der EINZIGE Grund zum Stoppen
+- **PR existiert bereits:** Überspringen, direkt mergen
+- **Alles schon auf main:** Sagen "Bereits auf main, nichts zu tun"
 
 ## Verboten
 
 - `git add -A` oder `git add .`
 - `--force` push
+- `--amend` bei Hook-Failure
 - Fragen stellen
 - Zwischen Schritten stoppen
 - Den Skill `finishing-a-development-branch` aufrufen
-- Automatisch mergen

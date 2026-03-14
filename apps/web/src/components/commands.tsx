@@ -1,8 +1,7 @@
 const commands = [
   { cmd: "/ticket", comment: "Describe what you need" },
   { cmd: "/develop", comment: "Agents start building" },
-  { cmd: "/ship", comment: "PR created and pushed" },
-  { cmd: "/merge", comment: "Squash, merge, done" },
+  { cmd: "/ship", comment: "Merge, deploy, done" },
 ];
 
 export function Commands() {
@@ -10,7 +9,7 @@ export function Commands() {
     <section className="bg-brand-900 py-24 sm:py-32">
       <div className="mx-auto max-w-4xl px-6">
         <h2 className="mb-16 text-center text-3xl font-bold text-white sm:text-4xl">
-          Four Commands. Full Lifecycle.
+          Three Commands. Full Lifecycle.
         </h2>
 
         {/* Terminal window */}
@@ -54,7 +53,7 @@ export function Commands() {
                 {'"sieht gut aus"'}
               </span>{" "}
               — auto-triggers{" "}
-              <span className="font-mono text-accent">/merge</span>
+              <span className="font-mono text-accent">/ship</span>
             </p>
           </div>
         </div>

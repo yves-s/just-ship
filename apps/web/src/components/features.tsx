@@ -23,7 +23,7 @@ const features = [
   {
     title: "Autonomous",
     description:
-      "No human in the loop. From ticket to merge without intervention.",
+      "No human in the loop. From ticket to ship without intervention.",
     icon: (
       <svg
         width="24"

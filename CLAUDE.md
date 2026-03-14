@@ -36,7 +36,7 @@ Dieses Repo nutzt ein Multi-Agent-System. Ob lokal oder auf dem Server:
 2. **Plane selbst** — kein Planner-Agent, keine Spec-Datei. Lies betroffene Dateien direkt und gib Agents konkrete Instruktionen
 3. **Wenn unklar:** Konservative Lösung wählen, nicht raten
 4. **Commit + PR** am Ende des Workflows → Board-Status "in_review"
-5. **Merge erst nach Freigabe** — User sagt "passt"/"merge" oder `/merge`
+5. **Merge erst nach Freigabe** — User sagt "passt"/"ship it" oder `/ship`
 
 ## Ticket-Workflow (Just Ship Board)
 
@@ -48,8 +48,7 @@ Falls Pipeline konfiguriert ist, sind Status-Updates **PFLICHT**:
 |---|---|---|
 | `/ticket` — Ticket schreiben | — | Erstellt ein neues Ticket im Board |
 | `/develop` — Ticket implementieren | **`in_progress`** | Sofort nach Ticket-Auswahl, VOR dem Coding |
-| `/ship` — PR erstellen | **`in_review`** | Nach PR-Erstellung |
-| `/merge` — PR mergen | **`done`** | Nach erfolgreichem Merge |
+| `/ship` — PR mergen & abschließen | **`done`** | Nach erfolgreichem Merge |
 
 Status-Updates via `mcp__claude_ai_Supabase__execute_sql` mit `pipeline.project_id`:
 ```sql
@@ -68,7 +67,7 @@ RETURNING number, title, status;
 
 ```
 agents/              Agent-Definitionen (Orchestrator, Backend, Frontend, etc.)
-commands/            Slash-Commands (/develop, /ship, /merge, etc.)
+commands/            Slash-Commands (/develop, /ship, etc.)
 skills/              Pipeline-Skills (ticket-writer, frontend-design, etc.)
 pipeline/            SDK Pipeline Runner (TypeScript)
   ├── run.ts         Einzellauf
@@ -91,6 +90,6 @@ setup.sh             Install/Update Script
 
 ## Konversationelle Trigger
 
-**"passt"**, **"done"**, **"fertig"**, **"klappt"**, **"sieht gut aus"** → automatisch `/merge` ausführen
+**"passt"**, **"done"**, **"fertig"**, **"klappt"**, **"sieht gut aus"** → automatisch `/ship` ausführen
 
-**Wichtig:** `/ship` und `/merge` laufen **vollständig autonom** — keine Rückfragen bei Commit, Push, PR oder Merge. Der User hat seine Freigabe bereits gegeben.
+**Wichtig:** `/ship` läuft **vollständig autonom** — keine Rückfragen bei Commit, Push, PR oder Merge. Der User hat seine Freigabe bereits gegeben.

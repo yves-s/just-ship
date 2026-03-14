@@ -1,6 +1,6 @@
 # Architecture -- Just Ship
 
-**From ticket to merge. Autonomously.**
+**From ticket to ship. Autonomously.**
 
 Comprehensive technical reference for the Just Ship system: the portable multi-agent framework, the Pipeline SDK, the Just Ship Board, and the VPS deployment infrastructure.
 
@@ -33,7 +33,7 @@ Just Ship is a portable multi-agent framework that turns Claude Code into an aut
 
 The framework operates in two modes:
 
-1. **Interactive** -- A developer works in Claude Code, using slash commands (`/ticket`, `/develop`, `/ship`, `/merge`) to drive the workflow.
+1. **Interactive** -- A developer works in Claude Code, using slash commands (`/ticket`, `/develop`, `/ship`) to drive the workflow.
 2. **Autonomous** -- A VPS worker polls a Supabase ticket queue, picks up tickets, and executes the full pipeline without human intervention.
 
 Both modes use the same agents, the same orchestrator logic, and the same shipping flow. The only difference is the entry point. The Just Ship Board provides real-time visibility into both modes through a Kanban dashboard and event streaming.
@@ -129,7 +129,7 @@ just-ship/                         # Framework repository
 |   +-- ticket.md                  # Write a ticket (/ticket)
 |   +-- develop.md                 # Implement next ticket (/develop)
 |   +-- ship.md                    # Commit + push + PR (/ship)
-|   +-- merge.md                   # Squash merge + cleanup (/merge)
+|   +-- ship.md                    # Commit, push, PR, merge, done (/ship)
 |   +-- status.md                  # Show current status (/status)
 |   +-- setup-pipeline.md          # Auto-detect stack, configure project
 |   +-- update-pipeline.md         # Sync templates after framework update
@@ -280,7 +280,7 @@ Commands are markdown files in `commands/` with frontmatter metadata. They provi
 | `/ticket` | Write a structured ticket (bug, feature, improvement, spike) | No -- may ask user for input |
 | `/develop` | Pick next ticket, implement end-to-end, create PR | Yes -- fully autonomous |
 | `/ship` | Commit, push, create PR, update board status | Yes -- zero questions |
-| `/merge` | Squash merge, delete branch, update board status | Yes -- zero questions |
+| `/ship` | Commit, push, PR, squash merge, delete branch, update board status | Yes -- zero questions |
 
 ### Utility Commands
 
@@ -292,7 +292,7 @@ Commands are markdown files in `commands/` with frontmatter metadata. They provi
 
 ### Conversational Triggers
 
-The following phrases automatically trigger `/merge`:
+The following phrases automatically trigger `/ship`:
 
 > "passt", "done", "fertig", "klappt", "sieht gut aus", "ship it", "mach zu"
 
@@ -303,7 +303,7 @@ The following phrases automatically trigger `/merge`:
                                                             |
 /develop -- picks ticket -- implements -- /ship ---+        |
                                                    |        |
-           "passt" or /merge ----------------------+        |
+           "passt" or /ship -----------------------+        |
                                                    v        |
                                           squash merge      |
                                           delete branch     |

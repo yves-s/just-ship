@@ -165,8 +165,7 @@ Claude Code Commands:
 |---------|--------|
 | `/ticket` | Neues Ticket erstellen |
 | `/develop T-123` | Ticket starten, Status `in_progress` |
-| `/ship` | PR erstellen, Status `in_review` |
-| `/merge` | PR mergen, Status `done` |
+| `/ship` | PR erstellen, mergen, Status `done` |
 
 ---
 

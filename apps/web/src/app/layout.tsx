@@ -15,11 +15,11 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Just Ship — From ticket to merge. Autonomously.",
+  title: "Just Ship — From ticket to ship. Autonomously.",
   description:
-    "A portable multi-agent framework for autonomous software development. Ship complex projects from ticket to merge — fully autonomous.",
+    "A portable multi-agent framework for autonomous software development. Ship complex projects from ticket to ship — fully autonomous.",
   openGraph: {
-    title: "Just Ship — From ticket to merge. Autonomously.",
+    title: "Just Ship — From ticket to ship. Autonomously.",
     description:
       "A portable multi-agent framework for autonomous software development.",
     url: "https://just-ship.io",

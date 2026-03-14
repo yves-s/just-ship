@@ -42,7 +42,7 @@ export function Hero() {
         {/* Headline — two lines */}
         <h1 className="mb-8 text-[clamp(2.5rem,8vw,5rem)] font-extrabold leading-[1.05] tracking-[-0.04em]">
           <span className="bg-gradient-to-br from-[#60a5fa] to-[#3b82f6] bg-clip-text text-transparent">
-            From ticket to merge.
+            From ticket to ship.
           </span>
           <br />
           <span className="text-white">Autonomously.</span>
@@ -51,7 +51,7 @@ export function Hero() {
         {/* Subtitle */}
         <p className="mx-auto mb-14 max-w-[620px] text-[clamp(1rem,2.2vw,1.2rem)] font-normal leading-[1.65] text-brand-400">
           A portable multi-agent framework for autonomous software development.
-          Ship complex projects from ticket to merge — fully autonomous.
+          Ship complex projects from ticket to ship — fully autonomous.
         </p>
 
         {/* CTAs */}
