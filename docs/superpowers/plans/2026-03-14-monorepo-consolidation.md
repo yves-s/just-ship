@@ -382,7 +382,7 @@ Go to Vercel Dashboard → just-ship-board project → Settings → General:
 
 Push a commit or trigger a manual deployment. Verify:
 - Build succeeds
-- `app.just-ship.io` loads correctly
+- `board.just-ship.io` loads correctly
 - Preview deploys work on branches
 
 ---
@@ -479,7 +479,7 @@ Expected: Dry run shows only framework files (agents, commands, skills, pipeline
 
 - [ ] **Step 3: Verify Vercel deployment**
 
-Check `app.just-ship.io` is serving the board correctly.
+Check `board.just-ship.io` is serving the board correctly.
 
 - [ ] **Step 4: Verify VPS services**
 

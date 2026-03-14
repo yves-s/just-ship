@@ -27,7 +27,7 @@
 
 Kernkonzept: Tickets werden entweder manuell im Board erstellt oder via Claude Code `/ticket`-Command angelegt. KI-Agenten arbeiten Tickets autonom ab, während der Status in Echtzeit auf dem Kanban Board aktualisiert wird.
 
-**Production:** `app.just-ship.io`
+**Production:** `board.just-ship.io`
 
 ---
 
@@ -62,7 +62,7 @@ Kernkonzept: Tickets werden entweder manuell im Board erstellt oder via Claude C
                           ┌────────────────────────────────┐
                           │        Just Ship Board          │
                           │      (Next.js 16 App Router)   │
-                          │      app.just-ship.io       │
+                          │      board.just-ship.io       │
                           └───────────┬────────────────────┘
                                       │
                     ┌─────────────────┼─────────────────┐
@@ -363,7 +363,7 @@ Alle Tabellen sind durch RLS auf DB-Ebene geschützt. Zugriff wird über `worksp
 
 ## Pipeline API (REST)
 
-Base URL: `https://app.just-ship.io/api`
+Base URL: `https://board.just-ship.io/api`
 
 Auth: `Authorization: Bearer adp_<key>`
 
@@ -535,7 +535,7 @@ cp .env.example .env.local
 ## Deployment
 
 - **Hosting:** Vercel
-- **Domain:** `app.just-ship.io`
+- **Domain:** `board.just-ship.io`
 - **Build:** `npm run build` (Next.js Production Build)
 - **Database:** Supabase (gehostet, managed PostgreSQL)
 

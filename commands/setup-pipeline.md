@@ -161,7 +161,7 @@ Falls `--board` und `--key` übergeben wurden:
 1. Frage: **"Projekt mit dem Just Ship Board verbinden? (J/n)"**
 2. Falls nein: Überspringe diesen Schritt.
 3. Falls ja: Frage nach Board URL und API Key im Gespräch:
-   - Board URL (z.B. `https://app.just-ship.io`)
+   - Board URL (z.B. `https://board.just-ship.io`)
    - API Key (z.B. `adp_...`)
 4. Dann weiter wie Modus 1 (curl Aufrufe mit den eingegebenen Werten).
 

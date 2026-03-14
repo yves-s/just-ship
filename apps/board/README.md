@@ -2,7 +2,7 @@
 
 Multi-Tenant-SaaS-Dashboard für KI-gestütztes Ticket- und Projektmanagement. Zentrales Board für das `just-ship`-System — Tickets werden manuell oder via Claude Code erstellt und von KI-Agenten autonom abgearbeitet.
 
-**Production:** [app.just-ship.io](https://app.just-ship.io)
+**Production:** [board.just-ship.io](https://board.just-ship.io)
 
 ---
 
@@ -114,29 +114,29 @@ KI-Agenten (Claude Code, just-ship) nutzen die REST API für Ticket- und Projekt
 curl -X PATCH -H "X-Pipeline-Key: adp_..." \
   -H "Content-Type: application/json" \
   -d '{"status": "in_progress"}' \
-  https://app.just-ship.io/api/tickets/<number>
+  https://board.just-ship.io/api/tickets/<number>
 
 # Ticket erstellen
 curl -X POST -H "X-Pipeline-Key: adp_..." \
   -H "Content-Type: application/json" \
   -d '{"title": "...", "body": "...", "priority": "medium", "project_id": "<uuid>"}' \
-  https://app.just-ship.io/api/tickets
+  https://board.just-ship.io/api/tickets
 
 # Agent Event loggen
 curl -X POST -H "X-Pipeline-Key: adp_..." \
   -H "Content-Type: application/json" \
   -d '{"ticket_number": 123, "agent_type": "orchestrator", "event_type": "agent_started"}' \
-  https://app.just-ship.io/api/events
+  https://board.just-ship.io/api/events
 
 # Projekte auflisten
 curl -H "X-Pipeline-Key: adp_..." \
-  https://app.just-ship.io/api/projects
+  https://board.just-ship.io/api/projects
 
 # Projekt erstellen
 curl -X POST -H "X-Pipeline-Key: adp_..." \
   -H "Content-Type: application/json" \
   -d '{"name": "My Project"}' \
-  https://app.just-ship.io/api/projects
+  https://board.just-ship.io/api/projects
 ```
 
 ---
@@ -151,7 +151,7 @@ Repos binden sich via `project.json` an das Board. Die vollständige Config wird
     "project_id": "<board-project-uuid>",
     "project_name": "Mein Projekt",
     "workspace_id": "<workspace-uuid>",
-    "api_url": "https://app.just-ship.io",
+    "api_url": "https://board.just-ship.io",
     "api_key": "adp_..."
   }
 }

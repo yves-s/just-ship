@@ -102,7 +102,7 @@ The CTA opens the Create Project Dialog.
 │ │ Führe das in deinem Projekt-Terminal aus:       │   │
 │ │                                                 │   │
 │ │ /setup-pipeline \                               │   │
-│ │   --board https://app.just-ship.io \         │   │
+│ │   --board https://board.just-ship.io \         │   │
 │ │   --key adp_ab18e060...                         │   │
 │ │                                  [Kopieren]     │   │
 │ └─────────────────────────────────────────────────┘   │
@@ -121,7 +121,7 @@ The CTA opens the Create Project Dialog.
 
 ```
 /setup-pipeline \
-  --board https://app.just-ship.io \
+  --board https://board.just-ship.io \
   --key adp_ab18e060... \
   --project e904798e-...
 ```
@@ -227,7 +227,7 @@ The "interactive" mode means Claude Code asks the user within the chat conversat
 Connect to Just Ship Board? (y/n)
 > y
 
-Board URL: [https://app.just-ship.io]
+Board URL: [https://board.just-ship.io]
 API Key: [adp_...]
 
 ✓ Connected to Workspace "Just Ship"
@@ -247,7 +247,7 @@ Project name: [My Project]
 **Mode 2: Direct Connect (copy-paste from Board)**
 
 ```
-> /setup-pipeline --board https://app.just-ship.io --key adp_... --project e904798e-...
+> /setup-pipeline --board https://board.just-ship.io --key adp_... --project e904798e-...
 
 ✓ Stack detected: Next.js 15, TypeScript, Supabase, pnpm
 ✓ project.json updated

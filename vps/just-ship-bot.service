@@ -14,7 +14,7 @@
 #   TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
 #   SUPABASE_URL=https://xxx.supabase.co
 #   SUPABASE_SERVICE_KEY=eyJ...
-#   BOARD_API_URL=https://app.just-ship.io
+#   BOARD_API_URL=https://board.just-ship.io
 #   TELEGRAM_BOT_SECRET=your-shared-secret-from-board-settings
 # =============================================================================
 

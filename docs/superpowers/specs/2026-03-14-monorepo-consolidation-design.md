@@ -151,7 +151,7 @@ Vercel project settings:
 
 Setting root directory to the repo root (not `apps/board`) ensures `npm install` runs at the monorepo level where the workspaces config lives. The workspace-scoped build command and explicit output directory handle the rest.
 
-Environment variables, domain (`app.just-ship.io`), preview deploys — all unchanged.
+Environment variables, domain (`board.just-ship.io`), preview deploys — all unchanged.
 
 ### Bot + Pipeline Worker — VPS
 

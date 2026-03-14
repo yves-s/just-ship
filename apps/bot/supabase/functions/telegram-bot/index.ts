@@ -566,7 +566,7 @@ Deno.serve(async (req: Request) => {
     await sendMessage(
       chatId,
       "👋 Willkommen! Verbinde zuerst deinen Telegram-Account:\n\n" +
-      `1. Öffne <a href="${BOARD_API_URL}">app.just-ship.io</a>\n` +
+      `1. Öffne <a href="${BOARD_API_URL}">board.just-ship.io</a>\n` +
       "2. Klicke in der Sidebar auf das Telegram-Symbol\n" +
       `3. Klicke auf <b>"Code generieren"</b>\n` +
       "4. Schick mir den 6-stelligen Code\n\n" +

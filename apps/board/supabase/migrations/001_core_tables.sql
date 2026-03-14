@@ -1,5 +1,5 @@
 -- 001_core_tables.sql
--- Core schema for app.just-ship.io
+-- Core schema for board.just-ship.io
 
 -- =============================================================================
 -- Workspaces (tenants)

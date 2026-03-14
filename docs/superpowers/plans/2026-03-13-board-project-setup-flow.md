@@ -136,7 +136,7 @@ export async function GET(request: Request) {
 - [ ] **Step 2: Verify with curl**
 
 ```bash
-curl -s -H "X-Pipeline-Key: adp_YOUR_KEY" https://app.just-ship.io/api/projects | jq .
+curl -s -H "X-Pipeline-Key: adp_YOUR_KEY" https://board.just-ship.io/api/projects | jq .
 ```
 
 Expected: 200 with `{ data: { workspace_id, workspace_name, projects: [...] }, error: null }`
@@ -238,7 +238,7 @@ ALTER TABLE projects ADD CONSTRAINT projects_workspace_name_unique UNIQUE (works
 curl -s -X POST -H "X-Pipeline-Key: adp_YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{"name": "Test Project"}' \
-  https://app.just-ship.io/api/projects | jq .
+  https://board.just-ship.io/api/projects | jq .
 ```
 
 Expected: 201 with `{ data: { id, name, workspace_id }, error: null }`
@@ -248,7 +248,7 @@ Test duplicate name:
 curl -s -X POST -H "X-Pipeline-Key: adp_YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{"name": "Test Project"}' \
-  https://app.just-ship.io/api/projects | jq .
+  https://board.just-ship.io/api/projects | jq .
 ```
 
 Expected: 409 with `{ data: null, error: { code: "CONFLICT", message: "Project name already exists" } }`
@@ -1325,20 +1325,20 @@ git commit -m "feat: update ticket-writer and CLAUDE.md template to use Board AP
 
 ```bash
 # GET projects
-curl -s -H "X-Pipeline-Key: YOUR_KEY" https://app.just-ship.io/api/projects | jq .
+curl -s -H "X-Pipeline-Key: YOUR_KEY" https://board.just-ship.io/api/projects | jq .
 
 # POST project
 curl -s -X POST -H "X-Pipeline-Key: YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{"name": "CLI Test"}' \
-  https://app.just-ship.io/api/projects | jq .
+  https://board.just-ship.io/api/projects | jq .
 ```
 
 - [ ] **Step 3: Test CLI flow**
 
 In a project directory with the pipeline framework installed:
 ```
-/setup-pipeline --board https://app.just-ship.io --key YOUR_KEY --project PROJECT_ID
+/setup-pipeline --board https://board.just-ship.io --key YOUR_KEY --project PROJECT_ID
 ```
 
 Verify `project.json` has complete pipeline config with all 5 fields.
