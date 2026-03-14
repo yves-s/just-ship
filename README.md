@@ -1,8 +1,12 @@
-# Just Ship
+<p align="center">
+  <img src="public/logos/png/social/banner-1280x420.png" alt="Just Ship — From ticket to ship. Autonomously." width="100%" />
+</p>
 
-**From ticket to ship. Autonomously.**
-
-A portable multi-agent framework for autonomous software development. Ship complex projects from ticket to ship — fully autonomous. Install it into any project, write tickets, and watch them turn into pull requests. Built on [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and the [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk).
+<p align="center">
+  A portable multi-agent framework for autonomous software development.<br/>
+  Install it into any project, write tickets, and watch them turn into pull requests.<br/>
+  Built on <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a> and the <a href="https://github.com/anthropics/claude-agent-sdk">Claude Agent SDK</a>.
+</p>
 
 ---
 
