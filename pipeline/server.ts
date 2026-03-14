@@ -307,7 +307,7 @@ process.on("SIGTERM", () => {
 // --- Start ---
 server.listen(PORT, () => {
   log("==========================================");
-  log("  Agentic Dev Pipeline Server");
+  log("  Just Ship Pipeline Server");
   log(`  Port: ${PORT}`);
   log(`  Project: ${PROJECT_DIR.split("/").pop()}`);
   log("==========================================");

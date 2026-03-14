@@ -1,10 +1,10 @@
 # =============================================================================
-# agentic-dev-bot.service — systemd Unit for Telegram Bot
+# just-ship-bot.service — systemd Unit for Telegram Bot
 #
 # Installation:
-#   sudo cp vps/agentic-dev-bot.service /etc/systemd/system/
+#   sudo cp vps/just-ship-bot.service /etc/systemd/system/
 #   sudo systemctl daemon-reload
-#   sudo systemctl enable --now agentic-dev-bot
+#   sudo systemctl enable --now just-ship-bot
 #
 # Voraussetzung:
 #   /home/claude-dev/.env              # Globale Keys (ANTHROPIC_API_KEY, OPENAI_API_KEY)
@@ -14,12 +14,12 @@
 #   TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
 #   SUPABASE_URL=https://xxx.supabase.co
 #   SUPABASE_SERVICE_KEY=eyJ...
-#   BOARD_API_URL=https://app.agentic-dev.xyz
+#   BOARD_API_URL=https://app.just-ship.io
 #   TELEGRAM_BOT_SECRET=your-shared-secret-from-board-settings
 # =============================================================================
 
 [Unit]
-Description=Agentic Dev Telegram Bot
+Description=Just Ship Bot
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=300
@@ -29,7 +29,7 @@ StartLimitBurst=5
 Type=simple
 User=claude-dev
 Group=claude-dev
-WorkingDirectory=/home/claude-dev/agentic-dev-pipeline/apps/bot
+WorkingDirectory=/home/claude-dev/just-ship/apps/bot
 
 # Globale Keys + bot-spezifische Config
 EnvironmentFile=/home/claude-dev/.env

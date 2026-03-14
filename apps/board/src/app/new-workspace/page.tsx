@@ -144,7 +144,7 @@ export default function NewWorkspacePage() {
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="slug">URL slug</Label>
               <div className="flex items-center rounded-md border bg-muted/30 px-3 text-sm">
-                <span className="text-muted-foreground shrink-0">app.agentic-dev.xyz/</span>
+                <span className="text-muted-foreground shrink-0">app.just-ship.io/</span>
                 <Input
                   id="slug"
                   type="text"

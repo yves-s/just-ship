@@ -64,7 +64,7 @@ bot.use(async (ctx, next) => {
 // ---------- /start ----------
 bot.start(async (ctx) => {
   await ctx.reply(
-    "Willkommen beim Agentic Dev Bot!\n\n" +
+    "Willkommen beim Just Ship Bot!\n\n" +
       "Sende mir eine Nachricht und ich erstelle ein Ticket daraus:\n" +
       "- Text — einfach losschreiben\n" +
       "- Sprachnachricht — wird transkribiert\n" +

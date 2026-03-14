@@ -1,5 +1,5 @@
 -- 001_create_tables.sql
--- Idempotent migration: creates projects and tickets tables for agentic-dev-pipeline
+-- Idempotent migration: creates projects and tickets tables for just-ship
 -- Run via: /setup-pipeline → mcp__claude_ai_Supabase__apply_migration
 
 -- =============================================================================

@@ -160,7 +160,7 @@ process.on("SIGTERM", () => {
 
 // --- Main loop ---
 log("==========================================");
-log("  Agentic Dev Pipeline Worker (SDK)");
+log("  Just Ship Pipeline Worker (SDK)");
 log(`  Project: ${PROJECT_DIR.split("/").pop()}`);
 log(`  Supabase-Project: ${SUPABASE_PROJECT_ID}`);
 log(`  Poll-Interval: ${POLL_INTERVAL / 1000}s`);

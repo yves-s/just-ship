@@ -36,7 +36,7 @@ Dieses Repo nutzt ein Multi-Agent-System. Ob lokal oder auf dem Server:
 4. **Commit + PR** am Ende des Workflows → Board-Status "in_review"
 5. **Merge erst nach Freigabe** — User sagt "passt"/"merge" oder `/merge`
 
-## Ticket-Workflow (Agentic Dev Board)
+## Ticket-Workflow (Just Ship Board)
 
 > Nur aktiv wenn `pipeline.api_url` und `pipeline.api_key` in `project.json` gesetzt sind. Ohne Pipeline-Config werden diese Schritte übersprungen.
 

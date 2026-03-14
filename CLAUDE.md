@@ -1,4 +1,4 @@
-# CLAUDE.md – agentic-dev-pipeline Project Instructions
+# CLAUDE.md – just-ship Project Instructions
 
 > Dieses Dokument wird von Claude Code automatisch gelesen.
 > Projektspezifische Konfiguration (Stack, Build-Commands, Pfade, Pipeline-Verbindung) liegt in `project.json`.
@@ -7,7 +7,7 @@
 
 ## Projekt
 
-**agentic-dev-pipeline** – Portables Multi-Agent-Framework für autonome Softwareentwicklung mit Claude Code. Installierbar in beliebige Projekte via `setup.sh`.
+**just-ship** – Portables Multi-Agent-Framework für autonome Softwareentwicklung mit Claude Code. Installierbar in beliebige Projekte via `setup.sh`.
 
 ---
 
@@ -38,7 +38,7 @@ Dieses Repo nutzt ein Multi-Agent-System. Ob lokal oder auf dem Server:
 4. **Commit + PR** am Ende des Workflows → Board-Status "in_review"
 5. **Merge erst nach Freigabe** — User sagt "passt"/"merge" oder `/merge`
 
-## Ticket-Workflow (Agentic Dev Board)
+## Ticket-Workflow (Just Ship Board)
 
 > Nur aktiv wenn `pipeline.project_id` in `project.json` gesetzt ist. Ohne Pipeline-Config werden diese Schritte übersprungen.
 

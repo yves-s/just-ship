@@ -1,5 +1,5 @@
 -- 001_core_tables.sql
--- Core schema for board.agentic-dev.xyz
+-- Core schema for app.just-ship.io
 
 -- =============================================================================
 -- Workspaces (tenants)

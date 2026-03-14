@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # /setup-pipeline — Projekt konfigurieren
 
-Erkennt automatisch den Tech-Stack, befüllt `project.json`, ergänzt `CLAUDE.md` und verbindet optional mit dem Agentic Dev Board. Alles in einem Schritt.
+Erkennt automatisch den Tech-Stack, befüllt `project.json`, ergänzt `CLAUDE.md` und verbindet optional mit dem Just Ship Board. Alles in einem Schritt.
 
 ## Voraussetzungen
 
@@ -158,10 +158,10 @@ Falls `--board` und `--key` übergeben wurden:
 
 #### Modus 2: Interaktiv (keine Flags)
 
-1. Frage: **"Projekt mit dem Agentic Dev Board verbinden? (J/n)"**
+1. Frage: **"Projekt mit dem Just Ship Board verbinden? (J/n)"**
 2. Falls nein: Überspringe diesen Schritt.
 3. Falls ja: Frage nach Board URL und API Key im Gespräch:
-   - Board URL (z.B. `https://app.agentic-dev.xyz`)
+   - Board URL (z.B. `https://app.just-ship.io`)
    - API Key (z.B. `adp_...`)
 4. Dann weiter wie Modus 1 (curl Aufrufe mit den eingegebenen Werten).
 

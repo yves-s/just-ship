@@ -16,7 +16,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Agentic Dev Board",
+  title: "Just Ship Board",
   description: "Ticket & Project Management for claude-pipeline",
 };
 

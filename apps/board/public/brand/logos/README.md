@@ -1,4 +1,4 @@
-# Agentic Dev — Logo Assets
+# Just Ship — Logo Assets
 
 Alle Orbit-Logo-Varianten in SVG und PNG.
 
@@ -58,4 +58,4 @@ logos/
 - **Ring & Agent Dot:** Indigo `#6366F1`
 - **Task Dot:** Orange `#F97316`
 - **Dark Variant:** Ring & Agent in Weiss `#FFFFFF`
-- **Wortmarke:** "agentic" in Textfarbe, "dev" in Indigo
+- **Wortmarke:** "just" in Textfarbe, "ship" in Indigo

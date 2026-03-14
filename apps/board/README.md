@@ -1,8 +1,8 @@
-# Agentic Dev Board
+# Just Ship Board
 
-Multi-Tenant-SaaS-Dashboard für KI-gestütztes Ticket- und Projektmanagement. Zentrales Board für das `agentic-dev-pipeline`-System — Tickets werden manuell oder via Claude Code erstellt und von KI-Agenten autonom abgearbeitet.
+Multi-Tenant-SaaS-Dashboard für KI-gestütztes Ticket- und Projektmanagement. Zentrales Board für das `just-ship`-System — Tickets werden manuell oder via Claude Code erstellt und von KI-Agenten autonom abgearbeitet.
 
-**Production:** [app.agentic-dev.xyz](https://app.agentic-dev.xyz)
+**Production:** [app.just-ship.io](https://app.just-ship.io)
 
 ---
 
@@ -43,8 +43,8 @@ Multi-Tenant-SaaS-Dashboard für KI-gestütztes Ticket- und Projektmanagement. Z
 ### Installation
 
 ```bash
-git clone https://github.com/<org>/agentic-dev-board.git
-cd agentic-dev-board
+git clone https://github.com/<org>/just-ship-board.git
+cd just-ship-board
 npm install
 ```
 
@@ -105,7 +105,7 @@ src/
 
 ## Pipeline API
 
-KI-Agenten (Claude Code, agentic-dev-pipeline) nutzen die REST API für Ticket- und Projekt-Operationen.
+KI-Agenten (Claude Code, just-ship) nutzen die REST API für Ticket- und Projekt-Operationen.
 
 **Auth:** `X-Pipeline-Key: adp_<key>`
 
@@ -114,29 +114,29 @@ KI-Agenten (Claude Code, agentic-dev-pipeline) nutzen die REST API für Ticket- 
 curl -X PATCH -H "X-Pipeline-Key: adp_..." \
   -H "Content-Type: application/json" \
   -d '{"status": "in_progress"}' \
-  https://app.agentic-dev.xyz/api/tickets/<number>
+  https://app.just-ship.io/api/tickets/<number>
 
 # Ticket erstellen
 curl -X POST -H "X-Pipeline-Key: adp_..." \
   -H "Content-Type: application/json" \
   -d '{"title": "...", "body": "...", "priority": "medium", "project_id": "<uuid>"}' \
-  https://app.agentic-dev.xyz/api/tickets
+  https://app.just-ship.io/api/tickets
 
 # Agent Event loggen
 curl -X POST -H "X-Pipeline-Key: adp_..." \
   -H "Content-Type: application/json" \
   -d '{"ticket_number": 123, "agent_type": "orchestrator", "event_type": "agent_started"}' \
-  https://app.agentic-dev.xyz/api/events
+  https://app.just-ship.io/api/events
 
 # Projekte auflisten
 curl -H "X-Pipeline-Key: adp_..." \
-  https://app.agentic-dev.xyz/api/projects
+  https://app.just-ship.io/api/projects
 
 # Projekt erstellen
 curl -X POST -H "X-Pipeline-Key: adp_..." \
   -H "Content-Type: application/json" \
   -d '{"name": "My Project"}' \
-  https://app.agentic-dev.xyz/api/projects
+  https://app.just-ship.io/api/projects
 ```
 
 ---
@@ -151,7 +151,7 @@ Repos binden sich via `project.json` an das Board. Die vollständige Config wird
     "project_id": "<board-project-uuid>",
     "project_name": "Mein Projekt",
     "workspace_id": "<workspace-uuid>",
-    "api_url": "https://app.agentic-dev.xyz",
+    "api_url": "https://app.just-ship.io",
     "api_key": "adp_..."
   }
 }

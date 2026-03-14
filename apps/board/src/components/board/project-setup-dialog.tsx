@@ -42,9 +42,9 @@ interface ProjectSetupDialogProps {
 
 type CopiedTarget = "cli" | "json" | "install" | "uuid" | null;
 
-const INSTALL_COMMAND = `git clone https://github.com/yves-s/agentic-dev-pipeline.git ~/.agentic-dev-pipeline
+const INSTALL_COMMAND = `git clone https://github.com/yves-s/just-ship.git ~/.just-ship
 cd /path/to/your/project
-~/.agentic-dev-pipeline/setup.sh`;
+~/.just-ship/setup.sh`;
 
 export function ProjectSetupDialog({
   open,
@@ -181,7 +181,7 @@ export function ProjectSetupDialog({
                     </div>
                     <p className="text-xs text-muted-foreground">
                       <a
-                        href="https://github.com/yves-s/agentic-dev-pipeline"
+                        href="https://github.com/yves-s/just-ship"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-primary hover:underline inline-flex items-center gap-0.5"

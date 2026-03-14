@@ -18,7 +18,7 @@ Gleicht `CLAUDE.md` und `project.json` gegen die aktuellen Framework-Templates a
 
 Lies `.claude/.pipeline-version` — falls vorhanden, bestätigt das eine aktive Installation.
 
-Ermittle den Framework-Pfad: Prüfe ob `~/agentic-dev-pipeline/` existiert (Standard-Installationspfad).
+Ermittle den Framework-Pfad: Prüfe ob `~/just-ship/` existiert (Standard-Installationspfad).
 Falls nicht gefunden: Frage den User nach dem Pfad zum Framework-Verzeichnis.
 
 ### 2. Templates laden

@@ -1,4 +1,4 @@
-# CLAUDE.md – agentic-dev-telegram-bot Project Instructions
+# CLAUDE.md – just-ship-bot Project Instructions
 
 > Dieses Dokument wird von Claude Code automatisch gelesen.
 > Projektspezifische Konfiguration (Stack, Build-Commands, Pfade, Pipeline-Verbindung) liegt in `project.json`.
@@ -7,7 +7,7 @@
 
 ## Projekt
 
-**agentic-dev-telegram-bot** – Telegram Bot zur Ticket-Erstellung im Agentic Dev Board. Nimmt Text, Sprachnachrichten und Screenshots entgegen, strukturiert sie per AI (Claude + Whisper) in Tickets und speichert sie in Supabase.
+**just-ship-bot** – Telegram Bot zur Ticket-Erstellung im Just Ship Board. Nimmt Text, Sprachnachrichten und Screenshots entgegen, strukturiert sie per AI (Claude + Whisper) in Tickets und speichert sie in Supabase.
 
 ---
 
@@ -40,7 +40,7 @@ Dieses Repo nutzt ein Multi-Agent-System. Ob lokal oder auf dem Server:
 4. **Commit + PR** am Ende des Workflows → Board-Status "in_review"
 5. **Merge erst nach Freigabe** — User sagt "passt"/"merge" oder `/merge`
 
-## Ticket-Workflow (Agentic Dev Board)
+## Ticket-Workflow (Just Ship Board)
 
 > Nur aktiv wenn `pipeline.api_url` und `pipeline.api_key` in `project.json` gesetzt sind. Ohne Pipeline-Config werden diese Schritte übersprungen.
 

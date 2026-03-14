@@ -2,7 +2,7 @@
 
 > Date: 2026-03-13
 > Status: Draft
-> Scope: agentic-dev-board + agentic-dev-pipeline
+> Scope: just-ship-board + just-ship
 
 ---
 
@@ -45,7 +45,7 @@ A self-service, guided flow from workspace creation to connected pipeline that w
 8. → project.json is configured, pipeline is connected
 ```
 
-## 2. Board Changes (agentic-dev-board)
+## 2. Board Changes (just-ship-board)
 
 ### 2.1 Workspace Creation — Simplified
 
@@ -102,7 +102,7 @@ The CTA opens the Create Project Dialog.
 │ │ Führe das in deinem Projekt-Terminal aus:       │   │
 │ │                                                 │   │
 │ │ /setup-pipeline \                               │   │
-│ │   --board https://app.agentic-dev.xyz \         │   │
+│ │   --board https://app.just-ship.io \         │   │
 │ │   --key adp_ab18e060...                         │   │
 │ │                                  [Kopieren]     │   │
 │ └─────────────────────────────────────────────────┘   │
@@ -121,7 +121,7 @@ The CTA opens the Create Project Dialog.
 
 ```
 /setup-pipeline \
-  --board https://app.agentic-dev.xyz \
+  --board https://app.just-ship.io \
   --key adp_ab18e060... \
   --project e904798e-...
 ```
@@ -158,7 +158,7 @@ Request:
 Response 200:
   {
     "workspace_id": "421dffa5-...",
-    "workspace_name": "Agentic Dev",
+    "workspace_name": "Just Ship",
     "projects": [
       { "id": "e904798e-...", "name": "Aime Web", "description": "..." },
       { "id": "d81500be-...", "name": "Aime Superadmin", "description": null }
@@ -203,7 +203,7 @@ Response 200:
 
 **Rate limiting:** `POST /api/projects` limited to 50 projects per workspace. Not enforced via middleware initially — just a DB check before insert.
 
-## 3. Pipeline Changes (agentic-dev-pipeline)
+## 3. Pipeline Changes (just-ship)
 
 ### 3.1 `/setup-pipeline` Command — Reworked
 
@@ -224,13 +224,13 @@ The "interactive" mode means Claude Code asks the user within the chat conversat
 ✓ project.json updated (stack, build, paths)
 ✓ CLAUDE.md enriched
 
-Connect to Agentic Dev Board? (y/n)
+Connect to Just Ship Board? (y/n)
 > y
 
-Board URL: [https://app.agentic-dev.xyz]
+Board URL: [https://app.just-ship.io]
 API Key: [adp_...]
 
-✓ Connected to Workspace "Agentic Dev"
+✓ Connected to Workspace "Just Ship"
 
 Available projects:
   1. Aime Web
@@ -247,12 +247,12 @@ Project name: [My Project]
 **Mode 2: Direct Connect (copy-paste from Board)**
 
 ```
-> /setup-pipeline --board https://app.agentic-dev.xyz --key adp_... --project e904798e-...
+> /setup-pipeline --board https://app.just-ship.io --key adp_... --project e904798e-...
 
 ✓ Stack detected: Next.js 15, TypeScript, Supabase, pnpm
 ✓ project.json updated
 
-✓ Connected to Workspace "Agentic Dev"
+✓ Connected to Workspace "Just Ship"
 ✓ Project: Aime Web
 
 ✓ project.json pipeline config written
@@ -315,7 +315,7 @@ If the user declines Board connection, only stack/build/paths are filled. The `p
 
 ## 5. Implementation Scope
 
-### agentic-dev-board
+### just-ship-board
 
 | # | Task | Complexity |
 |---|---|---|
@@ -328,7 +328,7 @@ If the user declines Board connection, only stack/build/paths are filled. The `p
 | B7 | `POST /api/workspace/[id]/api-keys/regenerate` endpoint (session auth) | Small |
 | B8 | "Setup" icon on project in toolbar/filter for re-opening Setup Dialog | Small |
 
-### agentic-dev-pipeline
+### just-ship
 
 | # | Task | Complexity |
 |---|---|---|

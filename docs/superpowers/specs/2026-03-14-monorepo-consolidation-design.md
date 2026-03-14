@@ -2,13 +2,13 @@
 
 **Date:** 2026-03-14
 **Status:** Implemented (VPS migration + archive pending)
-**Scope:** Merge `agentic-dev-board` and `agentic-dev-telegram-bot` into `agentic-dev-pipeline` as a single monorepo.
+**Scope:** Merge `just-ship-board` and `just-ship-bot` into `just-ship` as a single monorepo.
 
 ---
 
 ## Motivation
 
-Three separate repos (`agentic-dev-pipeline`, `agentic-dev-board`, `agentic-dev-telegram-bot`) share the same Supabase DB, duplicate the pipeline SDK, and require separate maintenance. For open source, a single `git clone` should give users the complete experience: framework, dashboard, and Telegram-based ticket intake.
+Three separate repos (`just-ship`, `just-ship-board`, `just-ship-bot`) share the same Supabase DB, duplicate the pipeline SDK, and require separate maintenance. For open source, a single `git clone` should give users the complete experience: framework, dashboard, and Telegram-based ticket intake.
 
 ### Goals
 
@@ -30,7 +30,7 @@ Three separate repos (`agentic-dev-pipeline`, `agentic-dev-board`, `agentic-dev-
 ### Monorepo Structure
 
 ```
-agentic-dev-pipeline/
+just-ship/
 ├── agents/                    # Agent definitions (unchanged)
 ├── commands/                  # Slash commands (unchanged)
 ├── skills/                    # Pipeline skills (unchanged)
@@ -54,8 +54,8 @@ agentic-dev-pipeline/
 ├── templates/                 # CLAUDE.md + project.json templates
 ├── vps/                       # VPS infrastructure (systemd services)
 │   ├── setup-vps.sh
-│   ├── agentic-dev-pipeline@.service
-│   ├── agentic-dev-bot.service
+│   ├── just-ship@.service
+│   ├── just-ship-bot.service
 │   └── README.md
 ├── docs/
 ├── scripts/
@@ -71,7 +71,7 @@ Root `package.json`:
 
 ```json
 {
-  "name": "agentic-dev-pipeline",
+  "name": "just-ship",
   "private": true,
   "workspaces": [
     "pipeline",
@@ -88,7 +88,7 @@ Root `package.json`:
 }
 ```
 
-**Note:** `pipeline/package.json` must be renamed from `"name": "agentic-dev-pipeline"` to `"name": "agentic-dev-pipeline-sdk"` to avoid a name collision with the root package.
+**Note:** `pipeline/package.json` must be renamed from `"name": "just-ship"` to `"name": "just-ship-sdk"` to avoid a name collision with the root package.
 
 One `npm install` at root installs all dependencies. Shared deps (e.g., `@supabase/supabase-js`, `tsx`) are hoisted to root `node_modules/`.
 
@@ -100,8 +100,8 @@ One `npm install` at root installs all dependencies. Shared deps (e.g., `@supaba
 | `pipeline/` | Minimal | Stays at root, becomes npm workspace |
 | `setup.sh` | No | Still copies from root-level paths |
 | `vps/` | Slightly | Bot systemd service added |
-| Board code | Move only | `agentic-dev-board/*` → `apps/board/` |
-| Bot code | Move only | `agentic-dev-telegram-bot/*` → `apps/bot/` |
+| Board code | Move only | `just-ship-board/*` → `apps/board/` |
+| Bot code | Move only | `just-ship-bot/*` → `apps/bot/` |
 | `.pipeline/` in Board + Bot | Removed | Both import directly from `../../pipeline` |
 | `.claude/` in Board + Bot | Removed | Root `.claude/` config applies to all |
 
@@ -124,10 +124,10 @@ All commits preserved, `git blame` works.
 2. **Add Board:** `git subtree add --prefix=apps/board` from board remote
 3. **Add Bot:** `git subtree add --prefix=apps/bot` from bot remote
 4. **Clean Board:** Remove `apps/board/.pipeline/`, `apps/board/.claude/`, `apps/board/pnpm-lock.yaml`, `apps/board/project.json` (contains secrets)
-5. **Clean Bot:** Remove `apps/bot/.pipeline/`, `apps/bot/.claude/`, `apps/bot/project.json` (contains secrets), move `apps/bot/telegram-bot.service` to `vps/agentic-dev-bot.service`
+5. **Clean Bot:** Remove `apps/bot/.pipeline/`, `apps/bot/.claude/`, `apps/bot/project.json` (contains secrets), move `apps/bot/telegram-bot.service` to `vps/just-ship-bot.service`
 6. **Create `.env.example` for Board** — Document all required environment variables
 7. **Reconcile `.gitignore`** — Consolidate board/bot `.gitignore` patterns with root, remove duplicates
-8. **Rename pipeline package** — `pipeline/package.json` name from `agentic-dev-pipeline` to `agentic-dev-pipeline-sdk`
+8. **Rename pipeline package** — `pipeline/package.json` name from `just-ship` to `just-ship-sdk`
 9. **Create root `package.json`** with workspaces config and scripts
 10. **Run `npm install`** at root to verify workspace resolution
 11. **Reconfigure Vercel:** See Vercel deployment section for exact settings
@@ -151,7 +151,7 @@ Vercel project settings:
 
 Setting root directory to the repo root (not `apps/board`) ensures `npm install` runs at the monorepo level where the workspaces config lives. The workspace-scoped build command and explicit output directory handle the rest.
 
-Environment variables, domain (`app.agentic-dev.xyz`), preview deploys — all unchanged.
+Environment variables, domain (`app.just-ship.io`), preview deploys — all unchanged.
 
 ### Bot + Pipeline Worker — VPS
 
@@ -159,25 +159,25 @@ Both are long-running polling processes, deployed as systemd services:
 
 ```
 vps/
-├── agentic-dev-pipeline@.service    # Pipeline worker (path unchanged)
-├── agentic-dev-bot.service          # Telegram bot (new path: apps/bot/)
+├── just-ship@.service    # Pipeline worker (path unchanged)
+├── just-ship-bot.service          # Telegram bot (new path: apps/bot/)
 └── setup-vps.sh                     # VPS initialization
 ```
 
 Bot service working directory change:
-- Before: `/home/claude-dev/agentic-dev-telegram-bot`
-- After: `/home/claude-dev/agentic-dev-pipeline/apps/bot`
+- Before: `/home/claude-dev/just-ship-bot`
+- After: `/home/claude-dev/just-ship/apps/bot`
 
 ### VPS Migration Checklist
 
-1. `cd /home/claude-dev/agentic-dev-pipeline && git pull` — Get monorepo with apps
+1. `cd /home/claude-dev/just-ship && git pull` — Get monorepo with apps
 2. `npm install` — Install all workspace dependencies at root
-3. `sudo cp vps/agentic-dev-bot.service /etc/systemd/system/` — Install new bot service
+3. `sudo cp vps/just-ship-bot.service /etc/systemd/system/` — Install new bot service
 4. `sudo systemctl daemon-reload`
 5. Stop old bot service (if running from separate repo)
-6. `sudo systemctl enable --now agentic-dev-bot.service` — Start bot from monorepo
+6. `sudo systemctl enable --now just-ship-bot.service` — Start bot from monorepo
 7. Verify bot responds on Telegram
-8. Remove old `/home/claude-dev/agentic-dev-telegram-bot` clone once verified
+8. Remove old `/home/claude-dev/just-ship-bot` clone once verified
 
 ### Deployment Flow
 
@@ -187,8 +187,8 @@ git push origin main
     ├──→ Vercel: builds apps/board automatically
     │
     └──→ VPS: git pull + systemctl restart
-         ├── agentic-dev-bot.service
-         └── agentic-dev-pipeline@{slug}.service
+         ├── just-ship-bot.service
+         └── just-ship@{slug}.service
 ```
 
 ---

@@ -1,18 +1,18 @@
 #!/bin/bash
 # =============================================================================
-# setup.sh – Install or update Agentic Dev Pipeline in a project
+# setup.sh – Install or update Just Ship in a project
 #
 # Usage:
 #   cd /path/to/your/project
 #
 #   # Initial setup (interactive)
-#   /path/to/agentic-dev-pipeline/setup.sh
+#   /path/to/just-ship/setup.sh
 #
 #   # Update framework files only (non-interactive)
-#   /path/to/agentic-dev-pipeline/setup.sh --update
+#   /path/to/just-ship/setup.sh --update
 #
 #   # Preview what would change
-#   /path/to/agentic-dev-pipeline/setup.sh --update --dry-run
+#   /path/to/just-ship/setup.sh --update --dry-run
 #
 # Framework files (overwritten on update):
 #   .claude/agents/*          Agent definitions
@@ -104,9 +104,9 @@ fi
 echo ""
 echo "================================================"
 if [ "$MODE" = "update" ]; then
-  echo "  Agentic Dev Pipeline — Update"
+  echo "  Just Ship — Update"
 else
-  echo "  Agentic Dev Pipeline — Setup"
+  echo "  Just Ship — Setup"
 fi
 echo "  Version: $FRAMEWORK_VERSION"
 echo "================================================"

@@ -1,4 +1,4 @@
-# Agentic Dev Board — Flow Documentation
+# Just Ship Board — Flow Documentation
 
 ## 1. Registration & Setup
 
@@ -81,9 +81,9 @@ Prefix:     adp_<8 hex chars>      → gespeichert in api_keys.key_prefix (für 
 │                  Pipeline-DB (Supabase)                  │
 │              wsmnutkobalfrceavpxs.supabase.co            │
 │                                                         │
-│  Workspace: "Agentic Dev"                               │
+│  Workspace: "Just Ship"                                  │
 │  ├── Projekt: Aime                                      │
-│  ├── Projekt: Agentic Dev Board                         │
+│  ├── Projekt: Just Ship Board                           │
 │  ├── Projekt: Aime Superadmin Dashboard                 │
 │  └── Projekt: Aime Web                                  │
 │                                                         │
@@ -206,7 +206,7 @@ Request mit Bearer Token
 
 ---
 
-## 5. Agentic Dev Board Web-UI
+## 5. Just Ship Board Web-UI
 
 ### Seiten
 

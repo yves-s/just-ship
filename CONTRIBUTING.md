@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in contributing to Agentic Dev Pipeline!
+Thanks for your interest in contributing to Just Ship!
 
 ## Ways to contribute
 
@@ -11,8 +11,8 @@ Thanks for your interest in contributing to Agentic Dev Pipeline!
 ## Development setup
 
 ```bash
-git clone https://github.com/yves-s/agentic-dev-pipeline.git
-cd agentic-dev-pipeline
+git clone https://github.com/yves-s/just-ship.git
+cd just-ship
 ```
 
 No build step needed — the framework is plain bash scripts and markdown files.
@@ -21,7 +21,7 @@ To test changes, install the framework into a test project:
 
 ```bash
 cd /path/to/test-project
-/path/to/agentic-dev-pipeline/setup.sh
+/path/to/just-ship/setup.sh
 ```
 
 ## Submitting a pull request

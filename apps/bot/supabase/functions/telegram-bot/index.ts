@@ -566,7 +566,7 @@ Deno.serve(async (req: Request) => {
     await sendMessage(
       chatId,
       "👋 Willkommen! Verbinde zuerst deinen Telegram-Account:\n\n" +
-      `1. Öffne <a href="${BOARD_API_URL}">app.agentic-dev.xyz</a>\n` +
+      `1. Öffne <a href="${BOARD_API_URL}">app.just-ship.io</a>\n` +
       "2. Klicke in der Sidebar auf das Telegram-Symbol\n" +
       `3. Klicke auf <b>"Code generieren"</b>\n` +
       "4. Schick mir den 6-stelligen Code\n\n" +
@@ -586,7 +586,7 @@ Deno.serve(async (req: Request) => {
   if (msg.text === "/start") {
     await sendMessage(
       chatId,
-      "Willkommen beim Agentic Dev Bot!\n\n" +
+      "Willkommen beim Just Ship Bot!\n\n" +
         "Sende mir eine Nachricht und ich erstelle ein Ticket daraus:\n" +
         "- Text — einfach losschreiben\n" +
         "- Sprachnachricht — wird transkribiert\n" +

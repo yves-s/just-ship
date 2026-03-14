@@ -35,7 +35,7 @@ fi
 
 echo ""
 echo "================================================"
-echo "  Agentic Dev Pipeline — VPS Setup"
+echo "  Just Ship — VPS Setup"
 echo "  Ubuntu 22.04 / Hostinger"
 echo "================================================"
 echo ""
@@ -134,7 +134,7 @@ fi
 
 # .env schreiben
 cat > "$ENV_FILE" <<ENVEOF
-# Agentic Dev Pipeline — Environment
+# Just Ship — Environment
 # Generiert von setup-vps.sh am $(date +%Y-%m-%d)
 
 ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
@@ -164,14 +164,14 @@ ok "Git + GitHub CLI konfiguriert"
 
 h "Pipeline-Framework klonen"
 
-FRAMEWORK_DIR="/home/claude-dev/agentic-dev-pipeline"
+FRAMEWORK_DIR="/home/claude-dev/just-ship"
 
 if [ -d "$FRAMEWORK_DIR/.git" ]; then
   su - claude-dev -c "cd $FRAMEWORK_DIR && git pull origin main" || true
   warn "Framework bereits vorhanden — aktualisiert"
 else
-  su - claude-dev -c "GH_TOKEN=${GH_TOKEN} gh repo clone yves-s/agentic-dev-pipeline $FRAMEWORK_DIR" 2>/dev/null || \
-  su - claude-dev -c "git clone https://${GH_TOKEN}@github.com/yves-s/agentic-dev-pipeline.git $FRAMEWORK_DIR"
+  su - claude-dev -c "GH_TOKEN=${GH_TOKEN} gh repo clone yves-s/just-ship $FRAMEWORK_DIR" 2>/dev/null || \
+  su - claude-dev -c "git clone https://${GH_TOKEN}@github.com/yves-s/just-ship.git $FRAMEWORK_DIR"
   ok "Framework geklont → $FRAMEWORK_DIR"
 fi
 
@@ -182,8 +182,8 @@ h "systemd Services installieren"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Service-Template installieren
-install -m 644 "$SCRIPT_DIR/agentic-dev-pipeline@.service" \
-  /etc/systemd/system/agentic-dev-pipeline@.service
+install -m 644 "$SCRIPT_DIR/just-ship-pipeline@.service" \
+  /etc/systemd/system/just-ship-pipeline@.service
 
 systemctl daemon-reload
 ok "systemd service template installiert"
@@ -200,7 +200,7 @@ echo ""
 echo "  1. Projekt klonen und Pipeline installieren:"
 echo "     su - claude-dev"
 echo "     git clone https://\$GH_TOKEN@github.com/org/repo.git ~/mein-projekt"
-echo "     ~/agentic-dev-pipeline/setup.sh  # im Projekt-Dir"
+echo "     ~/just-ship/setup.sh  # im Projekt-Dir"
 echo ""
 echo "  2. Projekt-Config erstellen:"
 echo "     cat > /home/claude-dev/.env.mein-projekt <<EOF"
@@ -212,8 +212,8 @@ echo "     POLL_INTERVAL=60"
 echo "     EOF"
 echo ""
 echo "  3. Worker starten:"
-echo "     systemctl enable --now agentic-dev-pipeline@mein-projekt"
-echo "     journalctl -fu agentic-dev-pipeline@mein-projekt"
+echo "     systemctl enable --now just-ship-pipeline@mein-projekt"
+echo "     journalctl -fu just-ship-pipeline@mein-projekt"
 echo ""
 echo "  Pipeline-Secret für Webhook:"
 echo "  PIPELINE_SECRET=$(cat $ENV_FILE | grep PIPELINE_SECRET | cut -d= -f2)"

@@ -2,7 +2,7 @@
 
 ## Problem
 
-Das Framework-Repo (`agentic-dev-pipeline`) hat Commands, Skills und Agents in Root-Verzeichnissen (`commands/`, `skills/`, `agents/`), aber Claude Code erwartet sie unter `.claude/`. Dadurch sind `/develop`, `/ship` etc. im Framework-Repo selbst nicht verfügbar — das Repo kann nicht mit den eigenen Tools weiterentwickelt werden.
+Das Framework-Repo (`just-ship`) hat Commands, Skills und Agents in Root-Verzeichnissen (`commands/`, `skills/`, `agents/`), aber Claude Code erwartet sie unter `.claude/`. Dadurch sind `/develop`, `/ship` etc. im Framework-Repo selbst nicht verfügbar — das Repo kann nicht mit den eigenen Tools weiterentwickelt werden.
 
 ## Lösung
 
@@ -65,7 +65,7 @@ fi
 Basierend auf `templates/CLAUDE.md`, mit ausgefüllten Feldern:
 
 **Projekt-Abschnitt:**
-> **agentic-dev-pipeline** – Portables Multi-Agent-Framework für autonome Softwareentwicklung mit Claude Code. Installierbar in beliebige Projekte via `setup.sh`.
+> **just-ship** – Portables Multi-Agent-Framework für autonome Softwareentwicklung mit Claude Code. Installierbar in beliebige Projekte via `setup.sh`.
 
 **Code-Konventionen:**
 > - TypeScript (Pipeline SDK unter `pipeline/`), Bash (setup.sh, scripts), Markdown (Agents, Commands, Skills)

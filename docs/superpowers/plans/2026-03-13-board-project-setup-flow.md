@@ -11,8 +11,8 @@
 **Spec:** `docs/superpowers/specs/2026-03-13-board-project-setup-flow-design.md`
 
 **Multi-repo:** This plan spans two repos:
-- **Board:** `/Users/yschleich/Developer/agentic-dev-board`
-- **Pipeline:** `/Users/yschleich/Developer/agentic-dev-pipeline`
+- **Board:** `/Users/yschleich/Developer/just-ship-board`
+- **Pipeline:** `/Users/yschleich/Developer/just-ship`
 
 All file paths are relative to the respective repo root unless stated otherwise.
 
@@ -20,7 +20,7 @@ All file paths are relative to the respective repo root unless stated otherwise.
 
 ## File Map
 
-### Board (agentic-dev-board) — New Files
+### Board (just-ship-board) — New Files
 
 | File | Responsibility |
 |---|---|
@@ -30,7 +30,7 @@ All file paths are relative to the respective repo root unless stated otherwise.
 | `src/components/board/create-project-dialog.tsx` | Inline project creation dialog |
 | `src/components/board/project-setup-dialog.tsx` | Setup dialog with CLI command + manual config |
 
-### Board (agentic-dev-board) — Modified Files
+### Board (just-ship-board) — Modified Files
 
 | File | Change |
 |---|---|
@@ -39,7 +39,7 @@ All file paths are relative to the respective repo root unless stated otherwise.
 | `src/components/board/board-toolbar.tsx` | Add "+" button and setup icon for projects |
 | `src/app/new-workspace/page.tsx` | Remove API key generation/display |
 
-### Pipeline (agentic-dev-pipeline) — Modified Files
+### Pipeline (just-ship) — Modified Files
 
 | File | Change |
 |---|---|
@@ -57,7 +57,7 @@ All file paths are relative to the respective repo root unless stated otherwise.
 
 ### Task 1: Project Validation Schema
 
-**Repo:** agentic-dev-board
+**Repo:** just-ship-board
 **Files:**
 - Create: `src/lib/validations/project.ts`
 
@@ -86,7 +86,7 @@ git commit -m "feat: add project validation schema"
 
 ### Task 2: GET /api/projects Endpoint
 
-**Repo:** agentic-dev-board
+**Repo:** just-ship-board
 **Files:**
 - Create: `src/app/api/projects/route.ts`
 - Reference: `src/lib/api/pipeline-key-auth.ts` (existing auth pattern)
@@ -136,7 +136,7 @@ export async function GET(request: Request) {
 - [ ] **Step 2: Verify with curl**
 
 ```bash
-curl -s -H "X-Pipeline-Key: adp_YOUR_KEY" https://app.agentic-dev.xyz/api/projects | jq .
+curl -s -H "X-Pipeline-Key: adp_YOUR_KEY" https://app.just-ship.io/api/projects | jq .
 ```
 
 Expected: 200 with `{ data: { workspace_id, workspace_name, projects: [...] }, error: null }`
@@ -152,7 +152,7 @@ git commit -m "feat: add GET /api/projects endpoint with pipeline key auth"
 
 ### Task 3: POST /api/projects Endpoint
 
-**Repo:** agentic-dev-board
+**Repo:** just-ship-board
 **Files:**
 - Modify: `src/app/api/projects/route.ts`
 - Reference: `src/lib/validations/project.ts`
@@ -238,7 +238,7 @@ ALTER TABLE projects ADD CONSTRAINT projects_workspace_name_unique UNIQUE (works
 curl -s -X POST -H "X-Pipeline-Key: adp_YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{"name": "Test Project"}' \
-  https://app.agentic-dev.xyz/api/projects | jq .
+  https://app.just-ship.io/api/projects | jq .
 ```
 
 Expected: 201 with `{ data: { id, name, workspace_id }, error: null }`
@@ -248,7 +248,7 @@ Test duplicate name:
 curl -s -X POST -H "X-Pipeline-Key: adp_YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{"name": "Test Project"}' \
-  https://app.agentic-dev.xyz/api/projects | jq .
+  https://app.just-ship.io/api/projects | jq .
 ```
 
 Expected: 409 with `{ data: null, error: { code: "CONFLICT", message: "Project name already exists" } }`
@@ -264,7 +264,7 @@ git commit -m "feat: add POST /api/projects endpoint with rate limiting"
 
 ### Task 4: Key Regeneration Endpoint
 
-**Repo:** agentic-dev-board
+**Repo:** just-ship-board
 **Files:**
 - Create: `src/app/api/workspace/[workspaceId]/api-keys/regenerate/route.ts`
 - Reference: `src/app/api/workspace/[workspaceId]/api-keys/route.ts` (existing key creation pattern)
@@ -355,7 +355,7 @@ git commit -m "feat: add key regeneration endpoint"
 
 ### Task 5: Create Project Dialog
 
-**Repo:** agentic-dev-board
+**Repo:** just-ship-board
 **Files:**
 - Create: `src/components/board/create-project-dialog.tsx`
 - Reference: `src/components/tickets/create-ticket-dialog.tsx` (pattern)
@@ -499,7 +499,7 @@ git commit -m "feat: add create project dialog component"
 
 ### Task 6: Project Setup Dialog
 
-**Repo:** agentic-dev-board
+**Repo:** just-ship-board
 **Files:**
 - Create: `src/components/board/project-setup-dialog.tsx`
 - Reference: `src/components/settings/create-api-key-dialog.tsx` (copy button pattern)
@@ -752,7 +752,7 @@ git commit -m "feat: add project setup dialog with CLI command and key managemen
 
 ### Task 7: Add "+" Button to Board Toolbar
 
-**Repo:** agentic-dev-board
+**Repo:** just-ship-board
 **Files:**
 - Modify: `src/components/board/board-toolbar.tsx`
 
@@ -797,7 +797,7 @@ git commit -m "feat: add create project button to board toolbar"
 
 ### Task 8: Board Empty State + Dialog Wiring
 
-**Repo:** agentic-dev-board
+**Repo:** just-ship-board
 **Files:**
 - Modify: `src/components/board/board.tsx` (the client component where all board state lives)
 - Modify: `src/components/board/board-client.tsx` (add `boardUrl` to `BoardClientProps` interface and forward to `Board`)
@@ -972,7 +972,7 @@ git commit -m "feat: add empty state, dialog wiring, and API key lifecycle to bo
 
 ### Task 9: "Setup" Icon on Projects
 
-**Repo:** agentic-dev-board
+**Repo:** just-ship-board
 **Files:**
 - Modify: `src/components/board/board-toolbar.tsx`
 
@@ -1032,7 +1032,7 @@ git commit -m "feat: add setup icon to project filter for re-opening setup dialo
 
 ### Task 10: Simplify Workspace Creation
 
-**Repo:** agentic-dev-board
+**Repo:** just-ship-board
 **Files:**
 - Modify: `src/app/new-workspace/page.tsx`
 
@@ -1077,7 +1077,7 @@ git commit -m "refactor: remove API key generation from workspace creation"
 
 ### Task 11: Update project.json Template
 
-**Repo:** agentic-dev-pipeline
+**Repo:** just-ship
 **Files:**
 - Modify: `templates/project.json`
 
@@ -1108,7 +1108,7 @@ git commit -m "feat: add api_url and api_key to project.json pipeline template"
 
 ### Task 12: Rewrite `/setup-pipeline` Command
 
-**Repo:** agentic-dev-pipeline
+**Repo:** just-ship
 **Files:**
 - Modify: `commands/setup-pipeline.md`
 
@@ -1131,7 +1131,7 @@ The command is a Claude Code slash command (markdown instructions for Claude). T
 **REPLACE Step 4 with:**
 
 ```markdown
-## Step 4: Connect to Agentic Dev Board (optional)
+## Step 4: Connect to Just Ship Board (optional)
 
 Parse command arguments for `--board`, `--key`, `--project` flags.
 
@@ -1143,7 +1143,7 @@ Parse command arguments for `--board`, `--key`, `--project` flags.
 5. Handle errors: 401 = invalid key, network error = Board unreachable
 
 ### If no flags (interactive mode):
-1. Ask user: "Connect to Agentic Dev Board? (y/n)"
+1. Ask user: "Connect to Just Ship Board? (y/n)"
 2. If yes: ask for Board URL and API Key conversationally
 3. Then proceed as above
 
@@ -1172,7 +1172,7 @@ git commit -m "feat: rewrite setup-pipeline to use Board API instead of Supabase
 
 ### Task 13: Update `/develop` Command
 
-**Repo:** agentic-dev-pipeline
+**Repo:** just-ship
 **Files:**
 - Modify: `commands/develop.md`
 
@@ -1213,7 +1213,7 @@ git commit -m "feat: update /develop to use Board API for ticket operations"
 
 ### Task 14: Update `/ship` Command
 
-**Repo:** agentic-dev-pipeline
+**Repo:** just-ship
 **Files:**
 - Modify: `commands/ship.md`
 
@@ -1243,7 +1243,7 @@ git commit -m "feat: update /ship to use Board API for ticket status update"
 
 ### Task 15: Update `/merge` Command
 
-**Repo:** agentic-dev-pipeline
+**Repo:** just-ship
 **Files:**
 - Modify: `commands/merge.md`
 
@@ -1276,7 +1276,7 @@ git commit -m "feat: update /merge to use Board API for ticket status update"
 
 ### Task 16: Update ticket-writer Skill and CLAUDE.md Template
 
-**Repo:** agentic-dev-pipeline
+**Repo:** just-ship
 **Files:**
 - Modify: `skills/ticket-writer.md`
 - Modify: `templates/CLAUDE.md`
@@ -1325,20 +1325,20 @@ git commit -m "feat: update ticket-writer and CLAUDE.md template to use Board AP
 
 ```bash
 # GET projects
-curl -s -H "X-Pipeline-Key: YOUR_KEY" https://app.agentic-dev.xyz/api/projects | jq .
+curl -s -H "X-Pipeline-Key: YOUR_KEY" https://app.just-ship.io/api/projects | jq .
 
 # POST project
 curl -s -X POST -H "X-Pipeline-Key: YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{"name": "CLI Test"}' \
-  https://app.agentic-dev.xyz/api/projects | jq .
+  https://app.just-ship.io/api/projects | jq .
 ```
 
 - [ ] **Step 3: Test CLI flow**
 
 In a project directory with the pipeline framework installed:
 ```
-/setup-pipeline --board https://app.agentic-dev.xyz --key YOUR_KEY --project PROJECT_ID
+/setup-pipeline --board https://app.just-ship.io --key YOUR_KEY --project PROJECT_ID
 ```
 
 Verify `project.json` has complete pipeline config with all 5 fields.

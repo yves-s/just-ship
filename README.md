@@ -1,4 +1,4 @@
-# Agentic Dev Pipeline
+# Just Ship
 
 A portable multi-agent framework for autonomous software development with [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
 
@@ -37,17 +37,17 @@ It works in two modes:
 
 ```bash
 # 1. Clone the framework
-git clone https://github.com/yves-s/agentic-dev-pipeline.git ~/.agentic-dev-pipeline
+git clone https://github.com/yves-s/just-ship.git ~/.just-ship
 
 # 2. Go to your project and run setup
 cd /path/to/your-project
-~/.agentic-dev-pipeline/setup.sh
+~/.just-ship/setup.sh
 
-# 3. Connect to the Agentic Dev Board
-#    Create a workspace + project at https://app.agentic-dev.xyz
+# 3. Connect to the Just Ship Board
+#    Create a workspace + project at https://app.just-ship.io
 #    Copy the connect command from the project setup dialog, then run it in Claude Code:
 claude
-> /setup-pipeline --board https://app.agentic-dev.xyz --key adp_... --project <uuid>
+> /setup-pipeline --board https://app.just-ship.io --key adp_... --project <uuid>
 
 # 4. Write your first ticket
 > /ticket Add dark mode toggle to the settings page
@@ -164,7 +164,7 @@ Phase 5: Ship            Commit → Push → PR → Board status "in_review" →
 ## Architecture
 
 ```
-agentic-dev-pipeline/
+just-ship/
 ├── setup.sh                    # Install + update script
 ├── agents/                     # Agent definitions (markdown + YAML frontmatter)
 │   ├── orchestrator.md         # Plans, delegates, ships
@@ -204,7 +204,7 @@ agentic-dev-pipeline/
 │   └── project.json            # Project config template
 ├── vps/                        # VPS deployment
 │   ├── setup-vps.sh            # Ubuntu 22.04 setup (Node, gh, claude)
-│   ├── agentic-dev-pipeline@.service  # systemd template unit
+│   ├── just-ship-pipeline@.service     # systemd template unit
 │   └── README.md               # Step-by-step VPS guide
 └── .claude/
     ├── hooks/                  # Event streaming hooks
@@ -270,7 +270,7 @@ Central config read by all agents and commands. Auto-populated by `/setup-pipeli
     "project_id": "uuid",
     "project_name": "My Project",
     "workspace_id": "uuid",
-    "api_url": "https://app.agentic-dev.xyz",
+    "api_url": "https://app.just-ship.io",
     "api_key": "adp_..."
   },
   "conventions": {
@@ -298,10 +298,10 @@ Project-specific instructions — architecture, conventions, domain knowledge. G
 
 ```bash
 cd /path/to/your-project                    # go to your project
-/path/to/agentic-dev-pipeline/setup.sh      # run the installer
+/path/to/just-ship/setup.sh                 # run the installer
 ```
 
-> **Note:** Replace `/path/to/agentic-dev-pipeline` with the actual path where you cloned the framework.
+> **Note:** Replace `/path/to/just-ship` with the actual path where you cloned the framework.
 
 Interactive: asks for project name, generates config files, installs dependencies, sets up the [superpowers](https://github.com/obra/superpowers-marketplace) plugin for TDD, debugging, and code review skills.
 
@@ -309,8 +309,8 @@ Interactive: asks for project name, generates config files, installs dependencie
 
 ```bash
 cd /path/to/your-project                                      # go to your project
-/path/to/agentic-dev-pipeline/setup.sh --update               # apply updates
-/path/to/agentic-dev-pipeline/setup.sh --update --dry-run     # preview changes only
+/path/to/just-ship/setup.sh --update                          # apply updates
+/path/to/just-ship/setup.sh --update --dry-run                # preview changes only
 ```
 
 Updates framework files — your project-specific content is never overwritten:
@@ -324,7 +324,7 @@ Updates framework files — your project-specific content is never overwritten:
 > **Tip:** Create an alias so you don't have to remember the path:
 > ```bash
 > # Add to ~/.zshrc or ~/.bashrc — adjust the path to where YOU cloned the framework
-> alias pipeline-update='/path/to/agentic-dev-pipeline/setup.sh --update'
+> alias pipeline-update='/path/to/just-ship/setup.sh --update'
 > ```
 > Then just `cd /path/to/your-project && pipeline-update`.
 
@@ -392,13 +392,13 @@ See **[vps/README.md](vps/README.md)** for the complete deployment guide.
 
 ## Dev Board Integration
 
-The **[Agentic Dev Board](https://app.agentic-dev.xyz)** is the visual companion for the pipeline. It provides a Kanban board, activity timelines, and project setup.
+The **[Just Ship Board](https://app.just-ship.io)** is the visual companion for the pipeline. It provides a Kanban board, activity timelines, and project setup.
 
 ### Connecting a Project
 
 1. Create a workspace and project on the Board
 2. The Board generates an API key and shows a connect command
-3. Run the command in Claude Code: `/setup-pipeline --board <url> --key <key> --project <uuid>`
+3. Run the command in Claude Code: `/setup-pipeline --board https://app.just-ship.io --key <key> --project <uuid>`
 4. This writes `api_url`, `api_key`, and `project_id` to `project.json`
 
 Commands (`/ticket`, `/develop`, `/ship`, `/merge`) auto-detect the Board API config and use it for ticket operations and status updates. If no Board API is configured, they fall back to legacy Supabase MCP.

@@ -1,6 +1,6 @@
-# VPS Setup — Agentic Dev Pipeline 24/7
+# VPS Setup — Just Ship 24/7
 
-Autonome Dev-Pipeline auf Hostinger VPS (Ubuntu 22.04).
+Autonome Dev-Pipeline auf Hostinger VPS (Ubuntu 22.04). Powered by Just Ship.
 
 ## Architektur
 
@@ -42,7 +42,7 @@ ssh root@<VPS-IP>
 
 ```bash
 # Auf dem VPS als root
-curl -fsSL https://raw.githubusercontent.com/yves-s/agentic-dev-pipeline/main/vps/setup-vps.sh -o /tmp/setup-vps.sh
+curl -fsSL https://raw.githubusercontent.com/yves-s/just-ship/main/vps/setup-vps.sh -o /tmp/setup-vps.sh
 chmod +x /tmp/setup-vps.sh
 bash /tmp/setup-vps.sh
 ```
@@ -74,7 +74,7 @@ git clone https://$GH_TOKEN@github.com/org/repo.git ~/mein-projekt
 
 # Pipeline-Framework installieren
 cd ~/mein-projekt
-~/agentic-dev-pipeline/setup.sh
+~/just-ship/setup.sh
 
 # project.json anpassen (Supabase-IDs, Build-Commands)
 nano project.json
@@ -114,13 +114,13 @@ chown claude-dev:claude-dev /home/claude-dev/.env.mein-projekt
 
 ```bash
 # Als root
-sudo systemctl enable --now agentic-dev-pipeline@mein-projekt
+sudo systemctl enable --now just-ship-pipeline@mein-projekt
 
 # Logs live
-journalctl -fu agentic-dev-pipeline@mein-projekt
+journalctl -fu just-ship-pipeline@mein-projekt
 
 # Status
-systemctl status agentic-dev-pipeline@mein-projekt
+systemctl status just-ship-pipeline@mein-projekt
 ```
 
 ---
@@ -143,17 +143,17 @@ PORT=3001
 
 ```bash
 # systemd Unit kopieren (einmalig)
-sudo cp agentic-dev-pipeline-server@.service /etc/systemd/system/
+sudo cp just-ship-server@.service /etc/systemd/system/
 sudo systemctl daemon-reload
 
 # Server aktivieren
-sudo systemctl enable --now agentic-dev-pipeline-server@mein-projekt
+sudo systemctl enable --now just-ship-server@mein-projekt
 
 # Logs live
-journalctl -fu agentic-dev-pipeline-server@mein-projekt
+journalctl -fu just-ship-server@mein-projekt
 
 # Status
-systemctl status agentic-dev-pipeline-server@mein-projekt
+systemctl status just-ship-server@mein-projekt
 ```
 
 ### Pipeline per HTTP triggern
@@ -197,7 +197,7 @@ PROJECT_DIR=/home/claude-dev/anderes-projekt
 POLL_INTERVAL=60
 EOF
 
-sudo systemctl enable --now agentic-dev-pipeline@anderes-projekt
+sudo systemctl enable --now just-ship-pipeline@anderes-projekt
 ```
 
 Beide Worker laufen unabhängig. Da jeder nur Tickets seines eigenen `project_id` pollt, gibt es keine Konflikte.
@@ -208,14 +208,14 @@ Beide Worker laufen unabhängig. Da jeder nur Tickets seines eigenen `project_id
 
 ```bash
 # Live-Log des Workers
-journalctl -fu agentic-dev-pipeline@mein-projekt
+journalctl -fu just-ship-pipeline@mein-projekt
 
 # Pipeline-Logs (pro Ticket)
 ls ~/pipeline-logs/
 tail -100 ~/pipeline-logs/T--267-*.log
 
 # Alle aktuellen Worker
-systemctl list-units "agentic-dev-pipeline@*"
+systemctl list-units "just-ship-pipeline@*"
 ```
 
 ---
@@ -239,8 +239,8 @@ Oder via `/ticket` Slash-Command in Claude Code (schreibt direkt nach Supabase).
 
 ### Worker startet nicht
 ```bash
-systemctl status agentic-dev-pipeline@mein-projekt
-journalctl -u agentic-dev-pipeline@mein-projekt -n 50
+systemctl status just-ship-pipeline@mein-projekt
+journalctl -u just-ship-pipeline@mein-projekt -n 50
 ```
 
 ### Häufige Fehler
@@ -248,7 +248,7 @@ journalctl -u agentic-dev-pipeline@mein-projekt -n 50
 | Fehler | Ursache | Fix |
 |--------|---------|-----|
 | `ANTHROPIC_API_KEY muss gesetzt sein` | .env nicht geladen | `EnvironmentFile` in Service prüfen |
-| `Pipeline runner nicht gefunden` | setup.sh nicht ausgeführt | `cd ~/projekt && ~/agentic-dev-pipeline/setup.sh` |
+| `Pipeline runner nicht gefunden` | setup.sh nicht ausgeführt | `cd ~/projekt && ~/just-ship/setup.sh` |
 | `Supabase nicht erreichbar` | Netzwerk/Key | SUPABASE_URL + SERVICE_KEY prüfen |
 | `gh: authentication required` | GH_TOKEN abgelaufen | Neuen Token generieren, in .env eintragen |
 | `claude: command not found` | npm global path fehlt | `export PATH="$(npm root -g)/.bin:$PATH"` |
@@ -277,14 +277,14 @@ WHERE number = 267;
 
 ```bash
 su - claude-dev
-cd ~/agentic-dev-pipeline && git pull
+cd ~/just-ship && git pull
 
 # In jedem Projekt
 cd ~/mein-projekt
-~/agentic-dev-pipeline/setup.sh --update
+~/just-ship/setup.sh --update
 
 # Worker neu starten (damit worker.ts aktuell ist)
-sudo systemctl restart agentic-dev-pipeline@mein-projekt
+sudo systemctl restart just-ship-pipeline@mein-projekt
 ```
 
 ---

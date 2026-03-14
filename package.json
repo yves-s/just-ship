@@ -1,5 +1,5 @@
 {
-  "name": "agentic-dev-pipeline",
+  "name": "just-ship",
   "private": true,
   "workspaces": [
     "pipeline",

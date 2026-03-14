@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Merge `agentic-dev-board` and `agentic-dev-telegram-bot` into `agentic-dev-pipeline` as a single monorepo with npm workspaces.
+**Goal:** Merge `just-ship-board` and `just-ship-bot` into `just-ship` as a single monorepo with npm workspaces.
 
 **Architecture:** Board and Bot move into `apps/board/` and `apps/bot/` via `git subtree add` (preserving history). Framework files (agents, commands, skills, pipeline) stay at root. npm workspaces connect all three packages. Board deploys on Vercel, Bot + Worker on VPS.
 
@@ -33,12 +33,12 @@ rm -rf telegram-bot/
 
 ### Task 2: Add Board repo via git subtree
 
-Bring in `agentic-dev-board` with full git history under `apps/board/`.
+Bring in `just-ship-board` with full git history under `apps/board/`.
 
 - [ ] **Step 1: Add the board remote**
 
 ```bash
-git remote add board git@github.com:yves-s/agentic-dev-board.git
+git remote add board git@github.com:yves-s/just-ship-board.git
 git fetch board
 ```
 
@@ -65,12 +65,12 @@ Both files should exist.
 
 ### Task 3: Add Bot repo via git subtree
 
-Bring in `agentic-dev-telegram-bot` with full git history under `apps/bot/`.
+Bring in `just-ship-bot` with full git history under `apps/bot/`.
 
 - [ ] **Step 1: Add the bot remote**
 
 ```bash
-git remote add bot git@github.com:yves-s/agentic-dev-telegram-bot.git
+git remote add bot git@github.com:yves-s/just-ship-bot.git
 git fetch bot
 ```
 
@@ -134,7 +134,7 @@ Bot has the same `.pipeline/` and `.claude/` duplication, plus a systemd service
 - Delete: `apps/bot/.pipeline/` (entire directory)
 - Delete: `apps/bot/.claude/` (entire directory)
 - Delete: `apps/bot/project.json` (contains API keys, was tracked in git)
-- Move: `apps/bot/telegram-bot.service` → `vps/agentic-dev-bot.service`
+- Move: `apps/bot/telegram-bot.service` → `vps/just-ship-bot.service`
 
 - [ ] **Step 1: Remove duplicated directories and secrets**
 
@@ -149,17 +149,17 @@ rm -f apps/bot/project.json
 Move the service file to `vps/` and update the working directory path:
 
 ```bash
-mv apps/bot/telegram-bot.service vps/agentic-dev-bot.service
+mv apps/bot/telegram-bot.service vps/just-ship-bot.service
 ```
 
-Then edit `vps/agentic-dev-bot.service` — change the `WorkingDirectory`:
+Then edit `vps/just-ship-bot.service` — change the `WorkingDirectory`:
 
 ```ini
 # Before:
-WorkingDirectory=/home/claude-dev/agentic-dev-pipeline/telegram-bot
+WorkingDirectory=/home/claude-dev/just-ship/telegram-bot
 
 # After:
-WorkingDirectory=/home/claude-dev/agentic-dev-pipeline/apps/bot
+WorkingDirectory=/home/claude-dev/just-ship/apps/bot
 ```
 
 **Note:** Verify that `EnvironmentFile` paths (e.g., `/home/claude-dev/.env.telegram-bot`) remain valid on the VPS. These env files must exist on the VPS for the service to start.
@@ -167,12 +167,12 @@ WorkingDirectory=/home/claude-dev/agentic-dev-pipeline/apps/bot
 - [ ] **Step 3: Commit**
 
 ```bash
-git add -A apps/bot/.pipeline/ apps/bot/.claude/ apps/bot/project.json apps/bot/telegram-bot.service vps/agentic-dev-bot.service
+git add -A apps/bot/.pipeline/ apps/bot/.claude/ apps/bot/project.json apps/bot/telegram-bot.service vps/just-ship-bot.service
 git commit -m "chore(bot): remove duplicated files, move systemd service to vps/
 
 - .pipeline/, .claude/ — now at monorepo root
 - project.json — contained API keys, should not be in git
-- telegram-bot.service → vps/agentic-dev-bot.service with updated path"
+- telegram-bot.service → vps/just-ship-bot.service with updated path"
 ```
 
 ---
@@ -282,17 +282,17 @@ Edit `pipeline/package.json` — change only the `name` field (leave everything 
 
 ```json
 // Before:
-"name": "agentic-dev-pipeline"
+"name": "just-ship"
 
 // After:
-"name": "agentic-dev-pipeline-sdk"
+"name": "just-ship-sdk"
 ```
 
 - [ ] **Step 2: Create root package.json**
 
 ```json
 {
-  "name": "agentic-dev-pipeline",
+  "name": "just-ship",
   "private": true,
   "workspaces": [
     "pipeline",
@@ -316,7 +316,7 @@ git add package.json pipeline/package.json
 git commit -m "feat: set up npm workspaces for monorepo
 
 Root package.json connects pipeline, apps/board, and apps/bot as
-npm workspaces. Pipeline package renamed to agentic-dev-pipeline-sdk
+npm workspaces. Pipeline package renamed to just-ship-sdk
 to avoid name collision with root."
 ```
 
@@ -338,7 +338,7 @@ Expected: Creates root `package-lock.json` and `node_modules/` with hoisted depe
 npm ls --workspaces --depth=0
 ```
 
-Expected output should list three workspaces: `agentic-dev-pipeline-sdk`, `agentic-dev-board`, `agentic-dev-telegram-bot`.
+Expected output should list three workspaces: `just-ship-sdk`, `just-ship-board`, `just-ship-bot`.
 
 - [ ] **Step 3: Verify board builds**
 
@@ -371,7 +371,7 @@ This is a manual step in the Vercel dashboard. No code changes needed.
 
 - [ ] **Step 1: Update Vercel project settings**
 
-Go to Vercel Dashboard → agentic-dev-board project → Settings → General:
+Go to Vercel Dashboard → just-ship-board project → Settings → General:
 
 - **Root Directory:** *(leave empty / repo root)*
 - **Build Command:** `npm run build -w apps/board`
@@ -382,7 +382,7 @@ Go to Vercel Dashboard → agentic-dev-board project → Settings → General:
 
 Push a commit or trigger a manual deployment. Verify:
 - Build succeeds
-- `app.agentic-dev.xyz` loads correctly
+- `app.just-ship.io` loads correctly
 - Preview deploys work on branches
 
 ---
@@ -395,7 +395,7 @@ This is a manual step on the VPS server.
 
 ```bash
 ssh claude-dev@<vps-ip>
-cd /home/claude-dev/agentic-dev-pipeline
+cd /home/claude-dev/just-ship
 git pull origin main
 ```
 
@@ -408,7 +408,7 @@ npm install
 - [ ] **Step 3: Install the new bot service**
 
 ```bash
-sudo cp vps/agentic-dev-bot.service /etc/systemd/system/
+sudo cp vps/just-ship-bot.service /etc/systemd/system/
 sudo systemctl daemon-reload
 ```
 
@@ -422,7 +422,7 @@ sudo systemctl disable telegram-bot.service 2>/dev/null || true
 - [ ] **Step 5: Start bot from monorepo**
 
 ```bash
-sudo systemctl enable --now agentic-dev-bot.service
+sudo systemctl enable --now just-ship-bot.service
 ```
 
 - [ ] **Step 6: Verify bot responds**
@@ -432,7 +432,7 @@ Send a message to the Telegram bot and verify it responds correctly.
 - [ ] **Step 7: Clean up old bot repo clone (after verification)**
 
 ```bash
-rm -rf /home/claude-dev/agentic-dev-telegram-bot
+rm -rf /home/claude-dev/just-ship-bot
 ```
 
 ---
@@ -472,20 +472,20 @@ npm run dev:bot
 
 ```bash
 # From a target project directory (e.g., Aime):
-/path/to/agentic-dev-pipeline/setup.sh --update --dry-run
+/path/to/just-ship/setup.sh --update --dry-run
 ```
 
 Expected: Dry run shows only framework files (agents, commands, skills, pipeline). No board or bot files.
 
 - [ ] **Step 3: Verify Vercel deployment**
 
-Check `app.agentic-dev.xyz` is serving the board correctly.
+Check `app.just-ship.io` is serving the board correctly.
 
 - [ ] **Step 4: Verify VPS services**
 
 ```bash
-sudo systemctl status agentic-dev-bot.service
-sudo systemctl status agentic-dev-pipeline@*.service
+sudo systemctl status just-ship-bot.service
+sudo systemctl status just-ship@*.service
 ```
 
 Both should be active and running.
@@ -496,18 +496,18 @@ Both should be active and running.
 
 **Only after production has been verified stable for at least one week.**
 
-- [ ] **Step 1: Archive agentic-dev-board on GitHub**
+- [ ] **Step 1: Archive just-ship-board on GitHub**
 
 ```bash
-gh repo edit yves-s/agentic-dev-board --description "ARCHIVED — Moved to agentic-dev-pipeline monorepo (apps/board/)" --visibility public
-gh repo archive yves-s/agentic-dev-board --yes
+gh repo edit yves-s/just-ship-board --description "ARCHIVED — Moved to just-ship monorepo (apps/board/)" --visibility public
+gh repo archive yves-s/just-ship-board --yes
 ```
 
-- [ ] **Step 2: Archive agentic-dev-telegram-bot on GitHub**
+- [ ] **Step 2: Archive just-ship-bot on GitHub**
 
 ```bash
-gh repo edit yves-s/agentic-dev-telegram-bot --description "ARCHIVED — Moved to agentic-dev-pipeline monorepo (apps/bot/)" --visibility public
-gh repo archive yves-s/agentic-dev-telegram-bot --yes
+gh repo edit yves-s/just-ship-bot --description "ARCHIVED — Moved to just-ship monorepo (apps/bot/)" --visibility public
+gh repo archive yves-s/just-ship-bot --yes
 ```
 
 ---

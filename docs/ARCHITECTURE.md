@@ -1,4 +1,4 @@
-# Architecture — Agentic Dev Pipeline
+# Architecture — Just Ship
 
 Comprehensive technical documentation of the framework's architecture, components, and inner workings.
 
@@ -13,7 +13,7 @@ Comprehensive technical documentation of the framework's architecture, component
 - [Slash Commands](#slash-commands)
 - [Skills System](#skills-system)
 - [Pipeline SDK](#pipeline-sdk)
-- [Event Streaming & Dev Board](#event-streaming--dev-board)
+- [Event Streaming & Just Ship Board](#event-streaming--dev-board)
 - [Hooks System](#hooks-system)
 - [Configuration](#configuration)
 - [Setup & Installation](#setup--installation)
@@ -25,7 +25,7 @@ Comprehensive technical documentation of the framework's architecture, component
 
 ## Overview
 
-Agentic Dev Pipeline is a portable multi-agent framework that turns Claude Code into an autonomous software development system. It provides a structured set of agents, commands, skills, and a pipeline runner that can be installed into any project — regardless of tech stack.
+Just Ship is a portable multi-agent framework that turns Claude Code into an autonomous software development system. It provides a structured set of agents, commands, skills, and a pipeline runner that can be installed into any project — regardless of tech stack.
 
 The framework operates in two modes:
 
@@ -65,7 +65,7 @@ The entire workflow — from ticket analysis through code implementation to PR c
 
 ```
                           ┌─────────────────────┐
-                          │   Agentic Dev Board  │
+                          │   Just Ship Board    │
                           │   (Next.js + Supa)   │
                           └──────────┬──────────┘
                                      │
@@ -97,7 +97,7 @@ The entire workflow — from ticket analysis through code implementation to PR c
 ### Directory Structure
 
 ```
-agentic-dev-pipeline/              # Framework repository
+just-ship/                         # Framework repository
 ├── setup.sh                       # Install + update script
 ├── settings.json                  # Template for .claude/settings.json
 ├── agents/                        # Agent definitions (markdown + frontmatter)
@@ -133,19 +133,19 @@ agentic-dev-pipeline/              # Framework repository
 │   └── lib/
 │       ├── config.ts              # Project config loader
 │       ├── load-agents.ts         # Agent definition parser
-│       └── event-hooks.ts         # Dev Board event streaming
+│       └── event-hooks.ts         # Just Ship Board event streaming
 ├── templates/                     # Templates for project files
 │   ├── CLAUDE.md                  # Project instructions template
 │   └── project.json               # Project config template
 ├── vps/                           # VPS infrastructure
 │   ├── setup-vps.sh               # Root setup script (Ubuntu 22.04)
-│   ├── agentic-dev-pipeline@.service  # systemd template unit
+│   ├── just-ship-pipeline@.service     # systemd template unit
 │   └── README.md                  # Step-by-step VPS guide
 ├── .claude/
 │   ├── hooks/                     # Event streaming hooks
 │   │   ├── detect-ticket.sh       # SessionStart: extract ticket from branch
-│   │   ├── on-agent-start.sh      # SubagentStart: send event to Dev Board
-│   │   ├── on-agent-stop.sh       # SubagentStop: send event to Dev Board
+│   │   ├── on-agent-start.sh      # SubagentStart: send event to Just Ship Board
+│   │   ├── on-agent-stop.sh       # SubagentStop: send event to Just Ship Board
 │   │   └── on-session-end.sh      # SessionEnd: send completion event
 │   └── scripts/
 │       └── send-event.sh          # Event posting utility
@@ -269,7 +269,7 @@ Commands are markdown files in `commands/` with frontmatter metadata. They provi
 | Command | Purpose |
 |---------|---------|
 | `/status` | Show current ticket, branch, and change summary |
-| `/setup-pipeline` | Auto-detect stack, fill `project.json`, connect Dev Board |
+| `/setup-pipeline` | Auto-detect stack, fill `project.json`, connect Just Ship Board |
 | `/update-pipeline` | Sync `CLAUDE.md` and `project.json` after framework update |
 
 ### Conversational Triggers
@@ -365,7 +365,7 @@ for await (const message of query({
     permissionMode: "bypassPermissions",
     allowedTools: ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent"],
     agents,           // Loaded from .claude/agents/*.md
-    hooks,            // Dev Board event streaming
+    hooks,            // Just Ship Board event streaming
     maxTurns: 200,
   },
 })) { ... }
@@ -407,9 +407,9 @@ The pipeline emits structured JSON for automation:
 
 ---
 
-## Event Streaming & Dev Board
+## Event Streaming & Just Ship Board
 
-The framework integrates with the **Agentic Dev Board** — a Next.js application that provides a visual Kanban board for tracking tickets and pipeline progress in real-time.
+The framework integrates with the **Just Ship Board** — a Next.js application that provides a visual Kanban board for tracking tickets and pipeline progress in real-time.
 
 ### Event API
 
@@ -439,7 +439,7 @@ Header: X-Pipeline-Key: adp_<hex>
 1. **SDK Hooks** (Pipeline/VPS mode) — `event-hooks.ts` registers callbacks for `SubagentStart`, `SubagentStop`, and `PostToolUse` events via the Agent SDK
 2. **Shell Hooks** (Interactive mode) — `settings.json` configures hooks for `SessionStart`, `SubagentStart`, `SubagentStop`, and `SessionEnd` that call shell scripts
 
-Both modes post to the same Event API, providing a unified view in the Dev Board regardless of execution mode.
+Both modes post to the same Event API, providing a unified view in the Just Ship Board regardless of execution mode.
 
 ### Real-time Updates
 
@@ -456,8 +456,8 @@ Claude Code hooks are shell scripts triggered by lifecycle events. The framework
 | Hook | Script | Purpose |
 |------|--------|---------|
 | `SessionStart` | `detect-ticket.sh` | Extract ticket number from branch name, set `TICKET_NUMBER` env var |
-| `SubagentStart` | `on-agent-start.sh` | Send `agent_started` event to Dev Board |
-| `SubagentStop` | `on-agent-stop.sh` | Send `completed` event to Dev Board |
+| `SubagentStart` | `on-agent-start.sh` | Send `agent_started` event to Just Ship Board |
+| `SubagentStop` | `on-agent-stop.sh` | Send `completed` event to Just Ship Board |
 | `SessionEnd` | `on-session-end.sh` | Send session completion event |
 
 ### Ticket Detection
@@ -564,13 +564,13 @@ Permissions and hook configuration:
 
 ```bash
 # Clone the framework (once)
-git clone https://github.com/yves-s/agentic-dev-pipeline.git ~/agentic-dev-pipeline
+git clone https://github.com/yves-s/just-ship.git ~/just-ship
 
 # Switch to your project
 cd /path/to/your-project
 
 # Run interactive setup
-~/agentic-dev-pipeline/setup.sh
+~/just-ship/setup.sh
 
 # Open Claude Code and configure
 claude
@@ -593,7 +593,7 @@ claude
 
 ```bash
 cd /path/to/your-project
-~/agentic-dev-pipeline/setup.sh --update
+~/just-ship/setup.sh --update
 ```
 
 Updates **only framework files** — never overwrites `CLAUDE.md`, `project.json`, or custom skills.
@@ -611,7 +611,7 @@ Updates **only framework files** — never overwrites `CLAUDE.md`, `project.json
 ### Dry Run
 
 ```bash
-~/agentic-dev-pipeline/setup.sh --update --dry-run
+~/just-ship/setup.sh --update --dry-run
 ```
 
 ### Self-Install Guard
@@ -629,12 +629,12 @@ The framework can run fully autonomously on a VPS. See [vps/README.md](../vps/RE
 ```
 VPS (Ubuntu 22.04)
 ├── claude-dev user
-├── ~/agentic-dev-pipeline/          # Framework (git cloned)
+├── ~/just-ship/                     # Framework (git cloned)
 ├── ~/mein-projekt/                  # Project clone
 │   ├── .pipeline/worker.ts          # Polling worker
 │   └── .env.mein-projekt            # Env vars (API keys)
 └── systemd
-    └── agentic-dev-pipeline@mein-projekt.service
+    └── just-ship-pipeline@mein-projekt.service
 ```
 
 ### Worker Environment
@@ -655,7 +655,7 @@ Required environment variables:
 
 One VPS can run multiple project workers. Each gets its own:
 - `.env.{slug}` file
-- systemd service instance (`agentic-dev-pipeline@{slug}`)
+- systemd service instance (`just-ship-pipeline@{slug}`)
 - Project clone directory
 
 Workers poll independently and only process tickets for their configured `SUPABASE_PROJECT_ID`.

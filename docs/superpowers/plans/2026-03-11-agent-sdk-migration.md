@@ -35,7 +35,7 @@
 | `commands/develop.md` | Remove `send-event.sh` calls |
 | `settings.json` | Remove `hooks.PostToolUse` entry |
 | `setup.sh` | Add `npm install` step, cleanup removed files on update |
-| `vps/agentic-dev-pipeline@.service` | Update `ExecStart` to `npx tsx worker.ts` |
+| `vps/just-ship-pipeline@.service` | Update `ExecStart` to `npx tsx worker.ts` |
 
 ### Removed files
 
@@ -59,7 +59,7 @@
 
 ```json
 {
-  "name": "agentic-dev-pipeline",
+  "name": "just-ship",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -961,7 +961,7 @@ process.on("SIGTERM", () => {
 
 // --- Main loop ---
 log("==========================================");
-log("  Agentic Dev Pipeline Worker (SDK)");
+log("  Just Ship Pipeline Worker (SDK)");
 log(`  Project: ${PROJECT_DIR.split("/").pop()}`);
 log(`  Supabase-Project: ${SUPABASE_PROJECT_ID}`);
 log(`  Poll-Interval: ${POLL_INTERVAL / 1000}s`);
@@ -1168,11 +1168,11 @@ git commit -m "feat: update setup.sh for SDK pipeline (npm install, cleanup, nod
 ### Task 13: Update VPS systemd service
 
 **Files:**
-- Modify: `vps/agentic-dev-pipeline@.service`
+- Modify: `vps/just-ship-pipeline@.service`
 
 - [ ] **Step 1: Read current service file**
 
-Read `vps/agentic-dev-pipeline@.service`.
+Read `vps/just-ship-pipeline@.service`.
 
 - [ ] **Step 2: Update ExecStart**
 

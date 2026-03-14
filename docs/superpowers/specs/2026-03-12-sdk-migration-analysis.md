@@ -12,7 +12,7 @@ Migration der Shell-Pipeline (`run.sh`, `worker.sh`, `send-event.sh`, `devboard-
 - **package.json**: `^0.1.0`
 - **Installiert**: `0.1.77`
 
-## Tickets (Board: Agentic Dev Pipeline)
+## Tickets (Board: Just Ship)
 
 | Ticket | Prio | Titel | Status |
 |--------|------|-------|--------|

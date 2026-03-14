@@ -1,12 +1,12 @@
 # =============================================================================
-# agentic-dev-pipeline-server@.service — systemd Template Unit
+# just-ship-server@.service — systemd Template Unit
 #
 # Installation:
-#   sudo cp agentic-dev-pipeline-server@.service /etc/systemd/system/
+#   sudo cp just-ship-server@.service /etc/systemd/system/
 #   sudo systemctl daemon-reload
 #
 # Starten (ein Service pro Projekt):
-#   sudo systemctl enable --now agentic-dev-pipeline-server@mein-projekt
+#   sudo systemctl enable --now just-ship-server@mein-projekt
 #
 # Voraussetzung:
 #   /home/claude-dev/.env              # Globale Keys (ANTHROPIC_API_KEY, GH_TOKEN)
@@ -22,7 +22,7 @@
 # =============================================================================
 
 [Unit]
-Description=Agentic Dev Pipeline Server — %i
+Description=Just Ship Pipeline Server — %i
 After=network-online.target
 Wants=network-online.target
 # Neustart wenn Netzwerk wegbricht
