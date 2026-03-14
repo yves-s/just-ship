@@ -1,0 +1,35 @@
+{
+  "name": "agentic-dev-telegram-bot",
+  "description": "Telegram Bot für Ticket-Erstellung im Agentic Dev Board — unterstützt Text, Sprache und Screenshots",
+  "stack": {
+    "framework": "Telegraf (Telegram Bot)",
+    "language": "TypeScript",
+    "runtime": "Node.js (tsx)",
+    "database": "Supabase (PostgreSQL)",
+    "ai": "Anthropic Claude + OpenAI Whisper",
+    "package_manager": "npm"
+  },
+  "build": {
+    "web": "",
+    "start": "npm run start",
+    "dev": "npm run dev",
+    "test": ""
+  },
+  "paths": {
+    "lib": "lib"
+  },
+  "supabase": {
+    "project_id": ""
+  },
+  "pipeline": {
+    "project_id": "e904798e-8622-4c6e-bc6c-660e862bf423",
+    "project_name": "Agentic Dev Telegram Bot",
+    "workspace_id": "421dffa5-5f2e-44a8-bdc1-7e0f31a87149",
+    "api_url": "https://app.agentic-dev.xyz",
+    "api_key": "adp_ab18e0605f4e9a09cebf4cbcdd8675b62bf1f070072a194b6cd330fea0e1311e"
+  },
+  "conventions": {
+    "commit_format": "conventional",
+    "language": "de"
+  }
+}

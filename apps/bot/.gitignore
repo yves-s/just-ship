@@ -1,0 +1,10 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+dist/
+
+# Pipeline config (contains API keys — do not commit)
+project.json
