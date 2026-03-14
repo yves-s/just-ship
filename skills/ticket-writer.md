@@ -311,25 +311,6 @@ Only if there is no `project.json` or no pipeline config at all, ask the user wh
 - **Kitchen-sink tickets:** One ticket per outcome. If the ticket has "and" in the title, split it
 - **Premature tech debt tickets:** If you can't articulate the business impact, it's not ready to be a ticket yet
 
-## Process
-
-1. Assess the input — is there enough context to write a good ticket?
-2. If not, ask up to 3 targeted questions (see Context Check)
-3. Identify the ticket type (user story, bug, improvement, spike, tech debt)
-4. Write the problem statement from the user's perspective
-5. Describe the desired behavior without implementation details
-6. Choose the right acceptance criteria format and write criteria
-7. Add out-of-scope notes if the boundaries aren't obvious
-8. Check: is the ticket too big? If yes, suggest a split
-9. Choose a clear, action-oriented title last (titles are easier to write after the body)
-10. Set properties: status, priority, type
-11. **Deliver the ticket** (see Output and Delivery section):
-    - Read `project.json`. If `pipeline.api_url` and `pipeline.api_key` are set → insert via Board API. No confirmation needed — just insert.
-    - If only `pipeline.project_id` is set (no `api_url`) → use legacy Supabase MCP with warning.
-    - Ensure `body` contains the full ticket Markdown and `project_id` is always set.
-    - If no `project.json` or no pipeline config → ask the user where to deliver.
-    - **After delivery:** confirm with `Ticket T-{number} erstellt: {title}` — NIEMALS `#{number}` verwenden.
-
 ## Full Example
 
 ### ❌ Bad Ticket (too technical)

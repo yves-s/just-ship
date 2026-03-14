@@ -1,6 +1,6 @@
 ---
 name: creative-design
-description: Use when creating new UIs from scratch — landing pages, marketing sites, prototypes, or any greenfield frontend work where no existing design system applies. Enforces bold, distinctive aesthetics and prevents generic AI output.
+description: Use when creating new UIs from scratch — landing pages, marketing sites, prototypes, or any greenfield frontend work where no existing design system applies
 ---
 
 # Creative Design (Greenfield)

@@ -21,7 +21,7 @@
 ### Code
 - TypeScript (Pipeline SDK unter `pipeline/`), Bash (`setup.sh`, Scripts), Markdown (Agents, Commands, Skills)
 - Conventional Commits auf Englisch (`feat:`, `fix:`, `chore:`)
-- Commands, Skills und Agent-Definitionen auf Deutsch
+- Commands und Agent-Definitionen auf Deutsch, Skills auf Englisch
 
 ### Dateien
 - Keine Dateien löschen ohne explizite Anweisung

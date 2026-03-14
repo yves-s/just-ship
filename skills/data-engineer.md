@@ -1,6 +1,6 @@
 ---
 name: data-engineer
-description: Use when making database schema changes, writing migrations, configuring RLS policies, or syncing TypeScript types — enforces safe, reversible, and secure database operations
+description: Use when making database schema changes, writing migrations, configuring RLS policies, or syncing TypeScript types with the database
 ---
 
 # Database Engineering Standards

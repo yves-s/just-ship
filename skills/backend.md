@@ -1,6 +1,6 @@
 ---
 name: backend
-description: Use when implementing API endpoints, server-side business logic, shared hooks, or integrations — enforces error handling, validation, and security standards
+description: Use when implementing API endpoints, server-side business logic, shared hooks, or backend integrations
 ---
 
 # Backend Implementation Standards

@@ -1,6 +1,6 @@
 ---
 name: design
-description: Use when making any visual or UX decision — choosing layout, spacing, colors, typography, or component structure. Enforces design system consistency and quality standards.
+description: Use when making visual or UX decisions within an existing design system — choosing layout, spacing, colors, typography, or component structure
 ---
 
 # Design Quality Standards

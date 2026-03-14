@@ -1,17 +1,17 @@
 ---
 name: webapp-testing
-description: Use after frontend implementation to visually verify UI behavior — screenshots, DOM inspection, console log capture, and interactive testing via Playwright
+description: Use after frontend implementation to verify rendered UI matches expectations, catch browser errors, and test interactive elements
 ---
 
 # Web Application Testing
 
-Visuelles Testing lokaler Web-Applikationen mit Playwright. Verifiziert Frontend-Funktionalität, fängt Browser-Errors und macht Screenshots.
+Visual testing of local web applications with Playwright. Verifies frontend functionality, captures browser errors, and takes screenshots.
 
 **Announce at start:** "Starting visual verification with Playwright."
 
-## Voraussetzung
+## Prerequisites
 
-Playwright muss installiert sein:
+Playwright must be installed:
 ```bash
 pip install playwright && playwright install chromium
 ```
@@ -19,25 +19,25 @@ pip install playwright && playwright install chromium
 ## Decision Tree
 
 ```
-Aufgabe -> Statisches HTML?
-    |-- Ja -> HTML-Datei lesen, Selektoren identifizieren
-    |          |-- Playwright-Script mit file:// URL
+Task -> Static HTML?
+    |-- Yes -> Read HTML file, identify selectors
+    |          |-- Playwright script with file:// URL
     |
-    |-- Nein (dynamische App) -> Server schon gestartet?
-        |-- Nein -> with_server.py nutzen (siehe unten)
-        |-- Ja  -> Reconnaissance-then-Action:
-            1. Navigieren + networkidle abwarten
-            2. Screenshot oder DOM inspizieren
-            3. Selektoren aus gerenderten Zustand identifizieren
-            4. Aktionen mit gefundenen Selektoren ausführen
+    |-- No (dynamic app) -> Server already running?
+        |-- No -> Use with_server.py (see below)
+        |-- Yes -> Reconnaissance-then-Action:
+            1. Navigate + wait for networkidle
+            2. Screenshot or inspect DOM
+            3. Identify selectors from rendered state
+            4. Execute actions with found selectors
 ```
 
-## Server-Lifecycle mit with_server.py
+## Server Lifecycle with with_server.py
 
-Das Framework enthält `.claude/scripts/with_server.py` — startet Server, wartet auf Port-Readiness, führt Automation aus, räumt auf.
+The framework includes `.claude/scripts/with_server.py` — starts server, waits for port readiness, runs automation, cleans up.
 
 ```bash
-# --help zuerst ausführen um Optionen zu sehen
+# Run --help first to see options
 python .claude/scripts/with_server.py --help
 
 # Single Server
@@ -52,9 +52,9 @@ python .claude/scripts/with_server.py \
   -- python test_script.py
 ```
 
-## Playwright-Script schreiben
+## Writing Playwright Scripts
 
-Automation-Scripts enthalten nur Playwright-Logik — Server werden von `with_server.py` verwaltet:
+Automation scripts contain only Playwright logic — servers are managed by `with_server.py`:
 
 ```python
 from playwright.sync_api import sync_playwright
@@ -63,40 +63,40 @@ with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     page = browser.new_page()
     page.goto('http://localhost:5173')
-    page.wait_for_load_state('networkidle')  # KRITISCH: Warten bis JS geladen
+    page.wait_for_load_state('networkidle')  # CRITICAL: Wait until JS is loaded
 
-    # ... Automation-Logik ...
+    # ... automation logic ...
 
     browser.close()
 ```
 
 ## Reconnaissance-then-Action Pattern
 
-### 1. Inspizieren
+### 1. Inspect
 ```python
-# Screenshot machen
+# Take screenshot
 page.screenshot(path='/tmp/inspect.png', full_page=True)
 
-# DOM inspizieren
+# Inspect DOM
 content = page.content()
 
-# Elemente entdecken
+# Discover elements
 buttons = page.locator('button').all()
 links = page.locator('a[href]').all()
 inputs = page.locator('input, textarea, select').all()
 ```
 
-### 2. Selektoren identifizieren
-Aus Screenshot oder DOM die richtigen Selektoren ableiten.
+### 2. Identify Selectors
+Derive correct selectors from screenshot or DOM.
 
-### 3. Aktionen ausführen
+### 3. Execute Actions
 ```python
 page.click('text=Dashboard')
 page.fill('#email', 'test@example.com')
 page.click('button[type="submit"]')
 ```
 
-## Console-Logs erfassen
+## Capturing Console Logs
 
 ```python
 console_logs = []
@@ -108,28 +108,28 @@ page.on("console", handle_console)
 page.goto('http://localhost:5173')
 page.wait_for_load_state('networkidle')
 
-# Nach Interaktionen Logs auswerten
+# Evaluate logs after interactions
 for log in console_logs:
     if log.startswith("[error]"):
         print(f"CONSOLE ERROR: {log}")
 ```
 
-## Wichtige Regeln
+## Important Rules
 
-- **Immer `headless=True`** — kein GUI nötig
-- **Immer `wait_for_load_state('networkidle')`** vor DOM-Inspektion bei dynamischen Apps
-- **Immer Browser schliessen** am Ende (`browser.close()`)
-- **Deskriptive Selektoren** verwenden: `text=`, `role=`, CSS-Selektoren, IDs
-- **Screenshots nach `/tmp/`** speichern und per Read Tool verifizieren
+- **Always `headless=True`** — no GUI needed
+- **Always `wait_for_load_state('networkidle')`** before DOM inspection on dynamic apps
+- **Always close browser** at the end (`browser.close()`)
+- **Use descriptive selectors**: `text=`, `role=`, CSS selectors, IDs
+- **Save screenshots to `/tmp/`** and verify via Read tool
 
-## Häufiger Fehler
+## Common Mistake
 
-Nicht den DOM inspizieren bevor `networkidle` erreicht ist — bei dynamischen Apps ist der initiale DOM leer/unvollständig.
+Do not inspect the DOM before `networkidle` is reached — on dynamic apps the initial DOM is empty/incomplete.
 
-## Verifikations-Checkliste
+## Verification Checklist
 
-- [ ] Seite lädt ohne Console-Errors
-- [ ] Wichtige UI-Elemente sind sichtbar (Screenshot prüfen)
-- [ ] Interaktive Elemente reagieren korrekt (Click, Fill, Submit)
-- [ ] Responsive Layout stimmt (verschiedene Viewports testen)
-- [ ] Keine unerwarteten Warnungen oder Errors in Console-Logs
+- [ ] Page loads without console errors
+- [ ] Key UI elements are visible (check screenshot)
+- [ ] Interactive elements respond correctly (click, fill, submit)
+- [ ] Responsive layout works (test various viewports)
+- [ ] No unexpected warnings or errors in console logs

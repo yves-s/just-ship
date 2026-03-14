@@ -1,6 +1,6 @@
 ---
 name: frontend-design
-description: Use when implementing frontend UI components or features — combines design system standards with component implementation patterns
+description: Use when implementing frontend UI components or features within an existing design system or component library
 ---
 
 # Frontend Implementation with Design Quality
