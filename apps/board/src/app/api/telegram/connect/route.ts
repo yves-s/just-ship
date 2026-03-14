@@ -42,7 +42,7 @@ export async function POST() {
     if (dbError) return error("DB_ERROR", dbError.message, 500);
 
     const botUsername =
-      process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || "agentic_dev_pipeline_bot";
+      process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || "just_ship_bot";
     const deepLink = `https://t.me/${botUsername}?start=${code}`;
 
     return success({ code, deepLink, expiresAt });
