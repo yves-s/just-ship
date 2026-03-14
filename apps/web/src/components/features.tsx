@@ -40,9 +40,9 @@ const features = [
     ),
   },
   {
-    title: "Any Stack",
+    title: "Extensible",
     description:
-      "TypeScript, Python, Go, Rust. Framework-agnostic by design.",
+      "Custom agents, skills, and commands. Make it yours.",
     icon: (
       <svg
         width="24"
@@ -54,8 +54,7 @@ const features = [
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        <polyline points="16 18 22 12 16 6" />
-        <polyline points="8 6 2 12 8 18" />
+        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
       </svg>
     ),
   },

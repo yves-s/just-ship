@@ -3,6 +3,7 @@ import { HowItWorks } from "@/components/how-it-works";
 import { Agents } from "@/components/agents";
 import { Commands } from "@/components/commands";
 import { Features } from "@/components/features";
+import { Skills } from "@/components/skills";
 import { QuickStart } from "@/components/quick-start";
 import { Footer } from "@/components/footer";
 
@@ -14,6 +15,7 @@ export default function Home() {
       <Agents />
       <Commands />
       <Features />
+      <Skills />
       <QuickStart />
       <Footer />
     </main>
