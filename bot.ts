@@ -21,11 +21,25 @@ const mediaGroupBuffers = new Map<
   string,
   {
     chatId: number;
+    messageId: number;
     photos: { buffer: Buffer; mimeType: string }[];
     caption: string | null;
     timer: ReturnType<typeof setTimeout>;
   }
 >();
+
+async function setReaction(chatId: number, messageId: number, emoji: string): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (bot.telegram.callApi as any)('setMessageReaction', {
+      chat_id: chatId,
+      message_id: messageId,
+      reaction: [{ type: 'emoji', emoji }],
+    });
+  } catch (err) {
+    console.error('Failed to set reaction:', err);
+  }
+}
 
 // ---------- Auth middleware ----------
 bot.use(async (ctx, next) => {
@@ -145,19 +159,20 @@ async function handlePendingTicket(
 bot.on("text", async (ctx) => {
   if (ctx.message.text.startsWith("/")) return;
 
-  await ctx.reply("Verarbeite Nachricht...");
+  await setReaction(ctx.chat.id, ctx.message.message_id, "👀");
 
   await handlePendingTicket(ctx.chat.id, {
     text: ctx.message.text,
     voice_transcript: null,
     image_descriptions: [],
     raw_caption: null,
+    messageId: ctx.message.message_id,
   });
 });
 
 // ---------- Voice messages ----------
 bot.on("voice", async (ctx) => {
-  await ctx.reply("Transkribiere Sprachnachricht...");
+  await setReaction(ctx.chat.id, ctx.message.message_id, "👀");
 
   try {
     const buffer = await downloadFile(ctx.message.voice.file_id);
@@ -170,6 +185,7 @@ bot.on("voice", async (ctx) => {
       voice_transcript: transcript,
       image_descriptions: [],
       raw_caption: null,
+      messageId: ctx.message.message_id,
     });
   } catch (err) {
     console.error("Voice transcription error:", err);
@@ -195,6 +211,7 @@ bot.on("photo", async (ctx) => {
         1000,
       );
     } else {
+      await setReaction(ctx.chat.id, ctx.message.message_id, "👀");
       const buffer = await downloadFile(photo.file_id);
       const timer = setTimeout(
         () => processMediaGroup(mediaGroupId),
@@ -202,14 +219,14 @@ bot.on("photo", async (ctx) => {
       );
       mediaGroupBuffers.set(mediaGroupId, {
         chatId: ctx.chat.id,
+        messageId: ctx.message.message_id,
         photos: [{ buffer, mimeType: "image/jpeg" }],
         caption,
         timer,
       });
-      await ctx.reply("Analysiere Screenshot(s)...");
     }
   } else {
-    await ctx.reply("Analysiere Screenshot...");
+    await setReaction(ctx.chat.id, ctx.message.message_id, "👀");
 
     try {
       const buffer = await downloadFile(photo.file_id);
@@ -220,6 +237,7 @@ bot.on("photo", async (ctx) => {
         voice_transcript: null,
         image_descriptions: [description],
         raw_caption: caption,
+        messageId: ctx.message.message_id,
       });
     } catch (err) {
       console.error("Image processing error:", err);
@@ -246,6 +264,7 @@ async function processMediaGroup(mediaGroupId: string): Promise<void> {
       voice_transcript: null,
       image_descriptions: descriptions,
       raw_caption: group.caption,
+      messageId: group.messageId,
     });
   } catch (err) {
     console.error("Media group processing error:", err);
@@ -340,6 +359,7 @@ bot.action(/^project:(.+)$/, async (ctx) => {
       chatId,
       `Ticket T-${data.number} erstellt: ${data.title}\n\nPriority: ${ticket.priority}\nTags: ${ticket.tags.join(", ")}`,
     );
+    await setReaction(chatId, pending.messageId, "👍");
   } catch (err) {
     console.error("Ticket creation error:", err);
     await bot.telegram.sendMessage(

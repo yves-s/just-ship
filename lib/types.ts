@@ -20,4 +20,5 @@ export interface PendingTicket {
   voice_transcript: string | null;
   image_descriptions: string[];
   raw_caption: string | null;
+  messageId: number;
 }
