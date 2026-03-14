@@ -18,7 +18,7 @@
     "project_name": "Just Ship",
     "workspace_id": "421dffa5-5f2e-44a8-bdc1-7e0f31a87149",
     "api_url": "https://board.just-ship.io",
-    "api_key": "adp_ab18e0605f4e9a09cebf4cbcdd8675b62bf1f070072a194b6cd330fea0e1311e"
+    "api_key": "adp_70e47c08f53981f5a17bfa844b06c50f5bd81ee33774b625ac45a993497a728b"
   },
   "conventions": {
     "branch_prefix": "feature/",
