@@ -1,7 +1,7 @@
 # Monorepo Consolidation: Pipeline + Board + Telegram Bot
 
 **Date:** 2026-03-14
-**Status:** Draft
+**Status:** Implemented (VPS migration + archive pending)
 **Scope:** Merge `agentic-dev-board` and `agentic-dev-telegram-bot` into `agentic-dev-pipeline` as a single monorepo.
 
 ---
@@ -78,12 +78,12 @@ Root `package.json`:
     "apps/*"
   ],
   "scripts": {
-    "dev:board": "npm run dev -w board",
-    "dev:bot": "npm run dev -w bot",
+    "dev:board": "npm run dev -w apps/board",
+    "dev:bot": "npm run dev -w apps/bot",
     "dev": "npm run dev:board & npm run dev:bot",
-    "build:board": "npm run build -w board",
-    "start:bot": "npm run start -w bot",
-    "lint": "npm run lint -w board"
+    "build:board": "npm run build -w apps/board",
+    "start:bot": "npm run start -w apps/bot",
+    "lint": "npm run lint -w apps/board"
   }
 }
 ```
@@ -145,7 +145,7 @@ All commits preserved, `git blame` works.
 
 Vercel project settings:
 - **Root Directory:** *(repo root, not `apps/board`)*
-- **Build Command:** `npm run build -w board`
+- **Build Command:** `npm run build -w apps/board`
 - **Output Directory:** `apps/board/.next`
 - **Install Command:** `npm install` (runs at repo root, resolves all workspaces)
 

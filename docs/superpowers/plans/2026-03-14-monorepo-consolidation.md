@@ -299,12 +299,12 @@ Edit `pipeline/package.json` — change only the `name` field (leave everything 
     "apps/*"
   ],
   "scripts": {
-    "dev:board": "npm run dev -w board",
-    "dev:bot": "npm run dev -w bot",
+    "dev:board": "npm run dev -w apps/board",
+    "dev:bot": "npm run dev -w apps/bot",
     "dev": "npm run dev:board & npm run dev:bot",
-    "build:board": "npm run build -w board",
-    "start:bot": "npm run start -w bot",
-    "lint": "npm run lint -w board"
+    "build:board": "npm run build -w apps/board",
+    "start:bot": "npm run start -w apps/bot",
+    "lint": "npm run lint -w apps/board"
   }
 }
 ```
@@ -374,7 +374,7 @@ This is a manual step in the Vercel dashboard. No code changes needed.
 Go to Vercel Dashboard → agentic-dev-board project → Settings → General:
 
 - **Root Directory:** *(leave empty / repo root)*
-- **Build Command:** `npm run build -w board`
+- **Build Command:** `npm run build -w apps/board`
 - **Output Directory:** `apps/board/.next`
 - **Install Command:** `npm install`
 
