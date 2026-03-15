@@ -185,6 +185,33 @@ Response (200):
 
 ---
 
+## Global Config for Pipeline Worker
+
+The pipeline worker resolves API keys from `~/.just-ship/config.json`.
+Create this file for the service user:
+
+```bash
+sudo -u claude-dev mkdir -p /home/claude-dev/.just-ship
+sudo -u claude-dev tee /home/claude-dev/.just-ship/config.json > /dev/null <<'EOF'
+{
+  "workspaces": {
+    "my-workspace": {
+      "board_url": "https://board.just-ship.io",
+      "workspace_id": "<workspace-uuid>",
+      "api_key": "<api-key>"
+    }
+  },
+  "default_workspace": "my-workspace"
+}
+EOF
+chmod 600 /home/claude-dev/.just-ship/config.json
+```
+
+**Backwards compatibility:** Existing VPS setups with `api_key` in `project.json`
+continue to work. Migration is optional but recommended.
+
+---
+
 ## Mehrere Projekte
 
 Für jedes Projekt eine separate `.env.{slug}` und einen separaten Service:
