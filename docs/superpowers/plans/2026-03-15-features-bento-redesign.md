@@ -1,3 +1,62 @@
+# Features Bento Grid Redesign — Implementation Plan
+
+> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Replace the generic 2x2 Features grid with an asymmetric bento grid that integrates Board visuals as proof points.
+
+**Architecture:** Single component rewrite of `features.tsx` + one attribute addition to `skills.tsx`. All visuals are pure HTML/CSS (no images, no JS). Uses Tailwind v4 utility classes + inline styles for custom values not in the design system. CSS animations for pulsing dots.
+
+**Tech Stack:** React, Tailwind CSS v4, Next.js 16
+
+**Spec:** `docs/superpowers/specs/2026-03-15-features-bento-redesign-design.md`
+**Visual mockup:** `.superpowers/brainstorm/26817-1773599920/bento-features-v2.html`
+
+---
+
+## Chunk 1: Implementation
+
+### Task 1: Add skills section anchor
+
+**Files:**
+- Modify: `apps/web/src/components/skills.tsx:26`
+
+- [ ] **Step 1: Add id="skills" to the Skills section root element**
+
+In `skills.tsx`, change line 26 from:
+```tsx
+    <section className="bg-brand-900 py-24 sm:py-32">
+```
+to:
+```tsx
+    <section id="skills" className="bg-brand-900 py-24 sm:py-32">
+```
+
+- [ ] **Step 2: Verify the change**
+
+Run: `cd apps/web && npx tsc --noEmit`
+Expected: No errors
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add apps/web/src/components/skills.tsx
+git commit -m "feat(web): add skills section anchor for bento grid link"
+```
+
+---
+
+### Task 2: Rewrite features.tsx with bento grid
+
+**Files:**
+- Rewrite: `apps/web/src/components/features.tsx`
+
+The complete component is below. It translates the approved mockup (`.superpowers/brainstorm/26817-1773599920/bento-features-v2.html`) from vanilla HTML/CSS into React + Tailwind. Where Tailwind classes don't cover custom values (e.g., specific hex colors for the visual areas, `#12141c` background), use inline styles or arbitrary Tailwind values.
+
+- [ ] **Step 1: Rewrite the full features.tsx**
+
+Replace the entire contents of `apps/web/src/components/features.tsx` with this component:
+
+```tsx
 import type { ReactNode } from "react";
 
 function PulseDot() {
@@ -479,3 +538,35 @@ export function Features() {
     </section>
   );
 }
+```
+
+- [ ] **Step 2: Verify TypeScript compiles**
+
+Run: `cd apps/web && npx tsc --noEmit`
+Expected: No errors
+
+- [ ] **Step 3: Verify build succeeds**
+
+Run: `cd apps/web && npm run build`
+Expected: Build completes successfully
+
+- [ ] **Step 4: Visual check (dev server)**
+
+Run: `cd apps/web && npm run dev`
+Open `http://localhost:3001` and scroll to Features section. Verify:
+- Bento grid renders with 3-column layout on desktop
+- Agent status bar shows 4 chips with pulsing green dots
+- Kanban cards display correctly
+- T-293 has pulsing green dot
+- VPS log shows terminal-style output
+- Parallel agents timeline shows progress bars
+- Small cells (Zero-Config, Skills, Non-Invasive) render with icons
+- "+12 more" link scrolls to Skills section
+- Mobile (resize to <768px): collapses to single column
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add apps/web/src/components/features.tsx
+git commit -m "feat(web): redesign features section with bento grid and board visuals"
+```
