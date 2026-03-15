@@ -361,6 +361,13 @@ if [ "$MODE" = "update" ]; then
   chmod +x "$PROJECT_DIR/.claude/scripts/"*.py 2>/dev/null || true
   echo "  ✓ scripts"
 
+  # Copy write-config.sh from framework root scripts/
+  if [ -f "$FRAMEWORK_DIR/scripts/write-config.sh" ]; then
+    cp "$FRAMEWORK_DIR/scripts/write-config.sh" "$PROJECT_DIR/.claude/scripts/write-config.sh"
+    chmod +x "$PROJECT_DIR/.claude/scripts/write-config.sh"
+    echo "  ✓ write-config.sh (shared config script)"
+  fi
+
   echo "Updating hooks..."
   mkdir -p "$PROJECT_DIR/.claude/hooks"
   cp "$FRAMEWORK_DIR/.claude/hooks/"*.sh "$PROJECT_DIR/.claude/hooks/" 2>/dev/null || true
@@ -395,6 +402,22 @@ if [ "$MODE" = "update" ]; then
   # Write version
   echo "$FRAMEWORK_VERSION" > "$VERSION_FILE"
 
+  # --- Check for old project.json format ---
+  if [ -f "$PROJECT_DIR/project.json" ]; then
+    JS_PJ="$PROJECT_DIR/project.json"
+    HAS_OLD_KEY=$(JS_PJ="$JS_PJ" node -e "
+      const c=JSON.parse(require('fs').readFileSync(process.env.JS_PJ,'utf-8'));
+      console.log(c.pipeline?.api_key ? 'yes' : 'no');
+    " 2>/dev/null || echo "no")
+
+    if [ "$HAS_OLD_KEY" = "yes" ]; then
+      echo ""
+      echo "  ⚠  project.json contains api_key (deprecated format)"
+      echo "     Run /connect-board in Claude Code to migrate"
+      echo "     to ~/.just-ship/config.json"
+    fi
+  fi
+
   # --- Check if templates changed (CLAUDE.md, project.json structure) ---
   TEMPLATE_HASH_FILE="$PROJECT_DIR/.claude/.template-hash"
   CURRENT_TEMPLATE_HASH=""
@@ -415,14 +438,6 @@ if [ "$MODE" = "update" ]; then
       # No hash stored yet — assume templates may have changed
       TEMPLATES_CHANGED=true
     fi
-  fi
-
-  echo "Checking .gitignore..."
-  if [ -f "$PROJECT_DIR/.gitignore" ]; then
-    ensure_gitignore "project.json" "Pipeline config (contains API keys — do not commit)"
-    echo "  ✓ project.json in .gitignore"
-  else
-    echo "  ⚠ No .gitignore found — add 'project.json' manually to avoid committing API keys"
   fi
 
   echo ""
