@@ -23,7 +23,7 @@ const superpowers = [
 
 export function Skills() {
   return (
-    <section className="bg-brand-900 py-24 sm:py-32">
+    <section id="skills" className="bg-brand-900 py-24 sm:py-32">
       <div className="mx-auto max-w-6xl px-6">
         <h2 className="mb-4 text-center text-3xl font-bold text-white sm:text-4xl">
           Battle-tested Workflows
