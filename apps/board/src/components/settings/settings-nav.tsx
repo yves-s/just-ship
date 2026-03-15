@@ -8,36 +8,40 @@ interface SettingsNavProps {
   slug: string;
 }
 
+const TABS = [
+  { label: "Overview", href: (slug: string) => `/${slug}/settings` },
+  { label: "Projects", href: (slug: string) => `/${slug}/settings/projects` },
+  { label: "Members", href: (slug: string) => `/${slug}/settings/members` },
+  { label: "API Keys", href: (slug: string) => `/${slug}/settings/api-keys` },
+  { label: "General", href: (slug: string) => `/${slug}/settings/general` },
+];
+
 export function SettingsNav({ slug }: SettingsNavProps) {
   const pathname = usePathname();
 
-  const navItems = [
-    { label: "General", href: `/${slug}/settings` },
-    { label: "Projects", href: `/${slug}/settings/projects` },
-    { label: "Members", href: `/${slug}/settings/members` },
-    { label: "API Keys", href: `/${slug}/settings/api-keys` },
-  ];
-
   return (
-    <nav className="flex flex-col gap-1 w-48 shrink-0">
-      {navItems.map((item) => {
-        // For "General" use exact match, for others use startsWith
+    <nav className="flex overflow-x-auto border-b px-6">
+      {TABS.map((tab) => {
+        const href = tab.href(slug);
+        // Overview: exact match only (must not match /settings/general etc.)
+        // Other tabs: startsWith match
         const isActive =
-          item.href === `/${slug}/settings`
-            ? pathname === item.href
-            : pathname.startsWith(item.href);
+          href === `/${slug}/settings`
+            ? pathname === href
+            : pathname.startsWith(href);
+
         return (
           <Link
-            key={item.href}
-            href={item.href}
+            key={tab.label}
+            href={href}
             className={cn(
-              "rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              "shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
               isActive
-                ? "bg-accent text-foreground"
-                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
-            {item.label}
+            {tab.label}
           </Link>
         );
       })}
