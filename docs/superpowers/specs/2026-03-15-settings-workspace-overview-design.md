@@ -1,0 +1,162 @@
+# Settings Redesign: Workspace Overview & Identity Header
+
+**Date:** 2026-03-15
+**Status:** Draft
+**Inspiration:** Sanity Management Dashboard (manage.sanity.io)
+
+---
+
+## Summary
+
+Redesign the board Settings pages to show workspace identity information at a glance, inspired by Sanity's project management dashboard. Replace the current minimal "Settings" header and left sidebar navigation with a Workspace Identity Header and horizontal tab bar. Add a new Overview tab as the default landing page with stats, project/member summaries, and a derived activity feed.
+
+## Current State
+
+- Settings header shows only "Settings" text
+- Left sidebar navigation: General, Projects, Members, API Keys
+- General page (`/[slug]/settings`) shows two cards: Workspace Name (editable) and Workspace Slug (read-only)
+- No workspace ID visible anywhere in the UI
+- No overview/dashboard with stats or activity
+
+## Design
+
+### 1. Workspace Identity Header
+
+Replaces the current "Settings" header. Visible on all Settings tabs.
+
+**Layout:**
+```
+┌──────────────────────────────────────────────────────────┐
+│  [Avatar]  Workspace Name                                │
+│            WORKSPACE ID        SLUG           CREATED    │
+│            ws_7f3k9x 📋       acme-corp      Jan 2026   │
+├──────────────────────────────────────────────────────────┤
+│  Overview  Projects  Members  API Keys  General          │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Components:**
+- **Avatar**: First letter of workspace name, 48px, rounded, primary color background (matches sidebar avatar style but larger)
+- **Workspace Name**: 20px, font-bold
+- **Workspace ID**: Monospace, muted color, with clipboard copy button. On click: copies full ID, shows brief "Copied!" feedback
+- **Slug**: Monospace, muted color
+- **Created**: Formatted date (e.g., "Jan 15, 2026")
+
+**Data source:** All fields from the existing `workspace` object (id, name, slug, created_at). No additional queries needed for the header.
+
+### 2. Horizontal Tab Navigation
+
+Replaces the current left sidebar `SettingsNav` component.
+
+**Tabs (left to right):**
+1. Overview (new, default)
+2. Projects (existing)
+3. Members (existing)
+4. API Keys (existing)
+5. General (existing, moved)
+
+**Styling:**
+- Horizontal row below the identity header
+- Active tab: text-foreground + 2px bottom border in primary color
+- Inactive tabs: text-muted-foreground, hover highlight
+- No horizontal scroll needed for 5 tabs; if viewport is very narrow, tabs can scroll horizontally with `overflow-x: auto`
+
+### 3. Tab Routing
+
+| Tab | Route | Content | Change |
+|---|---|---|---|
+| **Overview** | `/[slug]/settings` | New dashboard page | Replaces current General as default |
+| **Projects** | `/[slug]/settings/projects` | Project management | No change to content |
+| **Members** | `/[slug]/settings/members` | Members + invites | No change to content |
+| **API Keys** | `/[slug]/settings/api-keys` | API key management | No change to content |
+| **General** | `/[slug]/settings/general` | Workspace name + slug edit | Moved from `/[slug]/settings` to new sub-route |
+
+**Key change:** `/[slug]/settings` now shows Overview instead of General. The previous General content moves to `/[slug]/settings/general`.
+
+### 4. Overview Tab Content
+
+**Stats Row (top):**
+Four stat cards in a horizontal row:
+- **Projects** — count of projects in workspace
+- **Members** — count of workspace members
+- **Open Tickets** — count of tickets with status not in (done, cancelled)
+- **API Keys** — count of active (non-revoked) API keys
+
+Each card: dark background, uppercase label, large number.
+
+**Two-Column Layout (middle):**
+
+**Projects Card (left column):**
+- Header: "Projects (N)" + "View all →" link (navigates to Projects tab)
+- List of first 3-5 projects with:
+  - Project avatar (first letter, colored background)
+  - Project name
+  - Ticket count + member count per project
+- Click "View all" → navigates to `/[slug]/settings/projects`
+
+**Members Card (right column):**
+- Header: "Members (N)" + "View all →" link (navigates to Members tab)
+- List of first 3-5 members with:
+  - User avatar (initials from email)
+  - Email
+  - Role (Owner/Admin/Member)
+- If more than displayed, show "+N more members" row
+- Click "View all" → navigates to `/[slug]/settings/members`
+
+**Activity Feed (bottom, full width):**
+- Header: "Recent Activity"
+- Derived from existing data (no new DB table):
+  - Tickets: `created_at` / `updated_at` + `status` → "Ticket #42 moved to Done", "Ticket #43 created"
+  - Members: `joined_at` → "john@team.com joined the workspace"
+  - Projects: `created_at` → "Project Mobile App created"
+- Union of recent entries sorted by timestamp, limit 5-10
+- Each entry: colored dot indicator + description text + relative timestamp
+- Color coding: green for completed/positive, blue for info, amber for new items
+
+**Responsive behavior:**
+- Stats cards: 4 columns desktop → 2 columns mobile
+- Projects/Members: 2 columns desktop → stacked on mobile
+
+### 5. Data Fetching
+
+**Overview page (server component):**
+```
+// All queries run in parallel via Promise.all
+- workspace (already available from layout)
+- projects count + first 5 projects
+- members count + first 5 members
+- open tickets count
+- active API keys count
+- recent tickets (last 10, ordered by updated_at)
+- recent members (last 5, ordered by joined_at)
+- recent projects (last 5, ordered by created_at)
+```
+
+Stats are only loaded on the Overview tab, not on every Settings page. The identity header uses only the workspace object from the layout (no extra queries).
+
+### 6. Copy-to-Clipboard
+
+- Uses `navigator.clipboard.writeText(workspace.id)`
+- Visual feedback: clipboard icon briefly changes to checkmark, or shows small "Copied!" tooltip
+- Falls back gracefully if clipboard API is unavailable
+
+## Files Changed
+
+| File | Change |
+|---|---|
+| `src/app/[slug]/settings/layout.tsx` | Replace "Settings" header with identity header + horizontal tabs. Remove left sidebar nav layout. |
+| `src/app/[slug]/settings/page.tsx` | Change from rendering `SettingsGeneral` to new `SettingsOverview` component |
+| `src/app/[slug]/settings/general/page.tsx` | **New file.** Renders `SettingsGeneral` (moved from `/settings`) |
+| `src/components/settings/settings-nav.tsx` | Rewrite: vertical sidebar → horizontal tab bar |
+| `src/components/settings/settings-overview.tsx` | **New file.** Overview dashboard with stats, projects, members, activity |
+| `src/components/settings/workspace-identity-header.tsx` | **New file.** Workspace name, ID (copy), slug, created date |
+
+Existing content components (`settings-general.tsx`, `members-view.tsx`, `projects-settings-view.tsx`) remain unchanged.
+
+## Out of Scope
+
+- Billing/Plan concepts (we don't have plans yet)
+- Usage analytics tab
+- Dedicated Activity/Audit log table (derived feed from existing data is sufficient for now)
+- Changes to the Board header (stays as-is)
+- Agent activity in the overview (stays in the Board's agent panel)
