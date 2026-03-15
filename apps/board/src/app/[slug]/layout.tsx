@@ -50,7 +50,7 @@ export default async function WorkspaceLayout({
           userEmail={user.email!}
           workspaces={workspaces ?? []}
         />
-        <main className="flex flex-1 flex-col overflow-hidden">
+        <main className="relative flex flex-1 flex-col overflow-hidden">
           {children}
         </main>
       </div>
