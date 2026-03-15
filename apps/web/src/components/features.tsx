@@ -368,6 +368,143 @@ function SmallCell({
   );
 }
 
+/* ── Messenger cell ───────────────────────────────────── */
+
+function MessengerCell() {
+  return (
+    <div className="col-span-1 overflow-hidden rounded-2xl border border-brand-800 bg-brand-900 sm:col-span-2">
+      {/* Text */}
+      <div className="p-7">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[1.5px] text-accent">
+          Ship from anywhere
+          <span className="ml-2 rounded bg-accent/10 px-1.5 py-0.5 text-[9px] font-bold uppercase text-accent">
+            Coming Soon
+          </span>
+        </p>
+        <h3 className="mb-1.5 text-lg font-bold text-white">
+          Manage your dev flow by chat
+        </h3>
+        <p className="text-sm leading-relaxed text-brand-400">
+          Write tickets, check status, approve PRs — from Telegram, Slack, or
+          WhatsApp. Your entire dev workflow, wherever you are.
+        </p>
+      </div>
+
+      {/* Messenger icons row */}
+      <div
+        className="flex gap-1.5 border-y border-brand-800 px-5 py-2.5"
+        style={{ background: "#12141c" }}
+      >
+        <span className="rounded-lg border border-accent/30 bg-brand-900 px-3 py-1 text-[11px] font-medium text-accent">
+          Telegram
+        </span>
+        <span className="rounded-lg border border-brand-800 bg-brand-900 px-3 py-1 text-[11px] font-medium text-brand-500">
+          Slack
+        </span>
+        <span className="rounded-lg border border-brand-800 bg-brand-900 px-3 py-1 text-[11px] font-medium text-brand-500">
+          WhatsApp
+        </span>
+        <span className="rounded-lg border border-brand-800 bg-brand-900 px-3 py-1 text-[11px] font-medium text-brand-500">
+          iMessage
+        </span>
+      </div>
+
+      {/* Chat demo */}
+      <div className="px-5 py-4" style={{ background: "#12141c" }}>
+        {/* Message 1 — user */}
+        <div className="mb-3 flex items-start gap-2.5">
+          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-brand-800 text-xs text-brand-400">
+            Y
+          </div>
+          <div className="rounded-xl bg-brand-800 px-3.5 py-2 text-[13px] text-brand-200" style={{ maxWidth: "280px" }}>
+            Add dark mode support to the settings page
+          </div>
+        </div>
+
+        {/* Message 2 — bot */}
+        <div className="mb-3 flex items-start gap-2.5">
+          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-accent/15 text-xs text-accent">
+            js
+          </div>
+          <div className="rounded-xl border border-accent/15 bg-accent/5 px-3.5 py-2 text-[13px] text-brand-300" style={{ maxWidth: "280px" }}>
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-success mr-1" />
+            <span className="font-bold text-accent">T-324</span>
+            {" "}created. Agents are on it.
+            <span className="mt-1 block text-[11px] text-brand-500">
+              Preview ready in ~12 min
+            </span>
+            <a className="mt-0.5 block font-mono text-[11px] text-accent">
+              preview-t324.just-ship.dev
+            </a>
+          </div>
+        </div>
+
+        {/* Message 3 — user */}
+        <div className="mb-3 flex items-start gap-2.5">
+          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-brand-800 text-xs text-brand-400">
+            Y
+          </div>
+          <div className="rounded-xl bg-brand-800 px-3.5 py-2 text-[13px] text-brand-200" style={{ maxWidth: "280px" }}>
+            Sieht gut aus, ship it
+          </div>
+        </div>
+
+        {/* Message 4 — bot */}
+        <div className="flex items-start gap-2.5">
+          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-accent/15 text-xs text-accent">
+            js
+          </div>
+          <div className="rounded-xl border border-accent/15 bg-accent/5 px-3.5 py-2 text-[13px] text-brand-300" style={{ maxWidth: "280px" }}>
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-success mr-1" />
+            Merged to main. T-324 done.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Open Source cell ─────────────────────────────────── */
+
+function OpenSourceCell() {
+  const items = [
+    "MIT License",
+    "Self-hosted pipeline",
+    "No telemetry",
+    "~$4-8/mo hosting",
+  ];
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-brand-800 bg-brand-900">
+      <div className="p-7">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[1.5px] text-accent">
+          Open Source
+        </p>
+        <h3 className="mb-1.5 text-lg font-bold text-white">
+          Your infra. Your data.
+        </h3>
+        <p className="text-sm leading-relaxed text-brand-400">
+          Self-hosted on your VPS. No vendor lock-in, no data leaving your
+          infrastructure. Fork it, extend it, own it.
+        </p>
+      </div>
+      <div className="px-7 pb-6">
+        <div
+          className="flex flex-col gap-2 rounded-[10px] p-3.5"
+          style={{ background: "#12141c" }}
+        >
+          {items.map((item) => (
+            <div key={item} className="flex items-center gap-2.5 text-xs">
+              <span className="text-success">&#10003;</span>
+              <span className="text-brand-400">{item}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Exported section ─────────────────────────────────── */
 
 export function Features() {
@@ -462,6 +599,10 @@ export function Features() {
               {" "}— no pollution, no lock-in. Updates preserve your customizations.
             </p>
           </SmallCell>
+
+          {/* Row 4 */}
+          <MessengerCell />
+          <OpenSourceCell />
         </div>
       </div>
 
