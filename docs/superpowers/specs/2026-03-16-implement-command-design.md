@@ -38,10 +38,12 @@ Claude reads the current conversation and distills a compact spec:
 - Which files/areas are affected?
 - What is the desired behavior / acceptance criteria?
 
+If no clear implementable topic can be derived (empty session, unrelated conversation, or multiple conflicting topics), Claude **stops and asks**: "Ich konnte kein klares Implementierungsziel aus dem Chat ableiten. Bitte beschreibe kurz, was gebaut werden soll."
+
 **With arguments:**
 The argument text is used directly as the spec basis.
 
-In both cases, the extracted spec is printed before agents are spawned so the user can see what Claude understood.
+In both cases, the extracted spec is printed before agents are spawned so the user can see what Claude understood. No user confirmation is required — Claude proceeds immediately after printing the spec (autonomous mode).
 
 ---
 
@@ -53,12 +55,14 @@ Runs identically to `/develop` steps 4–8, but without board events:
 |---|---|
 | Feature branch | `feature/{slug}` derived from spec title |
 | Planning | Claude reads affected files directly (Read/Glob/Grep) |
-| Agents | `data-engineer` / `backend` / `frontend` as needed |
+| Agents | `data-engineer` / `backend` / `frontend` as needed (models per agent definition defaults) |
 | Build check | Commands from `project.json` |
 | QA agent | Acceptance criteria + security quick-check |
-| Finish | Commit + Push + PR — no board status update |
+| Finish | Commit + Push + PR (no merge, no board status update) |
 
-**Board events are explicitly suppressed** even if a pipeline is configured. This command is intentionally standalone.
+**All `send-event.sh` calls are omitted** — not just status updates, but pipeline events too. There is no ticket number, so event scripts cannot be called.
+
+**`/ship` is NOT invoked.** The PR is created and left open for review. The command manually performs commit → push → `gh pr create` without merging. This is consistent with the rest of the workflow where the user approves merges explicitly.
 
 ---
 
@@ -66,7 +70,8 @@ Runs identically to `/develop` steps 4–8, but without board events:
 
 Without a ticket number, the branch name is derived from the spec:
 - Tags/title contain "bug", "fix", "fehler" → `fix/{slug}`
-- Tags/title contain "chore", "refactor", "cleanup" → `chore/{slug}`
+- Tags/title contain "chore", "refactor", "cleanup", "deps" → `chore/{slug}`
+- Tags/title contain "docs" → `docs/{slug}`
 - Everything else → `feature/{slug}`
 
 `{slug}` is a short kebab-case summary of the spec (max 5 words).
