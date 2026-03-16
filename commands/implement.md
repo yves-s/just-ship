@@ -11,14 +11,22 @@ Kein Board, kein Ticket, keine Status-Updates erforderlich.
 
 ## WICHTIGSTE REGEL
 
-**STOPPE NICHT ZWISCHEN DEN SCHRITTEN.** Alle Schritte 1–7 hintereinander ausführen.
+**STOPPE NICHT ZWISCHEN DEN SCHRITTEN.** Alle Schritte 1–6 hintereinander ausführen.
 Kein "Soll ich...?", kein "Möchtest du...?". ALLES DURCHLAUFEN.
+Schritt 7 endet mit einem offenen PR — **KEIN Merge**, nicht warten auf Bestätigung.
 
 ## NICHT verwenden
 
-- NICHT `/ship` aufrufen (würde automatisch mergen)
-- NICHT `send-event.sh` aufrufen (kein Ticket, keine Event-IDs)
-- NICHT auf Board-Status-Updates warten
+- NICHT auf Board-Status-Updates warten (kein Ticket, keine Event-IDs)
+
+## Verboten
+
+- `git add -A` oder `git add .`
+- `--force` push
+- `--amend` bei Hook-Failure
+- `/ship` aufrufen
+- `send-event.sh` aufrufen
+- Zwischen Schritten stoppen oder fragen
 
 ## Konfiguration
 
@@ -32,6 +40,8 @@ Pipeline-Config wird **ignoriert** — dieser Command läuft immer im Standalone
 
 ### 1. Spec ableiten
 
+> **Guard:** Falls kein Argument übergeben wurde UND kein klares Implementierungsziel aus der Konversation ableitbar ist (leere Session, themenfremdes Gespräch, mehrere widersprüchliche Themen) → **STOP**: "Ich konnte kein klares Implementierungsziel aus dem Chat ableiten. Bitte beschreibe kurz, was gebaut werden soll."
+
 **Mit Argument (`/implement Beschreibung`):**
 Nutze `$ARGUMENTS` direkt als Spec-Basis.
 
@@ -40,9 +50,6 @@ Lies die aktuelle Konversation und destilliere eine kompakte Spec:
 - Was wird gebaut?
 - Welche Dateien/Bereiche sind betroffen?
 - Was ist das gewünschte Verhalten / die Acceptance Criteria?
-
-Falls kein klares Implementierungsziel ableitbar (leere Session, themenfremdes Gespräch, mehrere widersprüchliche Themen):
-**STOP** — Ausgabe: "Ich konnte kein klares Implementierungsziel aus dem Chat ableiten. Bitte beschreibe kurz, was gebaut werden soll."
 
 **Spec ausgeben** (immer, egal ob aus Argument oder Chat abgeleitet):
 ```
@@ -126,7 +133,7 @@ Falls uncommitted changes:
 git add <betroffene-dateien>
 git commit -m "feat: {englische Beschreibung}
 
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 ```
 
 Push:
@@ -161,7 +168,3 @@ EOF
   → Zum Mergen: /ship oder "passt"
 ```
 
-## Hinweis: Board-Integration nachträglich
-
-Falls du das Ergebnis doch im Board tracken willst:
-- `/ticket` auf diesem Branch aufrufen → erstellt Ticket und verknüpft es
