@@ -28,7 +28,7 @@ Lies `project.json` für Konventionen.
 
 ## WICHTIGSTE REGEL
 
-**STOPPE NICHT ZWISCHEN DEN SCHRITTEN.** Nach Build-Check (Schritt 6) kommt Review (Schritt 7), dann Ship (Schritt 8). Du darfst NICHT nach dem Build dem User die Ergebnisse zeigen und auf Antwort warten. ALLES durchlaufen bis Schritt 8 fertig ist.
+**STOPPE NICHT ZWISCHEN DEN SCHRITTEN.** Nach Build-Check (Schritt 6) kommt Review (Schritt 7), dann Docs-Check (Schritt 8), dann Ship (Schritt 9). Du darfst NICHT nach dem Build dem User die Ergebnisse zeigen und auf Antwort warten. ALLES durchlaufen bis Schritt 9 fertig ist.
 
 ## Ausführung
 
@@ -202,7 +202,36 @@ Ausgabe nach Abschluss: `✓ qa abgeschlossen`
 
 **NICHT STOPPEN.** SOFORT weiter zu Schritt 8.
 
-### 8. Ship — `/ship` ausführen
+### 8. Docs-Check
+
+Ausgabe: `▶ docs — Dokumentation prüfen`
+
+Ermittle alle geänderten Dateien auf diesem Branch:
+```bash
+git diff --name-only $(git merge-base main HEAD) HEAD
+git status --porcelain
+```
+
+Bestimme anhand der geänderten Dateien, welche Docs geprüft werden müssen:
+
+| Geänderte Dateien | Zu prüfende Docs |
+|---|---|
+| `commands/*.md` | README.md → Commands-Tabelle + Architecture-Abschnitt |
+| `agents/*.md` | README.md → Agents-Tabelle |
+| `skills/*.md` | README.md → Skills-Tabelle |
+| `pipeline/**`, `agents/*.md`, `commands/*.md` | README.md → Workflow-Diagramm |
+| Pipeline/Architektur-Strukturen | CLAUDE.md |
+| Keine der obigen | Schritt überspringen |
+
+Falls Anpassung nötig: direkt mit Edit-Tool ändern. Nur `README.md` und `CLAUDE.md` — keine anderen Docs.
+
+Ausgabe:
+- `✓ docs — README.md aktualisiert` (falls Änderungen gemacht)
+- `✓ docs — keine Änderungen nötig` (falls nichts zu tun)
+
+**NICHT STOPPEN.** SOFORT weiter zu Schritt 9.
+
+### 9. Ship — `/ship` ausführen
 
 **Pipeline-Event senden** (Orchestrator abgeschlossen):
 ```bash
@@ -221,5 +250,5 @@ NICHT fragen ob committed/gepusht werden soll.
 
 Bevor du den Workflow als fertig meldest, prüfe:
 - [ ] **Falls Pipeline konfiguriert:** Status wurde auf "in_progress" gesetzt (Schritt 3)
-- [ ] **Falls Pipeline konfiguriert:** Status wurde auf "in_review" gesetzt (Schritt 8 via `/ship`)
+- [ ] **Falls Pipeline konfiguriert:** Status wurde auf "in_review" gesetzt (Schritt 9 via `/ship`)
 Falls ein Status-Update fehlt und Pipeline konfiguriert ist: **JETZT nachholen**, nicht überspringen.
