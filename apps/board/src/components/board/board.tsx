@@ -627,9 +627,9 @@ export function Board({
           onDragEnd={handleDragEnd}
         >
           {filters.groupByProject ? (
-            <div className="min-h-full p-6 min-w-fit">
+            <div className="min-h-full p-3 sm:p-6 min-w-fit">
               {/* Column headers — sticky top */}
-              <div className="flex gap-4 mb-4 sticky top-0 z-20 bg-background pb-2">
+              <div className="flex gap-3 sm:gap-4 mb-4 sticky top-0 z-20 bg-background pb-2">
                 {visibleColumns.map((col) => {
                   const count = columnCounts[col.status] ?? filteredTickets.filter(
                     (t) => t.status === col.status
@@ -686,7 +686,7 @@ export function Board({
             </div>
 
           ) : (
-            <div className="flex h-full gap-4 p-6">
+            <div className="flex h-full gap-3 sm:gap-4 p-3 sm:p-6">
               {visibleColumns.map((col) => {
                 const colTickets = getTicketsForColumn(col.status);
                 const totalCount = columnCounts[col.status] ?? colTickets.length;

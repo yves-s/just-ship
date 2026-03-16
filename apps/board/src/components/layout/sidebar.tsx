@@ -66,7 +66,7 @@ export function Sidebar({ workspace, userEmail, workspaces }: SidebarProps) {
   }
 
   return (
-    <aside className="flex h-screen w-56 shrink-0 flex-col border-r bg-background">
+    <aside className="hidden md:flex h-screen w-56 shrink-0 flex-col border-r bg-background">
       {/* Workspace switcher */}
       <div className="border-b p-3">
         <DropdownMenu>

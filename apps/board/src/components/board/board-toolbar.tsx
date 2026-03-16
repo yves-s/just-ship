@@ -160,7 +160,7 @@ export function BoardToolbar({
   const sortLabel = `${SORT_BY_LABELS[filters.sortBy]} ${filters.sortDir === "asc" ? "↑" : "↓"}`;
 
   return (
-    <div className="flex flex-col gap-2 border-b px-6 py-2.5">
+    <div className="flex flex-col gap-2 border-b px-3 sm:px-6 py-2">
       <div className="flex items-center gap-2 flex-wrap">
         {/* Board quickfilter */}
         <div className="relative">
@@ -176,7 +176,7 @@ export function BoardToolbar({
               }
             }}
             placeholder="Filter tickets..."
-            className="h-7 w-44 pl-7 pr-7 text-xs"
+            className="h-9 sm:h-7 w-36 sm:w-44 pl-7 pr-7 text-xs"
           />
           {filters.search && (
             <button
@@ -198,12 +198,12 @@ export function BoardToolbar({
               variant="outline"
               size="sm"
               className={cn(
-                "h-7 text-xs",
+                "h-9 sm:h-7 text-xs",
                 hasActiveFilters && "border-primary/50 text-primary"
               )}
             >
               <SlidersHorizontal className="h-3 w-3" />
-              Filter
+              <span className="hidden sm:inline">Filter</span>
               {hasActiveFilters && (
                 <span className="ml-0.5 rounded-full bg-primary text-primary-foreground text-[10px] px-1.5 leading-5">
                   {chips.length}
@@ -310,9 +310,9 @@ export function BoardToolbar({
         {/* Sort dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-7 text-xs">
+            <Button variant="outline" size="sm" className="h-9 sm:h-7 text-xs">
               <ArrowUpDown className="h-3 w-3" />
-              {sortLabel}
+              <span className="hidden sm:inline">{sortLabel}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-44" align="start">
@@ -356,13 +356,13 @@ export function BoardToolbar({
         <Button
           variant={filters.groupByProject ? "secondary" : "outline"}
           size="sm"
-          className="h-7 text-xs"
+          className="h-9 sm:h-7 text-xs"
           onClick={() =>
             onChange({ ...filters, groupByProject: !filters.groupByProject })
           }
         >
           <Layers className="h-3 w-3" />
-          Group by project
+          <span className="hidden sm:inline">Group by project</span>
         </Button>
 
         {/* Reset filters button */}
@@ -370,7 +370,7 @@ export function BoardToolbar({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 text-xs text-muted-foreground"
+            className="h-9 sm:h-7 text-xs text-muted-foreground"
             onClick={() =>
               onChange({
                 ...DEFAULT_FILTERS,
@@ -390,7 +390,7 @@ export function BoardToolbar({
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className="h-11 w-11 sm:h-8 sm:w-8"
             onClick={onCreateProject}
             title="Create project"
           >

@@ -21,7 +21,7 @@ export function BoardHeader({ workspaceId }: BoardHeaderProps) {
   }
 
   return (
-    <div className="flex items-center justify-between border-b px-6 py-4">
+    <div className="flex items-center justify-between border-b px-3 sm:px-6 py-3 sm:py-4">
       <h1 className="text-sm font-semibold">Board</h1>
       <Button size="sm" onClick={() => setOpen(true)}>
         <Plus className="h-4 w-4" />
