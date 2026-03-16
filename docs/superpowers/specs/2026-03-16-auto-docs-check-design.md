@@ -25,20 +25,24 @@ New step in both `commands/implement.md` and `commands/develop.md`:
 
 ## Trigger Logic
 
-After QA, Claude runs:
+After QA, Claude runs both commands to get the full picture of what changed on this branch:
 ```bash
-git diff --name-only HEAD
+git diff --name-only $(git merge-base main HEAD) HEAD
+git status --porcelain
 ```
+
+Combine both outputs for the trigger evaluation.
 
 Based on changed files, Claude determines which docs to check:
 
 | Changed files | Docs to check |
 |---|---|
-| `commands/*.md` (new or modified) | README.md → Commands table |
+| `commands/*.md` (new or modified) | README.md → Commands table + Architecture section |
 | `agents/*.md` (new or modified) | README.md → Agents table |
+| `skills/*.md` (new or modified) | README.md → Skills table |
 | `commands/*.md`, `pipeline/`, workflow-relevant | README.md → Workflow diagram |
 | `CLAUDE.md`-relevant structures (pipeline, architecture) | CLAUDE.md |
-| No relevant changes | Skip entirely |
+| None of the above patterns | Skip entirely |
 
 **Scope:** Only `README.md` and `CLAUDE.md`. Internal docs (`docs/ARCHITECTURE.md`, etc.) are out of scope.
 
@@ -54,7 +58,9 @@ Based on changed files, Claude determines which docs to check:
 6. If no update needed: skip, output `✓ docs — keine Änderungen nötig`
 7. If update applied: output `✓ docs — README.md aktualisiert` (or CLAUDE.md)
 
-Updated doc files are staged and included in the final commit automatically (no separate commit needed).
+Updated doc files are included in the final commit:
+- In `/implement`: doc edits happen before `git add` in step 7 — they are picked up automatically
+- In `/develop`: doc edits must complete **before** `/ship` is invoked in step 8 — `/ship` handles the `git add` and commit, and will include any modified files
 
 ---
 
