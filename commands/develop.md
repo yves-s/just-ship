@@ -21,10 +21,10 @@ Lies `project.json` für Konventionen.
 **Pipeline (optional):** Lies `project.json` und bestimme den Pipeline-Modus:
 
 1. **Board API** (bevorzugt): Falls `pipeline.api_url` UND `pipeline.api_key` gesetzt sind → Board REST API verwenden
-2. **Legacy Supabase MCP**: Falls nur `pipeline.project_id` gesetzt ist (ohne `api_url`/`api_key`) → `execute_sql` verwenden, aber Warnung ausgeben: "Kein Board API konfiguriert. Nutze Legacy Supabase MCP. Fuehre /setup-pipeline aus um zu upgraden."
+2. **Legacy Supabase MCP**: Falls nur `pipeline.project_id` gesetzt ist (ohne `api_url`/`api_key`) → `execute_sql` verwenden, aber Warnung ausgeben: "Kein Board API konfiguriert. Nutze Legacy Supabase MCP. Fuehre /setup-just-ship aus um zu upgraden."
 3. **Standalone**: Falls weder Board API noch `pipeline.project_id` konfiguriert → Alle Pipeline-Schritte überspringen. Ticket-Infos werden per `$ARGUMENTS` übergeben.
 
-**project_id Format-Check:** Falls `pipeline.project_id` gesetzt ist und KEINE Bindestriche enthält (kurzer alphanumerischer String wie `wsmnutkobalfrceavpxs`), ist es eine alte Supabase-Projekt-ID. Warnung ausgeben: "pipeline.project_id sieht nach einer alten Supabase-ID aus. Fuehre /setup-pipeline aus um auf Board-UUID zu migrieren."
+**project_id Format-Check:** Falls `pipeline.project_id` gesetzt ist und KEINE Bindestriche enthält (kurzer alphanumerischer String wie `wsmnutkobalfrceavpxs`), ist es eine alte Supabase-Projekt-ID. Warnung ausgeben: "pipeline.project_id sieht nach einer alten Supabase-ID aus. Fuehre /setup-just-ship aus um auf Board-UUID zu migrieren."
 
 ## WICHTIGSTE REGEL
 

@@ -1,10 +1,10 @@
 ---
-name: setup-pipeline
+name: setup-just-ship
 description: Projekt konfigurieren — Stack erkennen, project.json befüllen
 disable-model-invocation: true
 ---
 
-# /setup-pipeline — Projekt konfigurieren
+# /setup-just-ship — Projekt konfigurieren
 
 Erkennt automatisch den Tech-Stack, befüllt `project.json` und ergänzt `CLAUDE.md`. Board-Verbindung separat via `/connect-board`.
 

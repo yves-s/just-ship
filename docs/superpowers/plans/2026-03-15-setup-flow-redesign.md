@@ -661,12 +661,12 @@ git commit -m "feat: add /disconnect-board command"
 
 ---
 
-### Task 6: Simplify `/setup-pipeline` command
+### Task 6: Simplify `/setup-just-ship` command
 
 **Files:**
-- Modify: `commands/setup-pipeline.md`
+- Modify: `commands/setup-just-ship.md`
 
-- [ ] **Step 1: Remove board connection logic from setup-pipeline**
+- [ ] **Step 1: Remove board connection logic from setup-just-ship**
 
 Remove the entire "### 4. Dev Board verbinden (optional)" section (lines 125-224 in the current file). This includes:
 - Modus 1: Direct Connect
@@ -701,8 +701,8 @@ Remove `api_key`, `api_url`, and `workspace_id` from the schema.
 - [ ] **Step 2: Commit**
 
 ```bash
-git add commands/setup-pipeline.md
-git commit -m "refactor: simplify /setup-pipeline — remove board connection (now in /connect-board)"
+git add commands/setup-just-ship.md
+git commit -m "refactor: simplify /setup-just-ship — remove board connection (now in /connect-board)"
 ```
 
 ---
@@ -834,7 +834,7 @@ Replace the "Next steps" section (lines 605-614) with:
 ```bash
 echo "Next steps:"
 echo "  1. Open a new Claude Code session"
-echo "  2. Run /setup-pipeline (detects stack, fills project.json)"
+echo "  2. Run /setup-just-ship (detects stack, fills project.json)"
 if [ "$SETUP_MODE" = "2" ]; then
   echo "  ✓ Board already connected!"
 else
@@ -1027,7 +1027,7 @@ In `project-setup-dialog.tsx`, update the regeneration confirmation dialog (line
 
 Change:
 ```
-Run /setup-pipeline --board ... --key <new-key> in each project
+Run /setup-just-ship --board ... --key <new-key> in each project
 ```
 To:
 ```
@@ -1036,7 +1036,7 @@ Run /connect-board --key <new-key> in each project
 
 - [ ] **Step 2: Update create-api-key-dialog**
 
-In `create-api-key-dialog.tsx`, update any references to `/setup-pipeline` to use `/connect-board` instead.
+In `create-api-key-dialog.tsx`, update any references to `/setup-just-ship` to use `/connect-board` instead.
 
 - [ ] **Step 3: Commit (in board repo)**
 

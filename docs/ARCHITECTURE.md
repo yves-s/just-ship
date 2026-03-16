@@ -131,7 +131,7 @@ just-ship/                         # Framework repository
 |   +-- ship.md                    # Commit + push + PR (/ship)
 |   +-- ship.md                    # Commit, push, PR, merge, done (/ship)
 |   +-- status.md                  # Show current status (/status)
-|   +-- setup-pipeline.md          # Auto-detect stack, configure project
+|   +-- setup-just-ship.md          # Auto-detect stack, configure project
 |   +-- update-just-ship.md         # Sync templates after framework update
 +-- skills/                        # Framework skills (copied to projects)
 |   +-- ticket-writer.md           # PM-quality ticket writing
@@ -287,7 +287,7 @@ Commands are markdown files in `commands/` with frontmatter metadata. They provi
 | Command | Purpose |
 |---------|---------|
 | `/status` | Show current ticket, branch, and change summary |
-| `/setup-pipeline` | Auto-detect stack, fill `project.json`, connect Just Ship Board |
+| `/setup-just-ship` | Auto-detect stack, fill `project.json`, connect Just Ship Board |
 | `/update-just-ship` | Sync `CLAUDE.md` and `project.json` after framework update |
 
 ### Conversational Triggers
@@ -1013,7 +1013,7 @@ cd /path/to/your-project
 
 # Open a new Claude Code session and configure
 claude
-> /setup-pipeline
+> /setup-just-ship
 ```
 
 ### What setup.sh Does

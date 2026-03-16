@@ -157,7 +157,7 @@ Repos binden sich via `project.json` an das Board. Die vollständige Config wird
 }
 ```
 
-**Setup-Flow:** Workspace erstellen → Projekt auf dem Board erstellen → Connect-Command kopieren → in Claude Code ausführen (`/setup-pipeline --board ... --key ... --project ...`). Der Setup-Dialog zeigt auch eine Installationsanleitung für Erstnutzer.
+**Setup-Flow:** Workspace erstellen → Projekt auf dem Board erstellen → Connect-Command kopieren → in Claude Code ausführen (`/setup-just-ship --board ... --key ... --project ...`). Der Setup-Dialog zeigt auch eine Installationsanleitung für Erstnutzer.
 
 Claude Code Commands:
 

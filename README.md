@@ -53,7 +53,7 @@ cd /path/to/your-project
 #    Create a workspace + project at https://board.just-ship.io
 #    Copy the connect command from the project setup dialog:
 claude
-> /setup-pipeline --board https://board.just-ship.io --key adp_... --project <uuid>
+> /setup-just-ship --board https://board.just-ship.io --key adp_... --project <uuid>
 
 # 4. Write your first ticket
 > /ticket Add dark mode toggle to the settings page
@@ -72,7 +72,7 @@ claude
 | `/develop` | Pick next ticket, implement end-to-end, create PR | Yes |
 | `/ship` | Commit + push + PR + squash merge + board status "done" | Yes |
 | `/status` | Show current ticket, branch, and changes | -- |
-| `/setup-pipeline` | Auto-detect stack, configure project, connect Dev Board | Interactive |
+| `/setup-just-ship` | Auto-detect stack, configure project, connect Dev Board | Interactive |
 | `/update-just-ship` | Sync project files after framework update | Interactive |
 
 **Conversational triggers:** Saying "passt", "done", "fertig", or "sieht gut aus" automatically executes `/ship`.
@@ -184,7 +184,7 @@ just-ship/
 │   ├── develop.md
 │   ├── ship.md
 │   ├── status.md
-│   ├── setup-pipeline.md
+│   ├── setup-just-ship.md
 │   └── update-just-ship.md
 ├── skills/                     # Framework skills
 ├── pipeline/                   # SDK pipeline runner (TypeScript)
@@ -224,7 +224,7 @@ For a comprehensive technical deep dive, see **[docs/ARCHITECTURE.md](docs/ARCHI
 
 ### project.json
 
-Central config read by all agents and commands. Auto-populated by `/setup-pipeline`:
+Central config read by all agents and commands. Auto-populated by `/setup-just-ship`:
 
 ```json
 {
@@ -353,7 +353,7 @@ The **[Just Ship Board](https://board.just-ship.io)** is the visual companion fo
 
 1. Create a workspace and project at [board.just-ship.io](https://board.just-ship.io)
 2. Copy the connect command from the project setup dialog
-3. Run it in Claude Code: `/setup-pipeline --board https://board.just-ship.io --key <key> --project <uuid>`
+3. Run it in Claude Code: `/setup-just-ship --board https://board.just-ship.io --key <key> --project <uuid>`
 4. This writes `api_url`, `api_key`, and `project_id` to `project.json`
 
 Commands (`/ticket`, `/develop`, `/ship`) auto-detect the Board config and use it for ticket operations and status updates.
