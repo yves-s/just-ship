@@ -7,6 +7,7 @@ import { Features } from "@/components/features";
 import { Skills } from "@/components/skills";
 import { Showcase } from "@/components/showcase";
 import { QuickStart } from "@/components/quick-start";
+import { Newsletter } from "@/components/newsletter";
 import { Footer } from "@/components/footer";
 
 export default function Home() {
@@ -21,6 +22,7 @@ export default function Home() {
       <Skills />
       <Showcase />
       <QuickStart />
+      <Newsletter />
       <Footer />
     </main>
   );
