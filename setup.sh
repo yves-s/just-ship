@@ -91,6 +91,36 @@ ensure_gitignore() {
   echo "$pattern" >> "$gitignore"
 }
 
+# --- Helper: enable Agent Teams feature flag in global Claude settings ---
+enable_agent_teams() {
+  local global_settings="$HOME/.claude/settings.json"
+
+  mkdir -p "$HOME/.claude"
+
+  local result
+  result=$(SETTINGS_PATH="$global_settings" node -e "
+    const fs = require('fs');
+    const path = process.env.SETTINGS_PATH;
+    let s = {};
+    try { s = JSON.parse(fs.readFileSync(path, 'utf-8')); } catch(e) {}
+    if (s.env?.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS === '1') {
+      console.log('exists');
+    } else {
+      if (!s.env) s.env = {};
+      s.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1';
+      fs.writeFileSync(path, JSON.stringify(s, null, 2) + '\n');
+      console.log('added');
+    }
+  " 2>/dev/null || echo "error")
+
+  case "$result" in
+    exists) echo "  ✓ Agent Teams already enabled" ;;
+    added)  echo "  ✓ Agent Teams enabled (~/.claude/settings.json)" ;;
+    *)      echo "  ⚠ Could not enable Agent Teams — add manually:"
+            echo "    Set env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = \"1\" in ~/.claude/settings.json" ;;
+  esac
+}
+
 # --- Self-install guard ---
 # The framework repo itself uses symlinks (.claude/commands → ../commands etc.)
 # Running setup.sh on itself would try to copy files onto themselves.
@@ -399,6 +429,9 @@ if [ "$MODE" = "update" ]; then
   cp "$FRAMEWORK_DIR/settings.json" "$PROJECT_DIR/.claude/settings.json"
   echo "  ✓ .claude/settings.json"
 
+  echo "Enabling Agent Teams..."
+  enable_agent_teams
+
   # Write version
   echo "$FRAMEWORK_VERSION" > "$VERSION_FILE"
 
@@ -593,6 +626,10 @@ if [ ! -f "$PROJECT_DIR/.claude/settings.json" ]; then
 else
   echo "  ~ .claude/settings.json (exists, skipped)"
 fi
+
+# --- Enable Agent Teams feature flag ---
+echo "Enabling Agent Teams..."
+enable_agent_teams
 
 # --- Generate CLAUDE.md ---
 if [ ! -f "$PROJECT_DIR/CLAUDE.md" ]; then
