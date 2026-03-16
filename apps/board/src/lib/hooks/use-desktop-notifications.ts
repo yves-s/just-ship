@@ -128,6 +128,39 @@ export function useDesktopNotifications(
           sendNotification(title, message, ticket.number);
         }
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "tickets",
+        },
+        (payload) => {
+          if (!initialLoadDoneRef.current) return;
+
+          const newTicket = payload.new as {
+            number: number;
+            title: string;
+            status: string;
+          };
+
+          // Only notify for status changes to in_review or done
+          // Note: payload.old may not include status due to REPLICA IDENTITY default,
+          // so we rely on the new status check as the primary guard
+          if (
+            newTicket.status !== "in_review" &&
+            newTicket.status !== "done"
+          )
+            return;
+
+          const title =
+            newTicket.status === "in_review"
+              ? `T-${newTicket.number} — Ready for Review`
+              : `T-${newTicket.number} — Done`;
+
+          sendNotification(title, newTicket.title, newTicket.number);
+        }
+      )
       .subscribe();
 
     // Mark initial load as done after a short delay to skip any buffered events
