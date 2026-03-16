@@ -44,6 +44,17 @@ export function createEventHooks(config: EventConfig): Partial<Record<HookEvent,
     return { async: true as const };
   };
 
+  const onSubagentDispatchCompleted: HookCallback = async (input) => {
+    const hookInput = input as PostToolUseHookInput;
+    const toolInput = (hookInput.tool_input ?? {}) as Record<string, unknown>;
+    const agentType = (toolInput.subagent_type ?? toolInput.name ?? "unknown") as string;
+    await postEvent(config, {
+      agent_type: agentType,
+      event_type: "completed",
+    });
+    return { async: true as const };
+  };
+
   const onFileChanged: HookCallback = async (input) => {
     const hookInput = input as PostToolUseHookInput;
     const toolInput = (hookInput.tool_input ?? {}) as Record<string, unknown>;
@@ -61,7 +72,10 @@ export function createEventHooks(config: EventConfig): Partial<Record<HookEvent,
   return {
     SubagentStart: [{ matcher: ".*", hooks: [onAgentStarted] }],
     SubagentStop: [{ matcher: ".*", hooks: [onAgentCompleted] }],
-    PostToolUse: [{ matcher: "Write|Edit", hooks: [onFileChanged] }],
+    PostToolUse: [
+      { matcher: "Write|Edit", hooks: [onFileChanged] },
+      { matcher: "Agent", hooks: [onSubagentDispatchCompleted] },
+    ],
   };
 }
 
