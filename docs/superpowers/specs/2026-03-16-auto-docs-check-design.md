@@ -40,7 +40,7 @@ Based on changed files, Claude determines which docs to check:
 | `commands/*.md` (new or modified) | README.md → Commands table + Architecture section |
 | `agents/*.md` (new or modified) | README.md → Agents table |
 | `skills/*.md` (new or modified) | README.md → Skills table |
-| `commands/*.md`, `pipeline/`, workflow-relevant | README.md → Workflow diagram |
+| `pipeline/**`, `agents/*.md`, `commands/*.md` | README.md → Workflow diagram |
 | `CLAUDE.md`-relevant structures (pipeline, architecture) | CLAUDE.md |
 | None of the above patterns | Skip entirely |
 
@@ -85,5 +85,12 @@ Updated doc files are included in the final commit:
 
 ## Files to Modify
 
-- `commands/implement.md` — add docs-check step between QA (step 6) and Abschließen (step 7)
-- `commands/develop.md` — add docs-check step between Review (step 7) and Ship (step 8)
+- `commands/implement.md`:
+  - Add docs-check as new step 7 (between current QA step 6 and Abschließen)
+  - Abschließen becomes step 8
+  - Update "WICHTIGSTE REGEL" banner: `Alle Schritte 1–6` → `Alle Schritte 1–7`
+
+- `commands/develop.md`:
+  - Add docs-check between Review (step 7) and Ship (current step 8)
+  - Ship becomes step 9
+  - Update "WICHTIGSTE REGEL" banner: `Nach Build-Check (Schritt 6) kommt Review (Schritt 7), dann Ship (Schritt 8)` → `...dann Docs-Check (Schritt 8), dann Ship (Schritt 9)`
