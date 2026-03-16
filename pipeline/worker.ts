@@ -137,7 +137,7 @@ async function runTicketPipeline(ticket: Ticket): Promise<void> {
   });
 
   if (result.status === "failed") {
-    throw new Error(`Pipeline failed (exit code: ${result.exitCode})`);
+    throw new Error(result.failureReason ?? `Pipeline failed (exit code: ${result.exitCode})`);
   }
 
   // Update ticket status to in_review

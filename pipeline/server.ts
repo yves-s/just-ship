@@ -171,11 +171,12 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse): Promise<
           branch: result.branch,
         });
       } else {
-        log(`Pipeline failed: T-${ticketNumber} (exit code: ${result.exitCode})`);
+        const reason = result.failureReason ?? `exited with code ${result.exitCode}`;
+        log(`Pipeline failed: T-${ticketNumber} (${reason})`);
         await patchTicket(ticketNumber, {
           pipeline_status: "failed",
           status: "ready_to_develop",
-          summary: `Pipeline error: exited with code ${result.exitCode}`,
+          summary: `Pipeline error: ${reason}`,
         });
       }
     })
