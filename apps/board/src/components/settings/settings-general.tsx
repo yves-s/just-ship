@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { DeleteWorkspaceDialog } from "./delete-workspace-dialog";
 import type { Workspace } from "@/lib/types";
 
 interface SettingsGeneralProps {
@@ -27,6 +28,7 @@ interface SettingsGeneralProps {
 export function SettingsGeneral({ workspace }: SettingsGeneralProps) {
   const [serverError, setServerError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const {
     register,
@@ -112,6 +114,36 @@ export function SettingsGeneral({ workspace }: SettingsGeneralProps) {
           </div>
         </CardContent>
       </Card>
+
+      <Card className="border-destructive/50">
+        <CardHeader>
+          <CardTitle className="text-destructive">Danger zone</CardTitle>
+          <CardDescription>
+            Permanently delete this workspace and all its data.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-3 max-w-sm">
+            <p className="text-sm text-muted-foreground">
+              Deleting a workspace removes all projects, tickets, API keys, and
+              members. This cannot be undone.
+            </p>
+            <Button
+              variant="destructive"
+              className="self-start"
+              onClick={() => setDeleteOpen(true)}
+            >
+              Delete workspace
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <DeleteWorkspaceDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        workspace={workspace}
+      />
     </div>
   );
 }
