@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/layout/sidebar";
+import { MobileNav } from "@/components/layout/mobile-nav";
 import { WorkspaceProvider } from "@/lib/workspace-context";
 import { CommandPalette } from "@/components/shared/command-palette";
 import { DesktopNotificationListener } from "@/components/shared/desktop-notification-listener";
@@ -51,9 +52,16 @@ export default async function WorkspaceLayout({
           userEmail={user.email!}
           workspaces={workspaces ?? []}
         />
-        <main className="relative flex flex-1 flex-col overflow-hidden">
-          {children}
-        </main>
+        <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+          <MobileNav
+            workspace={workspace}
+            userEmail={user.email!}
+            workspaces={workspaces ?? []}
+          />
+          <main className="relative flex flex-1 flex-col overflow-hidden">
+            {children}
+          </main>
+        </div>
       </div>
       <CommandPalette workspaceId={workspace.id} workspaceSlug={workspace.slug} />
       <DesktopNotificationListener />
