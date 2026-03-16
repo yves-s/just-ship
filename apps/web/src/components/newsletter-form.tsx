@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 
 type State = "idle" | "loading" | "success" | "duplicate" | "error";
 
-export function WaitlistForm() {
+export function NewsletterForm() {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<State>("idle");
   const [validationError, setValidationError] = useState("");
@@ -50,42 +50,45 @@ export function WaitlistForm() {
     return (
       <div
         className="flex flex-col items-center gap-3"
-        style={{ animation: "waitlist-fadein 0.35s ease both" }}
+        style={{ animation: "nl-fadein 0.35s ease both" }}
       >
         <div
           className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/15"
-          style={{ animation: "waitlist-scalein 0.4s cubic-bezier(0.34,1.56,0.64,1) both" }}
+          style={{ animation: "nl-scalein 0.4s cubic-bezier(0.34,1.56,0.64,1) both" }}
         >
-          {state === "success" ? (
-            <svg
-              className="h-6 w-6 text-green-400"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.5}
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-            </svg>
-          ) : (
-            <svg
-              className="h-6 w-6 text-green-400"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.5}
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          )}
+          <svg
+            className="h-6 w-6 text-green-400"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2.5}
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
         </div>
         <p className="text-base font-semibold text-green-400">
-          {state === "success" ? "You're on the list!" : "You're already on the list!"}
+          {state === "success" ? "You're subscribed!" : "You're already subscribed!"}
         </p>
         <p className="text-sm text-brand-500">
           {state === "success"
-            ? "We'll reach out when early access opens."
-            : "We already have your email — we'll be in touch soon."}
+            ? "We'll keep you in the loop."
+            : "We already have your email — stay tuned."}
         </p>
+
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+              @keyframes nl-fadein {
+                from { opacity: 0; transform: translateY(6px); }
+                to   { opacity: 1; transform: translateY(0); }
+              }
+              @keyframes nl-scalein {
+                from { transform: scale(0.5); opacity: 0; }
+                to   { transform: scale(1);   opacity: 1; }
+              }
+            `,
+          }}
+        />
       </div>
     );
   }
@@ -98,7 +101,7 @@ export function WaitlistForm() {
         className="flex w-full flex-col gap-3 sm:flex-row sm:gap-2"
       >
         <input
-          id="waitlist-email"
+          id="newsletter-email"
           type="email"
           value={email}
           onChange={(e) => {
@@ -113,7 +116,7 @@ export function WaitlistForm() {
           inputMode="email"
           aria-label="Email address"
           aria-invalid={validationError ? "true" : "false"}
-          aria-describedby={validationError ? "email-error" : undefined}
+          aria-describedby={validationError ? "newsletter-error" : undefined}
         />
         <button
           type="submit"
@@ -142,20 +145,17 @@ export function WaitlistForm() {
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                 />
               </svg>
-              Joining&hellip;
+              Subscribing&hellip;
             </>
           ) : (
-            <>
-              Get Early Access
-            </>
+            "Subscribe"
           )}
         </button>
       </form>
 
-      {/* Validation / error messages */}
       <div className="mt-2 min-h-[20px]">
         {validationError && (
-          <p id="email-error" className="text-sm text-red-400" role="alert">
+          <p id="newsletter-error" className="text-sm text-red-400" role="alert">
             {validationError}
           </p>
         )}
@@ -166,26 +166,9 @@ export function WaitlistForm() {
         )}
       </div>
 
-      {/* Privacy note */}
       <p className="mt-3 text-center text-xs text-brand-500 sm:text-left">
         No spam. Unsubscribe anytime.
       </p>
-
-      {/* Keyframes */}
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-            @keyframes waitlist-fadein {
-              from { opacity: 0; transform: translateY(6px); }
-              to   { opacity: 1; transform: translateY(0); }
-            }
-            @keyframes waitlist-scalein {
-              from { transform: scale(0.5); opacity: 0; }
-              to   { transform: scale(1);   opacity: 1; }
-            }
-          `,
-        }}
-      />
     </div>
   );
 }

@@ -1,5 +1,3 @@
-import { WaitlistForm } from "./waitlist-form";
-
 const links = [
   { label: "GitHub", href: "https://github.com/yves-s/just-ship" },
   { label: "Board", href: "https://board.just-ship.io" },
@@ -27,14 +25,15 @@ export function Footer() {
           </div>
         </div>
 
-        {/* Waitlist CTA */}
+        {/* CTA */}
         <div className="mb-12 flex justify-center">
-          <div className="w-full max-w-md">
-            <p className="mb-5 text-center text-sm font-medium text-brand-400">
-              Get early access — be the first to know when it ships.
-            </p>
-            <WaitlistForm />
-          </div>
+          <a
+            href="https://github.com/yves-s/just-ship"
+            className="inline-flex h-[52px] items-center gap-2 rounded-xl bg-accent px-8 text-base font-semibold text-white shadow-[0_4px_20px_rgba(59,130,246,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgba(59,130,246,0.4)]"
+          >
+            Start Shipping
+            <span aria-hidden="true">&rarr;</span>
+          </a>
         </div>
 
         {/* Divider */}
