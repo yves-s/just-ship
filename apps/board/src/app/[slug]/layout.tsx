@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/layout/sidebar";
 import { WorkspaceProvider } from "@/lib/workspace-context";
 import { CommandPalette } from "@/components/shared/command-palette";
+import { DesktopNotificationListener } from "@/components/shared/desktop-notification-listener";
 
 export default async function WorkspaceLayout({
   children,
@@ -55,6 +56,7 @@ export default async function WorkspaceLayout({
         </main>
       </div>
       <CommandPalette workspaceId={workspace.id} workspaceSlug={workspace.slug} />
+      <DesktopNotificationListener />
     </WorkspaceProvider>
   );
 }
