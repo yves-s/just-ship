@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
 import {
   CalendarDays,
@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge, PriorityBadge } from "@/components/shared/status-badge";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { formatTokenCount } from "@/lib/utils/format-tokens";
 import { useWorkspace } from "@/lib/workspace-context";
 import { MarkdownRenderer } from "@/components/shared/markdown-renderer";
 import type { Ticket, Project } from "@/lib/types";
@@ -149,8 +150,18 @@ export function TicketDetailSheet({
       .then(({ data }) => setProjects(data ?? []));
   }, [open, workspace.id]);
 
-  const [events, setEvents] = useState<{ id: string; event_type: string; message: string; agent_type: string; created_at: string }[]>([]);
+  const [events, setEvents] = useState<{ id: string; event_type: string; message: string; agent_type: string; created_at: string; tokens_used: number }[]>([]);
   const [logsCollapsed, setLogsCollapsed] = useState(true);
+
+  const tokensByAgent = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const event of events) {
+      if (event.tokens_used > 0) {
+        map.set(event.agent_type, (map.get(event.agent_type) ?? 0) + event.tokens_used);
+      }
+    }
+    return map;
+  }, [events]);
 
   useEffect(() => {
     if (!open || !current) return;
@@ -170,6 +181,9 @@ export function TicketDetailSheet({
             message: ((e.metadata as Record<string, unknown>)?.message as string) ?? "",
             agent_type: e.agent_type as string,
             created_at: e.created_at as string,
+            tokens_used: typeof (e.metadata as Record<string, unknown>)?.tokens_used === 'number'
+              ? ((e.metadata as Record<string, unknown>).tokens_used as number)
+              : 0,
           })));
         }
       });
@@ -195,6 +209,9 @@ export function TicketDetailSheet({
               message: ((event.metadata as Record<string, unknown>)?.message as string) ?? "",
               agent_type: event.agent_type as string,
               created_at: event.created_at as string,
+              tokens_used: typeof (event.metadata as Record<string, unknown>)?.tokens_used === 'number'
+                ? ((event.metadata as Record<string, unknown>).tokens_used as number)
+                : 0,
             },
           ]);
         }
@@ -618,6 +635,48 @@ export function TicketDetailSheet({
                 <pre className="rounded-md bg-muted px-3 py-2 text-xs font-mono overflow-auto whitespace-pre-wrap">
                   {current.test_results}
                 </pre>
+              </div>
+            </>
+          )}
+
+          {(current.total_tokens > 0 || tokensByAgent.size > 0) && (
+            <>
+              <div className="h-px bg-border mx-6 my-2" />
+              <div className="px-8 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">
+                  Token Usage
+                </div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Zap className="h-4 w-4 text-amber-500" />
+                  <span className="text-lg font-semibold text-foreground">
+                    {formatTokenCount(current.total_tokens)}
+                  </span>
+                  <span className="text-sm text-muted-foreground">tokens gesamt</span>
+                </div>
+                {tokensByAgent.size > 0 && (
+                  <div className="space-y-1.5">
+                    {Array.from(tokensByAgent.entries())
+                      .sort(([, a], [, b]) => b - a)
+                      .map(([agentType, tokens]) => (
+                        <div key={agentType} className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground w-24 shrink-0">
+                            {agentType}
+                          </span>
+                          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-amber-400 rounded-full"
+                              style={{
+                                width: `${Math.round((tokens / current.total_tokens) * 100)}%`,
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs font-mono text-muted-foreground w-16 text-right shrink-0">
+                            {formatTokenCount(tokens)}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                )}
               </div>
             </>
           )}

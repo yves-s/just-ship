@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GitBranch, CalendarDays, Copy, Check } from "lucide-react";
+import { GitBranch, CalendarDays, Copy, Check, Zap } from "lucide-react";
+import { formatTokenCount } from "@/lib/utils/format-tokens";
 import { cn } from "@/lib/utils";
 import { PriorityBadge } from "@/components/shared/status-badge";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -60,7 +61,7 @@ export function TicketCard({
     transition,
   };
 
-  const hasFooter = ticket.branch || ticket.pipeline_status || ticket.due_date;
+  const hasFooter = ticket.branch || ticket.pipeline_status || ticket.due_date || ticket.total_tokens > 0;
 
   function handleCopyNumber(e: React.MouseEvent) {
     e.stopPropagation();
@@ -163,6 +164,12 @@ export function TicketCard({
               >
                 {ticket.pipeline_status}
               </span>
+            )}
+            {ticket.total_tokens > 0 && (
+              <div className="flex items-center gap-1 text-[10px] text-amber-600">
+                <Zap className="h-3 w-3 shrink-0" />
+                <span>{formatTokenCount(ticket.total_tokens)}</span>
+              </div>
             )}
             {ticket.due_date && (
               <div className="flex items-center gap-1 text-[10px] text-muted-foreground ml-auto">

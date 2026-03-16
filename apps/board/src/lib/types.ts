@@ -92,6 +92,7 @@ export interface Ticket {
   assigned_agents: string[];
   summary: string | null;
   test_results: string | null;
+  total_tokens: number;
   preview_url: string | null;
   due_date: string | null;
   created_by: string | null;

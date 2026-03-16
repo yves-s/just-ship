@@ -150,11 +150,12 @@ bash .claude/scripts/send-event.sh {N} {agent-type} agent_started
 ```
 Ausgabe: `▶ [{agent-type}] — {was der Agent macht}`
 
-Nach Agent-Ende:
+Nach Agent-Ende — Token-Verbrauch aus dem Agent-Ergebnis extrahieren:
 ```bash
-bash .claude/scripts/send-event.sh {N} {agent-type} completed
+bash .claude/scripts/send-event.sh {N} {agent-type} completed '{"tokens_used": {total_tokens}}'
 ```
-Ausgabe: `✓ [{agent-type}] abgeschlossen`
+Dabei `{total_tokens}` aus dem `<usage>total_tokens: X</usage>` Block des Agent-Ergebnisses lesen. Falls kein Usage-Block vorhanden, `0` senden.
+Ausgabe: `✓ [{agent-type}] abgeschlossen ({formatted_tokens} tokens)`
 
 Spawne Agents via Agent-Tool mit konkreten Instruktionen:
 

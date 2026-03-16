@@ -50,5 +50,16 @@ export async function POST(request: Request) {
 
   if (dbError) return error("DB_ERROR", dbError.message, 500);
 
+  // Accumulate token usage on ticket when agent completes
+  const tokensUsed = typeof parsed.data.metadata.tokens_used === "number"
+    ? parsed.data.metadata.tokens_used
+    : 0;
+  if (tokensUsed > 0) {
+    await supabase.rpc("increment_ticket_tokens", {
+      ticket_id_param: ticket.id,
+      tokens_param: tokensUsed,
+    });
+  }
+
   return success(event, 201);
 }
