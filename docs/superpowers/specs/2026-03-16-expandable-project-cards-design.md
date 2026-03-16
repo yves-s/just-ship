@@ -24,7 +24,7 @@ Redesign the projects list in Settings from a flat list with dropdown menus to e
 
 **Collapsed State:**
 Each project renders as a bordered card with:
-- Project avatar (first letter, colored background — same pattern as Overview)
+- Project avatar (first letter, deterministic color based on hashing the project ID to pick from a fixed color palette — stable across reorders)
 - Project name (bold)
 - Description (muted, truncated — if present)
 - Connection status badge: green "Connected" or muted "Not connected"
@@ -40,11 +40,11 @@ The card expands below the header to reveal:
 
 **Stats Row:**
 Three mini stat cards side by side:
-- **Total Tickets**: Count of all tickets with `project_id` matching this project
-- **Open**: Count of tickets where `status NOT IN ('done', 'cancelled')`
-- **Done**: Count of tickets where `status = 'done'`
+- **Open**: Count of tickets where `status NOT IN ('done', 'cancelled')` — amber
+- **Done**: Count of tickets where `status = 'done'` — green
+- **Total**: Open + Done (excludes cancelled tickets, which are irrelevant for project health)
 
-Stats color coding: Open in amber, Done in green.
+"Total" is defined as `open + done` so the numbers always add up. Cancelled tickets are excluded from all counts.
 
 **Actions Row:**
 Inline buttons replacing the dropdown menu:
@@ -59,13 +59,16 @@ Inline buttons replacing the dropdown menu:
 - Clicking an expanded card collapses it
 - Clicking a collapsed card while another is expanded: collapse the other, expand the clicked one
 - State managed via `expandedProjectId: string | null`
+- Use existing `Collapsible` / `CollapsibleTrigger` / `CollapsibleContent` from `@/components/ui/collapsible` (Radix, already installed) with controlled `open` state
+- The entire collapsed card header is the click trigger (not just the chevron)
+- No animation needed (instant expand/collapse, consistent with existing Collapsible usage in `ProjectSetupDialog`)
 
 ### Connection Status Detection
 
 The current code does not track whether a project has an active pipeline connection. We need to determine connection status from existing data:
 
-- A project is "Connected" if the workspace has at least one active (non-revoked) API key. This is a workspace-level check, not per-project. The API key is shared across all projects in a workspace.
-- The connection status is already implicitly available — the `ensureApiKey` function checks for existing keys. We can pre-fetch this in the server component page.
+- A project is "Connected" if the workspace has at least one active (non-revoked) API key. This is a **workspace-level** check, not per-project — the API key is shared across all projects in a workspace. This means all projects in a connected workspace will show "Connected" simultaneously. This is a known limitation; per-project connection tracking would require a new data model (out of scope).
+- The connection status is pre-fetched in the server component page as a single boolean `hasApiKey`.
 
 **Data needed:** The projects page already fetches projects. Additionally fetch:
 - Ticket counts per project (total, open, done) — via Supabase queries
@@ -75,21 +78,25 @@ The current code does not track whether a project has an active pipeline connect
 
 The Settings projects page (`src/app/[slug]/settings/projects/page.tsx`) is a server component. Add queries:
 
-```
-// Existing: projects list
-// New: for each project, get ticket counts
-// New: check if workspace has active API key (boolean)
-```
+**Ticket stats strategy:** Fetch all tickets for the workspace in a single query (`select('id, project_id, status').eq('workspace_id', wid)`), then aggregate counts client-side in the server component by grouping on `project_id`. This avoids N+1 queries regardless of how many projects exist.
+
+**API key check:** Single query: `select('id', { count: 'exact', head: true }).eq('workspace_id', wid).is('revoked_at', null)` → `hasApiKey = count > 0`.
 
 Pass ticket counts and connection status as props to the component. The component stays a client component for interactive accordion behavior.
+
+**Client-side state mutations:**
+- New project created via dialog → added to local state with `ticketStats: { total: 0, open: 0, done: 0 }`
+- Project deleted/moved → removed from local state (stats irrelevant)
+- Project renamed → stats preserved from server-fetched data
+- Stats are not live-updated; they reflect the state at page load (documented in Out of Scope)
 
 **Props change for ProjectsSettingsView:**
 ```typescript
 interface ProjectWithStats extends Project {
   ticketStats: {
-    total: number;
-    open: number;
-    done: number;
+    open: number;   // status NOT IN ('done', 'cancelled')
+    done: number;   // status = 'done'
+    total: number;  // open + done (excludes cancelled)
   };
 }
 
