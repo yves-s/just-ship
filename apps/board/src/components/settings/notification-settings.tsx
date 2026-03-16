@@ -56,9 +56,9 @@ export function NotificationSettings() {
             <div>
               <h3 className="font-medium">Desktop Notifications</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Receive desktop notifications when agents complete or fail on
-                your tickets. Notifications only appear when the board tab is not
-                focused.
+                Receive desktop notifications for ticket status changes and
+                agent events. Notifications only appear when the board tab is
+                not focused.
               </p>
             </div>
           </div>
@@ -95,6 +95,8 @@ export function NotificationSettings() {
           You will be notified when:
         </p>
         <ul className="list-disc pl-5 space-y-1">
+          <li>A ticket is ready for review</li>
+          <li>A ticket is marked as done</li>
           <li>An agent completes work on a ticket</li>
           <li>An agent encounters an error</li>
         </ul>
