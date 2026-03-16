@@ -56,7 +56,7 @@ curl -s -X PATCH -H "X-Pipeline-Key: {pipeline.api_key}" \
   "{pipeline.api_url}/api/tickets/{N}"
 ```
 
-**Backward Compatibility:** Falls nur `pipeline.project_id` gesetzt ist (ohne `api_url`/`api_key`), wird `mcp__claude_ai_Supabase__execute_sql` als Fallback verwendet. Fuehre `/setup-pipeline` aus um auf Board API zu upgraden.
+**Backward Compatibility:** Falls nur `pipeline.project_id` gesetzt ist (ohne `api_url`/`api_key`), wird `mcp__claude_ai_Supabase__execute_sql` als Fallback verwendet. Fuehre `/setup-just-ship` aus um auf Board API zu upgraden.
 
 **Überspringe KEINEN dieser Schritte.** Falls ein Update fehlschlägt, versuche es erneut oder informiere den User.
 

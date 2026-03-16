@@ -40,7 +40,7 @@ Vergleiche die Projekt-`CLAUDE.md` Abschnitt für Abschnitt gegen das Template.
 | Situation | Aktion |
 |-----------|--------|
 | Abschnitt fehlt im Projekt komplett | Hinzufügen (mit projektspezifischem Inhalt wenn möglich) |
-| Abschnitt existiert, hat TODO-Platzhalter | TODO ersetzen via Stack-Erkennung (wie `/setup-pipeline`) |
+| Abschnitt existiert, hat TODO-Platzhalter | TODO ersetzen via Stack-Erkennung (wie `/setup-just-ship`) |
 | Abschnitt existiert, hat projektspezifischen Inhalt | **NICHT anfassen** |
 | Abschnitt existiert, aber Template-Version hat sich geändert (z.B. neue Workflow-Tabelle) | Framework-Teile aktualisieren, projektspezifische Teile beibehalten |
 
@@ -91,7 +91,7 @@ Lies die aktuelle `project.json`. Vergleiche gegen die erwartete Struktur:
 | Feld existiert mit Wert | **NICHT anfassen** |
 | Feld existiert ohne Wert (leer) | Beibehalten (User hat es bewusst leer gelassen oder es wurde noch nicht konfiguriert) |
 
-**Falls `stack` oder `build` leer sind und `/setup-pipeline` noch nie gelaufen ist:** Hinweis geben dass `/setup-pipeline` den Stack automatisch erkennt.
+**Falls `stack` oder `build` leer sind und `/setup-just-ship` noch nie gelaufen ist:** Hinweis geben dass `/setup-just-ship` den Stack automatisch erkennt.
 
 ### 5. Änderungen anzeigen
 

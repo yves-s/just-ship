@@ -677,7 +677,7 @@ echo "================================================"
 echo ""
 echo "Next steps:"
 echo "  1. Open a new Claude Code session"
-echo "  2. Run /setup-pipeline (detects stack, fills project.json)"
+echo "  2. Run /setup-just-ship (detects stack, fills project.json)"
 if [ "$SETUP_MODE" = "2" ]; then
   echo "  ✓ Board already connected!"
 else

@@ -4,7 +4,7 @@
 
 **Goal:** Self-service flow for workspace creation → project setup → pipeline connection, without requiring Supabase access.
 
-**Architecture:** Board gets new API endpoints (GET/POST /api/projects, POST regenerate key) and UI components (Create Project Dialog, Setup Dialog, Empty State). Pipeline's `/setup-pipeline` command switches from Supabase MCP to Board API. Ticket commands (`/develop`, `/ship`, `/merge`) migrate from `execute_sql` to Board REST API.
+**Architecture:** Board gets new API endpoints (GET/POST /api/projects, POST regenerate key) and UI components (Create Project Dialog, Setup Dialog, Empty State). Pipeline's `/setup-just-ship` command switches from Supabase MCP to Board API. Ticket commands (`/develop`, `/ship`, `/merge`) migrate from `execute_sql` to Board REST API.
 
 **Tech Stack:** Next.js 15 (App Router), Supabase, shadcn/radix-ui, react-hook-form + zod, TypeScript
 
@@ -43,7 +43,7 @@ All file paths are relative to the respective repo root unless stated otherwise.
 
 | File | Change |
 |---|---|
-| `commands/setup-pipeline.md` | Rewrite: Board API instead of Supabase MCP |
+| `commands/setup-just-ship.md` | Rewrite: Board API instead of Supabase MCP |
 | `commands/develop.md` | Replace `execute_sql` with Board API calls |
 | `commands/ship.md` | Replace `execute_sql` with Board API calls |
 | `commands/merge.md` | Replace `execute_sql` with Board API calls |
@@ -580,7 +580,7 @@ export function ProjectSetupDialog({
       ? `${apiKey.key_prefix}...****`
       : "Generating...";
 
-  const cliCommand = `/setup-pipeline \\
+  const cliCommand = `/setup-just-ship \\
   --board ${boardUrl} \\
   --key ${displayKey} \\
   --project ${project.id}`;
@@ -713,7 +713,7 @@ export function ProjectSetupDialog({
                   <li>All connected projects need the new key</li>
                   <li>
                     Run{" "}
-                    <code className="text-xs">/setup-pipeline --board ... --key &lt;new-key&gt;</code>{" "}
+                    <code className="text-xs">/setup-just-ship --board ... --key &lt;new-key&gt;</code>{" "}
                     in each project
                   </li>
                   <li>
@@ -1106,11 +1106,11 @@ git commit -m "feat: add api_url and api_key to project.json pipeline template"
 
 ---
 
-### Task 12: Rewrite `/setup-pipeline` Command
+### Task 12: Rewrite `/setup-just-ship` Command
 
 **Repo:** just-ship
 **Files:**
-- Modify: `commands/setup-pipeline.md`
+- Modify: `commands/setup-just-ship.md`
 
 - [ ] **Step 1: Rewrite the Board connection section (Step 4 in current command)**
 
@@ -1164,8 +1164,8 @@ Consider adding it to .gitignore."
 - [ ] **Step 2: Commit**
 
 ```bash
-git add commands/setup-pipeline.md
-git commit -m "feat: rewrite setup-pipeline to use Board API instead of Supabase MCP"
+git add commands/setup-just-ship.md
+git commit -m "feat: rewrite setup-just-ship to use Board API instead of Supabase MCP"
 ```
 
 ---
@@ -1180,7 +1180,7 @@ git commit -m "feat: rewrite setup-pipeline to use Board API instead of Supabase
 
 In `commands/develop.md`, replace the ticket fetching and status update SQL with Board API calls.
 
-**Check config first:** At the start, read `project.json`. If `pipeline.api_url` and `pipeline.api_key` are set, use the Board API. Otherwise, fall back to existing `execute_sql` approach and log: "⚠️ No Board API configured. Using legacy Supabase MCP. Run /setup-pipeline to upgrade."
+**Check config first:** At the start, read `project.json`. If `pipeline.api_url` and `pipeline.api_key` are set, use the Board API. Otherwise, fall back to existing `execute_sql` approach and log: "⚠️ No Board API configured. Using legacy Supabase MCP. Run /setup-just-ship to upgrade."
 
 **Fetch next ticket:** Replace the `execute_sql` SELECT with:
 ```
@@ -1229,7 +1229,7 @@ curl -s -X PATCH -H "X-Pipeline-Key: {pipeline.api_key}" \
 
 **Three-way backward compatibility check** (same for all commands):
 1. If `pipeline.api_url` AND `pipeline.api_key` are set → use Board API
-2. Else if `pipeline.project_id` is set (legacy format) → use `execute_sql` via Supabase MCP, log warning to re-run `/setup-pipeline`
+2. Else if `pipeline.project_id` is set (legacy format) → use `execute_sql` via Supabase MCP, log warning to re-run `/setup-just-ship`
 3. Else → skip pipeline status updates entirely (standalone mode)
 
 - [ ] **Step 2: Commit**
@@ -1338,7 +1338,7 @@ curl -s -X POST -H "X-Pipeline-Key: YOUR_KEY" \
 
 In a project directory with the pipeline framework installed:
 ```
-/setup-pipeline --board https://board.just-ship.io --key YOUR_KEY --project PROJECT_ID
+/setup-just-ship --board https://board.just-ship.io --key YOUR_KEY --project PROJECT_ID
 ```
 
 Verify `project.json` has complete pipeline config with all 5 fields.

@@ -12,7 +12,7 @@ The current setup flow has three critical gaps:
 
 1. **Projects cannot be created in the Board UI** — the DB supports it, but no UI exists. Users must insert directly into Supabase.
 2. **The API Key is shown during workspace creation with no guidance** — the user sees it once and must know on their own that it belongs in `project.json`.
-3. **`/setup-pipeline` depends on the Supabase MCP** — only users with direct Supabase access can connect the pipeline. External developers cannot self-onboard.
+3. **`/setup-just-ship` depends on the Supabase MCP** — only users with direct Supabase access can connect the pipeline. External developers cannot self-onboard.
 
 ## Goal
 
@@ -22,9 +22,9 @@ A self-service, guided flow from workspace creation to connected pipeline that w
 
 - **API Key scope:** Per workspace (not per project). Access control via workspace membership and roles.
 - **Project creation:** Inline dialog in Board toolbar (not a separate settings page). Projects are simple (name + description).
-- **Pipeline standalone:** `/setup-pipeline` works without Board connection. Board integration is optional.
+- **Pipeline standalone:** `/setup-just-ship` works without Board connection. Board integration is optional.
 - **Telegram Bot:** No changes needed. Bot reads projects dynamically from DB.
-- **API Key storage:** Keys are stored in `project.json` as plaintext for simplicity. `project.json` should be in `.gitignore` (it contains project-specific config). The `/setup-pipeline` command should warn if `project.json` is tracked by git.
+- **API Key storage:** Keys are stored in `project.json` as plaintext for simplicity. `project.json` should be in `.gitignore` (it contains project-specific config). The `/setup-just-ship` command should warn if `project.json` is tracked by git.
 - **Board UI language:** English (matches existing Board UI). German labels shown in this spec are illustrative only.
 - **`project_id` semantics change:** The `pipeline.project_id` field changes from Supabase hosting project ID to Board project UUID. See Section 3.2 for migration details.
 
@@ -41,7 +41,7 @@ A self-service, guided flow from workspace creation to connected pipeline that w
      - Option 1 (prominent): CLI command with --board and --key
      - Option 2 (expandable): Manual project.json snippet
 6. → Setup Dialog accessible anytime via icon on project
-7. → Developer runs /setup-pipeline in their terminal
+7. → Developer runs /setup-just-ship in their terminal
 8. → project.json is configured, pipeline is connected
 ```
 
@@ -101,7 +101,7 @@ The CTA opens the Create Project Dialog.
 │ ┌─ OPTION 1 (prominent) ─────────────────────────┐   │
 │ │ Führe das in deinem Projekt-Terminal aus:       │   │
 │ │                                                 │   │
-│ │ /setup-pipeline \                               │   │
+│ │ /setup-just-ship \                               │   │
 │ │   --board https://board.just-ship.io \         │   │
 │ │   --key adp_ab18e060...                         │   │
 │ │                                  [Kopieren]     │   │
@@ -120,7 +120,7 @@ The CTA opens the Create Project Dialog.
 **The CLI command includes `--project` so it's fully non-interactive (true copy-paste-and-done):**
 
 ```
-/setup-pipeline \
+/setup-just-ship \
   --board https://board.just-ship.io \
   --key adp_ab18e060... \
   --project e904798e-...
@@ -138,7 +138,7 @@ The CTA opens the Create Project Dialog.
 >
 > Der aktuelle Key wird sofort ungültig. Folgende Schritte sind danach nötig:
 > - Alle verbundenen Projekte müssen den neuen Key erhalten
-> - Führe `/setup-pipeline --board <url> --key <neuer-key>` in jedem Projekt erneut aus
+> - Führe `/setup-just-ship --board <url> --key <neuer-key>` in jedem Projekt erneut aus
 > - Oder ersetze `api_key` in der `project.json` manuell
 > - Der VPS Worker muss neu gestartet werden (falls aktiv)
 >
@@ -148,7 +148,7 @@ The CTA opens the Create Project Dialog.
 
 #### `GET /api/projects`
 
-Lists projects for the authenticated workspace. Used by `/setup-pipeline`.
+Lists projects for the authenticated workspace. Used by `/setup-just-ship`.
 
 ```
 Request:
@@ -168,7 +168,7 @@ Response 200:
 
 #### `POST /api/projects`
 
-Creates a project in the authenticated workspace. Used by `/setup-pipeline` when user wants to create a new project from CLI.
+Creates a project in the authenticated workspace. Used by `/setup-just-ship` when user wants to create a new project from CLI.
 
 ```
 Request:
@@ -205,9 +205,9 @@ Response 200:
 
 ## 3. Pipeline Changes (just-ship)
 
-### 3.1 `/setup-pipeline` Command — Reworked
+### 3.1 `/setup-just-ship` Command — Reworked
 
-**File:** `commands/setup-pipeline.md`
+**File:** `commands/setup-just-ship.md`
 
 The command is freed from Supabase MCP dependency and uses the Board API instead.
 
@@ -218,7 +218,7 @@ The command is freed from Supabase MCP dependency and uses the Board API instead
 The "interactive" mode means Claude Code asks the user within the chat conversation (not terminal I/O prompts). The command's markdown instructions guide Claude to ask these questions conversationally.
 
 ```
-> /setup-pipeline
+> /setup-just-ship
 
 ✓ Stack detected: Next.js 15, TypeScript, Supabase, pnpm
 ✓ project.json updated (stack, build, paths)
@@ -247,7 +247,7 @@ Project name: [My Project]
 **Mode 2: Direct Connect (copy-paste from Board)**
 
 ```
-> /setup-pipeline --board https://board.just-ship.io --key adp_... --project e904798e-...
+> /setup-just-ship --board https://board.just-ship.io --key adp_... --project e904798e-...
 
 ✓ Stack detected: Next.js 15, TypeScript, Supabase, pnpm
 ✓ project.json updated
@@ -302,7 +302,7 @@ If the user declines Board connection, only stack/build/paths are filled. The `p
 
 **Migration path:** These commands must be updated to use the Board API (e.g., `PATCH /api/tickets/{number}`) instead of direct `execute_sql`. This is a follow-up task tracked separately — the new Board API endpoints for ticket status updates already exist at `/api/tickets/[number]`.
 
-**Backward compatibility:** If `pipeline.project_id` looks like a Supabase project ID (short alphanumeric, no dashes), commands should log a warning suggesting to re-run `/setup-pipeline`.
+**Backward compatibility:** If `pipeline.project_id` looks like a Supabase project ID (short alphanumeric, no dashes), commands should log a warning suggesting to re-run `/setup-just-ship`.
 
 ## 4. No Changes Required
 
@@ -332,7 +332,7 @@ If the user declines Board connection, only stack/build/paths are filled. The `p
 
 | # | Task | Complexity |
 |---|---|---|
-| P1 | Rework `/setup-pipeline` command: Board API instead of Supabase MCP | Medium |
+| P1 | Rework `/setup-just-ship` command: Board API instead of Supabase MCP | Medium |
 | P2 | Support `--board`, `--key`, and `--project` flags for direct connect mode | Small |
 | P3 | Write complete pipeline config (including `api_url` and `api_key`) | Small |
 | P4 | Add git-tracking warning for `project.json` with API key | Small |

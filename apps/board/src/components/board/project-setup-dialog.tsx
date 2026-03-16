@@ -78,7 +78,7 @@ export function ProjectSetupDialog({
       ? `${apiKey.key_prefix}...****`
       : "";
 
-  const cliCommand = `/setup-pipeline \\
+  const cliCommand = `/setup-just-ship \\
   --board ${boardUrl} \\
   --key ${displayKey || "<loading...>"} \\
   --project ${project.id}`;
@@ -295,7 +295,7 @@ export function ProjectSetupDialog({
                   <li>All connected projects need the new key</li>
                   <li>
                     Run{" "}
-                    <code className="text-xs">/setup-pipeline --board ... --key &lt;new-key&gt;</code>{" "}
+                    <code className="text-xs">/setup-just-ship --board ... --key &lt;new-key&gt;</code>{" "}
                     in each project
                   </li>
                   <li>

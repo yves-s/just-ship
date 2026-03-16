@@ -94,15 +94,15 @@ Resolution at runtime: `project.json` → `workspace: "my-team"` → `~/.just-sh
 
 ### 2. Setup Flow: `setup.sh` and Commands
 
-#### Relationship to existing `/setup-pipeline`
+#### Relationship to existing `/setup-just-ship`
 
-The existing `/setup-pipeline` command currently handles board connection, stack detection, `project.json` writing, and `CLAUDE.md` generation in one flow. This redesign **replaces the board-connection part** of `/setup-pipeline` with dedicated commands:
+The existing `/setup-just-ship` command currently handles board connection, stack detection, `project.json` writing, and `CLAUDE.md` generation in one flow. This redesign **replaces the board-connection part** of `/setup-just-ship` with dedicated commands:
 
-- `/setup-pipeline` remains but is simplified: it handles only stack detection, `CLAUDE.md` generation, and `project.json` scaffolding. It no longer accepts `--board`, `--key` flags.
+- `/setup-just-ship` remains but is simplified: it handles only stack detection, `CLAUDE.md` generation, and `project.json` scaffolding. It no longer accepts `--board`, `--key` flags.
 - Board connection is fully handled by `/connect-board` and `/add-project`.
 - `setup.sh` orchestrates both: first mode selection, then delegates to the appropriate command.
 
-The Board UI generates `/connect-board` commands (for workspace setup) and `/add-project` commands (for project connection) instead of the current `/setup-pipeline` command.
+The Board UI generates `/connect-board` commands (for workspace setup) and `/add-project` commands (for project connection) instead of the current `/setup-just-ship` command.
 
 #### Initial Setup (`setup.sh`)
 
@@ -295,6 +295,6 @@ The old format continues to work, but:
 | Board: `create-api-key-dialog.tsx` | Updated instructions referencing `/connect-board` |
 | Board: `projects-settings-view.tsx` | Updated setup dialog trigger |
 | Board: `new-workspace/page.tsx` | Add `?setup=workspace` to redirect URL after workspace creation |
-| `commands/setup-pipeline.md` | Remove `--board`, `--key` flags. Simplify to stack detection + `CLAUDE.md` only |
+| `commands/setup-just-ship.md` | Remove `--board`, `--key` flags. Simplify to stack detection + `CLAUDE.md` only |
 | `setup.sh` (`.gitignore` section) | Remove `project.json` from `.gitignore` and "contains API keys" comment |
 | `vps/setup-vps.sh` | Document `~/.just-ship/config.json` creation for VPS service user |
