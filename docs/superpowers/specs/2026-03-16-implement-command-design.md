@@ -58,7 +58,7 @@ Runs identically to `/develop` steps 4–8, but without board events:
 | Agents | `data-engineer` / `backend` / `frontend` as needed (models per agent definition defaults) |
 | Build check | Commands from `project.json` |
 | QA agent | Acceptance criteria + security quick-check |
-| Finish | Commit + Push + PR (no merge, no board status update) |
+| Finish | Commit (`feat: {description}` — no ticket reference) + Push + PR (no merge, no board status update) |
 
 **All `send-event.sh` calls are omitted** — not just status updates, but pipeline events too. There is no ticket number, so event scripts cannot be called.
 
