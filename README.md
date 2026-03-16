@@ -69,6 +69,7 @@ claude
 | Command | What it does | Autonomous |
 |---------|-------------|------------|
 | `/ticket` | Write a structured ticket (bug, feature, improvement, spike) | No |
+| `/implement` | Implement from chat context or description — no ticket required | Yes |
 | `/develop` | Pick next ticket, implement end-to-end, create PR | Yes |
 | `/ship` | Commit + push + PR + squash merge + board status "done" | Yes |
 | `/status` | Show current ticket, branch, and changes | -- |
@@ -98,17 +99,19 @@ Sub-agents run in parallel where possible (e.g., backend + frontend simultaneous
 ## Workflow
 
 ```
-/ticket --- writes ticket to Board API -----------------.
-                                                        |
-/develop -- picks ticket -- implements -- creates PR     |
-                                                   |    |
-              "passt" or /ship --------------------|    |
-                                                   v    |
-                                          squash merge  |
-                                          delete branch |
-                                          status: done <'
+/implement - chat context or description -- implements -- creates PR (no ticket needed)
+                                                                  |
+/ticket --- writes ticket to Board API -----------------.         |
+                                                        |         |
+/develop -- picks ticket -- implements -- creates PR    |         |
+                                                   |   |         |
+              "passt" or /ship --------------------|   |         |
+                                                   v   v         |
+                                          squash merge <---------'
+                                          delete branch
+                                          status: done (if ticket linked)
 
-Ticket lifecycle:
+Ticket lifecycle (Board):
   ready_to_develop --> in_progress --> in_review --> done
 ```
 
