@@ -10,6 +10,7 @@ export interface PipelineOptions {
   projectDir: string;
   ticket: TicketArgs;
   abortSignal?: AbortSignal;
+  timeoutMs?: number;
 }
 
 export interface PipelineResult {
@@ -17,6 +18,7 @@ export interface PipelineResult {
   exitCode: number;
   branch: string;
   project: string;
+  failureReason?: string;
 }
 
 export async function executePipeline(opts: PipelineOptions): Promise<PipelineResult> {
@@ -74,15 +76,43 @@ Folge deinem Workflow:
 
 Branch ist bereits erstellt: ${branchName}`;
 
-  // --- Prepare abort controller ---
-  let abortController: AbortController | undefined;
-  if (abortSignal) {
-    abortController = new AbortController();
-    abortSignal.addEventListener("abort", () => abortController!.abort(), { once: true });
+  // --- Timeout configuration ---
+  const DEFAULT_TIMEOUT_MS = 1_800_000; // 30 minutes
+  const MIN_TIMEOUT_MS = 60_000; // 1 minute minimum
+  const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours max
+
+  let timeoutMs = opts.timeoutMs ?? (Number(process.env.PIPELINE_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS);
+
+  // SECURITY: Validate timeout value bounds
+  if (!Number.isFinite(timeoutMs) || timeoutMs < MIN_TIMEOUT_MS || timeoutMs > MAX_TIMEOUT_MS) {
+    console.warn(`Invalid timeout ${timeoutMs}ms, using default ${DEFAULT_TIMEOUT_MS}ms`);
+    timeoutMs = DEFAULT_TIMEOUT_MS;
   }
+
+  const timeoutMinutes = Math.round(timeoutMs / 60_000);
+
+  // --- Abort controller: combines external signal + wall-clock timeout ---
+  const queryAbortController = new AbortController();
+  let timedOut = false;
+
+  // Forward external abort signal (graceful shutdown)
+  if (abortSignal) {
+    if (abortSignal.aborted) {
+      queryAbortController.abort();
+    } else {
+      abortSignal.addEventListener("abort", () => queryAbortController.abort(), { once: true });
+    }
+  }
+
+  // Wall-clock timeout
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    queryAbortController.abort();
+  }, timeoutMs);
 
   // --- Run orchestrator ---
   let exitCode = 0;
+  let failureReason: string | undefined;
   try {
     if (hasPipeline) await postPipelineEvent(eventConfig, "agent_started", "orchestrator");
 
@@ -99,7 +129,7 @@ Branch ist bereits erstellt: ${branchName}`;
         maxTurns: 200,
         settingSources: ["project"],
         persistSession: false,
-        abortController,
+        abortController: queryAbortController,
       },
     })) {
       if (message.type === "result") {
@@ -113,9 +143,16 @@ Branch ist bereits erstellt: ${branchName}`;
 
     if (hasPipeline) await postPipelineEvent(eventConfig, "completed", "orchestrator");
   } catch (error) {
-    console.error("Pipeline error:", error);
     exitCode = 1;
+    if (timedOut) {
+      failureReason = `Timeout nach ${timeoutMinutes} Minuten`;
+    } else {
+      failureReason = error instanceof Error ? error.message : String(error);
+    }
+    console.error(`Pipeline error: ${failureReason}`);
     if (hasPipeline) await postPipelineEvent(eventConfig, "pipeline_failed", "orchestrator");
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   return {
@@ -123,6 +160,7 @@ Branch ist bereits erstellt: ${branchName}`;
     exitCode,
     branch: branchName,
     project: config.name,
+    failureReason,
   };
 }
 
