@@ -50,7 +50,7 @@ Based on changed files, Claude determines which docs to check:
 
 ## Execution
 
-1. Run `git diff --name-only HEAD` to get changed file list
+1. Run `git diff --name-only $(git merge-base main HEAD) HEAD` + `git status --porcelain` to get changed file list
 2. Determine which doc sections are affected (see trigger logic above)
 3. Read affected doc files
 4. Check if entries are present, accurate, and complete
