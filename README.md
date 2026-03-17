@@ -336,15 +336,7 @@ The pipeline is built on the [Claude Agent SDK](https://github.com/anthropics/cl
 
 ### VPS Worker
 
-Polls Supabase every 60s for tickets with `status = 'ready_to_develop'`:
-
-```
-Supabase ticket queue --> Worker claims --> Orchestrator executes --> PR created
-```
-
-Features: atomic ticket claiming, graceful shutdown (SIGTERM), failure cooldown, max consecutive failure limit.
-
-See **[vps/README.md](vps/README.md)** for the complete VPS deployment guide.
+Runs the pipeline 24/7 on a VPS — polls for tickets, claims them, runs the orchestrator, and creates PRs automatically. See [Autonomous VPS Deployment](#autonomous-vps-deployment) for the full setup overview and **[vps/README.md](vps/README.md)** for the step-by-step guide.
 
 ---
 
@@ -369,6 +361,63 @@ Real-time agent activity via two modes:
 - **Shell Hooks** (Interactive) -- `SessionStart`, `SubagentStart/Stop`, `SessionEnd` via `settings.json` hook config
 
 Both post to `POST /api/events` with `X-Pipeline-Key` authentication.
+
+---
+
+## Autonomous VPS Deployment
+
+Run the pipeline 24/7 on a VPS — no local machine required. A worker process polls for tickets, claims them, runs the full orchestrator flow, and creates pull requests autonomously.
+
+```
+Ticket queue --> Worker claims ticket --> Orchestrator runs agents --> PR created
+                  (polls every 60s)        (plan, implement, review)
+```
+
+### Why a VPS?
+
+- **Always on** — tickets are processed around the clock, not just when your laptop is open
+- **Hands-free** — write tickets from the Board, phone, or anywhere — the VPS picks them up
+- **Low cost** — a $4-8/month Ubuntu VPS handles it; API costs scale with ticket complexity
+
+### Prerequisites
+
+- Any Ubuntu 22.04+ VPS (e.g. Hostinger, Hetzner, DigitalOcean — any provider works)
+- SSH access to the VPS
+- **Anthropic API key** — for Claude Code
+- **GitHub Personal Access Token** — with `repo` and `workflow` scopes
+
+### Setup Overview
+
+| Step | What happens |
+|------|-------------|
+| **1. Provision VPS** | Create an Ubuntu 22.04 VPS with your provider, SSH in as root |
+| **2. Run setup script** | One-liner installs Node.js, Claude Code, GitHub CLI, and creates a `claude-dev` service user |
+| **3. Clone your project** | Clone your repo, run `setup.sh` to install the pipeline framework |
+| **4. Configure environment** | Set API keys and project config in `.env.{project-slug}` |
+| **5. Start the worker** | Enable the systemd service — it starts polling immediately |
+
+See **[vps/README.md](vps/README.md)** for the complete step-by-step guide with all commands.
+
+### Multi-Project Support
+
+One VPS can run multiple projects in parallel. Each project gets its own systemd service and environment file:
+
+```bash
+systemctl enable --now just-ship-pipeline@project-a
+systemctl enable --now just-ship-pipeline@project-b
+```
+
+Workers run independently — each polls only its own project's ticket queue, so there are no conflicts.
+
+### Cost
+
+| Component | Cost |
+|-----------|------|
+| VPS hosting | ~$4-8/month (smallest tier is sufficient) |
+| API per simple ticket | ~$1-2 (Orchestrator + 1 agent) |
+| API per complex ticket | ~$5-10 (Orchestrator + 5 agents) |
+
+At 5 tickets/day, expect ~$15-25/day in API costs. The VPS itself is negligible.
 
 ---
 
