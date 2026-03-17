@@ -50,6 +50,7 @@ export function TicketCard({
   const [launching, setLaunching] = useState(false);
 
   const workspace = useWorkspace();
+  const vpsConfigured = !!workspace.vps_url;
   const canLaunch =
     ticket.status === "ready_to_develop" && !ticket.pipeline_status;
 
@@ -139,7 +140,7 @@ export function TicketCard({
                 {copiedNumber ? "Kopiert!" : "Kopieren"}
               </TooltipContent>
             </Tooltip>
-            {(agentActive || (ticket.status === "in_progress" && (ticket.pipeline_status === "running" || ticket.pipeline_status === "queued"))) && (
+            {(agentActive || ticket.status === "in_progress") && (
               <span
                 className="relative flex h-2 w-2"
                 title={
@@ -147,7 +148,9 @@ export function TicketCard({
                     ? `${agentActivity.agent_type}: ${agentActivity.event_type}`
                     : ticket.pipeline_status === "running"
                       ? "Pipeline läuft..."
-                      : "Pipeline wird gestartet..."
+                      : ticket.pipeline_status === "queued"
+                        ? "Pipeline wird gestartet..."
+                        : "In Bearbeitung"
                 }
               >
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
@@ -155,17 +158,26 @@ export function TicketCard({
               </span>
             )}
             {canLaunch && (
-              <button
-                onClick={handleLaunchPipeline}
-                disabled={launching}
-                className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-emerald-400 text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50"
-              >
-                {launching ? (
-                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                ) : (
-                  <Play className="h-2.5 w-2.5 fill-emerald-600" />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={vpsConfigured ? handleLaunchPipeline : (e: React.MouseEvent) => e.stopPropagation()}
+                    disabled={!vpsConfigured || launching}
+                    className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-emerald-400 text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {launching ? (
+                      <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                    ) : (
+                      <Play className="h-2.5 w-2.5 fill-emerald-600" />
+                    )}
+                  </button>
+                </TooltipTrigger>
+                {!vpsConfigured && (
+                  <TooltipContent side="top">
+                    VPS nicht konfiguriert
+                  </TooltipContent>
                 )}
-              </button>
+              </Tooltip>
             )}
           </div>
           <p className="text-sm font-medium leading-snug line-clamp-3">

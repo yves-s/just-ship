@@ -22,6 +22,7 @@ import {
   Zap,
   Wrench,
   Loader2,
+  Rocket,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { TICKET_STATUSES, TICKET_PRIORITIES } from "@/lib/constants";
@@ -136,6 +137,7 @@ export function TicketDetailSheet({
   const [actionError, setActionError] = useState<string | null>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
+  const vpsConfigured = !!workspace.vps_url;
   const canLaunch =
     current?.status === "ready_to_develop" && !current?.pipeline_status;
   const canShip = current?.status === "in_review";
@@ -422,32 +424,50 @@ export function TicketDetailSheet({
         {(canLaunch || canShip) && (
           <div className="flex items-center gap-2 px-8 pb-3">
             {canLaunch && (
-              <button
-                onClick={handleLaunchPipeline}
-                disabled={launching}
-                className="flex items-center gap-1.5 rounded-md border border-emerald-400 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-50"
-              >
-                {launching ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Play className="h-3.5 w-3.5 fill-emerald-700" />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={vpsConfigured ? handleLaunchPipeline : undefined}
+                    disabled={!vpsConfigured || launching}
+                    className="flex items-center gap-1.5 rounded-md border border-emerald-400 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {launching ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Play className="h-3.5 w-3.5 fill-emerald-700" />
+                    )}
+                    {launching ? "Starting…" : "Develop"}
+                  </button>
+                </TooltipTrigger>
+                {!vpsConfigured && (
+                  <TooltipContent side="bottom">
+                    VPS nicht konfiguriert — Settings → Pipeline
+                  </TooltipContent>
                 )}
-                {launching ? "Starting…" : "Develop"}
-              </button>
+              </Tooltip>
             )}
             {canShip && (
-              <button
-                onClick={handleShip}
-                disabled={shipping}
-                className="flex items-center gap-1.5 rounded-md bg-foreground text-background px-3 py-1.5 text-xs font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50"
-              >
-                {shipping ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <img src="/brand/logos/mark/mark-mono-white.svg" alt="" className="h-3.5 w-3.5" />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={vpsConfigured ? handleShip : undefined}
+                    disabled={!vpsConfigured || shipping}
+                    className="flex items-center gap-1.5 rounded-md bg-foreground text-background px-3 py-1.5 text-xs font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {shipping ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Rocket className="h-3.5 w-3.5" />
+                    )}
+                    {shipping ? "Shipping…" : "Just Ship"}
+                  </button>
+                </TooltipTrigger>
+                {!vpsConfigured && (
+                  <TooltipContent side="bottom">
+                    VPS nicht konfiguriert — Settings → Pipeline
+                  </TooltipContent>
                 )}
-                {shipping ? "Shipping…" : "Just Ship"}
-              </button>
+              </Tooltip>
             )}
             {actionError && (
               <span className="text-xs text-destructive">{actionError}</span>
