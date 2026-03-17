@@ -163,7 +163,7 @@ export function TicketCard({
                   <button
                     onClick={vpsConfigured ? handleLaunchPipeline : (e: React.MouseEvent) => e.stopPropagation()}
                     disabled={!vpsConfigured || launching}
-                    className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-emerald-400 text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-emerald-400 text-emerald-600 cursor-pointer hover:bg-emerald-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {launching ? (
                       <Loader2 className="h-2.5 w-2.5 animate-spin" />
