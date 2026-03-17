@@ -1,0 +1,27 @@
+<svg width="1280" height="320" viewBox="0 0 1280 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="60%" fx="50%" fy="50%">
+      <stop offset="0%" stop-color="#1a2340"/>
+      <stop offset="100%" stop-color="#0a0b10"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1280" height="320" rx="12" fill="url(#glow)"/>
+
+  <!-- Lockup: mark + wordmark, centered -->
+  <g transform="translate(533, 30)">
+    <circle cx="37.5" cy="37.5" r="30" stroke="#fff" stroke-width="1.8" fill="none" opacity="0.3"/>
+    <path d="M33.6 13.6L33.6 61.4L18.5 61.4Z" fill="#fff" opacity="0.3"/>
+    <path d="M36.6 21.1L36.6 61.4L54.7 61.4Z" fill="#fff"/>
+    <text x="82" y="48" font-family="Sora, sans-serif" font-weight="800" font-size="32" letter-spacing="-1" fill="#fff">just</text>
+    <text x="146" y="48" font-family="Sora, sans-serif" font-weight="800" font-size="32" letter-spacing="-1" fill="#93bbfc">ship</text>
+  </g>
+
+  <!-- Tagline -->
+  <text x="640" y="170" font-family="Sora, sans-serif" font-weight="600" font-size="28" fill="#93bbfc" text-anchor="middle">From ticket to ship.</text>
+  <text x="640" y="215" font-family="Sora, sans-serif" font-weight="700" font-size="36" fill="#ffffff" text-anchor="middle">Autonomously.</text>
+
+  <!-- Description -->
+  <text x="640" y="270" font-family="Sora, sans-serif" font-weight="400" font-size="15" fill="#ffffff" opacity="0.45" text-anchor="middle">A portable multi-agent framework for autonomous software development.</text>
+</svg>
