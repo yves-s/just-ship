@@ -48,6 +48,8 @@ export function useAgentActivity(workspaceId: string, ticketIds?: string[], done
     Map<string, AgentActivity & { ticket_id: string }>
   >(new Map());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Track ticket IDs that have ever received events (survives event expiry)
+  const ticketsWithHistoryRef = useRef<Set<string>>(new Set());
 
   const isActive = useCallback(
     (ticketId: string) => {
@@ -125,6 +127,7 @@ export function useAgentActivity(workspaceId: string, ticketIds?: string[], done
         setActivityMap((prev) => {
           const next = new Map(prev);
           for (const event of data as TaskEvent[]) {
+            ticketsWithHistoryRef.current.add(event.ticket_id);
             const key = event.event_type === "log"
               ? `${event.ticket_id}::log::${event.id}`
               : `${event.ticket_id}::${event.agent_type}`;
@@ -157,6 +160,7 @@ export function useAgentActivity(workspaceId: string, ticketIds?: string[], done
         },
         (payload) => {
           const event = payload.new as TaskEvent;
+          ticketsWithHistoryRef.current.add(event.ticket_id);
           const key = event.event_type === "log"
             ? `${event.ticket_id}::log::${event.id}`
             : `${event.ticket_id}::${event.agent_type}`;
@@ -202,5 +206,10 @@ export function useAgentActivity(workspaceId: string, ticketIds?: string[], done
     };
   }, [workspaceId]);
 
-  return { isActive, getActivity, activeAgents };
+  const hasHadEvents = useCallback(
+    (ticketId: string) => ticketsWithHistoryRef.current.has(ticketId),
+    [] // ref is stable; consumers re-evaluate when activityMap changes
+  );
+
+  return { isActive, getActivity, activeAgents, hasHadEvents };
 }

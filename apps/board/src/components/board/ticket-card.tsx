@@ -108,13 +108,15 @@ export function TicketCard({
                 {copiedNumber ? "Kopiert!" : "Kopieren"}
               </TooltipContent>
             </Tooltip>
-            {ticket.status === "in_progress" && (
+            {(agentActive || (ticket.status === "in_progress" && (ticket.pipeline_status === "running" || ticket.pipeline_status === "queued"))) && (
               <span
                 className="relative flex h-2 w-2"
                 title={
                   agentActivity
                     ? `${agentActivity.agent_type}: ${agentActivity.event_type}`
-                    : "Pipeline wird gestartet..."
+                    : ticket.pipeline_status === "running"
+                      ? "Pipeline läuft..."
+                      : "Pipeline wird gestartet..."
                 }
               >
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
