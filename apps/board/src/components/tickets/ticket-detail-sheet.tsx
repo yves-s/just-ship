@@ -21,6 +21,7 @@ import {
   XCircle,
   Zap,
   Wrench,
+  Loader2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { TICKET_STATUSES, TICKET_PRIORITIES } from "@/lib/constants";
@@ -130,7 +131,14 @@ export function TicketDetailSheet({
   const [copiedNumber, setCopiedNumber] = useState(false);
   const [editingBody, setEditingBody] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [launching, setLaunching] = useState(false);
+  const [shipping, setShipping] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+  const canLaunch =
+    current?.status === "ready_to_develop" && !current?.pipeline_status;
+  const canShip = current?.status === "in_review";
 
   useEffect(() => {
     setCurrent(ticket);
@@ -295,10 +303,71 @@ export function TicketDetailSheet({
     onOpenChange(false);
   }
 
+  async function handleLaunchPipeline() {
+    if (!current || launching) return;
+    setLaunching(true);
+    setActionError(null);
+    try {
+      const res = await fetch("/api/pipeline/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticket_number: current.number,
+          action: "launch",
+          workspace_id: workspace.id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setActionError(
+          (((data as Record<string, unknown>).error as Record<string, unknown>)
+            ?.message as string) ?? "Pipeline start failed"
+        );
+      } else {
+        setActionError(null);
+      }
+    } catch {
+      setActionError("Could not reach pipeline server");
+    } finally {
+      setLaunching(false);
+    }
+  }
+
+  async function handleShip() {
+    if (!current || shipping) return;
+    setShipping(true);
+    setActionError(null);
+    try {
+      const res = await fetch("/api/pipeline/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticket_number: current.number,
+          action: "ship",
+          workspace_id: workspace.id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setActionError(
+          (((data as Record<string, unknown>).error as Record<string, unknown>)
+            ?.message as string) ?? "Ship failed"
+        );
+      } else {
+        setActionError(null);
+      }
+    } catch {
+      setActionError("Could not reach pipeline server");
+    } finally {
+      setShipping(false);
+    }
+  }
+
   function handleOpenChange(isOpen: boolean) {
     if (!isOpen) {
       setConfirmDelete(false);
       setSaveError(null);
+      setActionError(null);
     }
     onOpenChange(isOpen);
   }
@@ -327,7 +396,7 @@ export function TicketDetailSheet({
       >
         <SheetTitle className="sr-only">{current.title}</SheetTitle>
 
-        {/* Header strip — T-number aligned with X close button */}
+        {/* Header strip — T-number only, X close button is absolutely positioned by Sheet */}
         <div className="flex items-center px-8 h-12 shrink-0 pr-14">
           <Tooltip open={copiedNumber ? true : undefined}>
             <TooltipTrigger asChild>
@@ -348,6 +417,43 @@ export function TicketDetailSheet({
             </TooltipContent>
           </Tooltip>
         </div>
+
+        {/* Action buttons — own row below header */}
+        {(canLaunch || canShip) && (
+          <div className="flex items-center gap-2 px-8 pb-3">
+            {canLaunch && (
+              <button
+                onClick={handleLaunchPipeline}
+                disabled={launching}
+                className="flex items-center gap-1.5 rounded-md border border-emerald-400 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+              >
+                {launching ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Play className="h-3.5 w-3.5 fill-emerald-700" />
+                )}
+                {launching ? "Starting…" : "Develop"}
+              </button>
+            )}
+            {canShip && (
+              <button
+                onClick={handleShip}
+                disabled={shipping}
+                className="flex items-center gap-1.5 rounded-md bg-foreground text-background px-3 py-1.5 text-xs font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50"
+              >
+                {shipping ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <img src="/brand/logos/mark/mark-mono-white.svg" alt="" className="h-3.5 w-3.5" />
+                )}
+                {shipping ? "Shipping…" : "Just Ship"}
+              </button>
+            )}
+            {actionError && (
+              <span className="text-xs text-destructive">{actionError}</span>
+            )}
+          </div>
+        )}
 
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
           {/* Title */}

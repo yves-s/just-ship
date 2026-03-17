@@ -24,7 +24,7 @@ export default async function WorkspaceLayout({
 
   const { data: workspace } = await supabase
     .from("workspaces")
-    .select("*")
+    .select("id, name, slug, created_by, created_at, updated_at, vps_url")
     .eq("slug", slug)
     .single();
 
@@ -41,7 +41,7 @@ export default async function WorkspaceLayout({
 
   const { data: workspaces } = await supabase
     .from("workspaces")
-    .select("id, name, slug, created_by, created_at, updated_at")
+    .select("id, name, slug, created_by, created_at, updated_at, vps_url")
     .order("created_at");
 
   return (

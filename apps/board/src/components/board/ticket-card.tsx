@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GitBranch, CalendarDays, Copy, Check, Zap } from "lucide-react";
+import { GitBranch, CalendarDays, Copy, Check, Zap, Play, Loader2 } from "lucide-react";
 import { formatTokenCount } from "@/lib/utils/format-tokens";
 import { cn } from "@/lib/utils";
 import { PriorityBadge } from "@/components/shared/status-badge";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { useWorkspace } from "@/lib/workspace-context";
 import type { Ticket } from "@/lib/types";
 
 interface TicketCardProps {
@@ -46,6 +47,11 @@ export function TicketCard({
   agentActivity = null,
 }: TicketCardProps) {
   const [copiedNumber, setCopiedNumber] = useState(false);
+  const [launching, setLaunching] = useState(false);
+
+  const workspace = useWorkspace();
+  const canLaunch =
+    ticket.status === "ready_to_develop" && !ticket.pipeline_status;
 
   const {
     attributes,
@@ -62,6 +68,31 @@ export function TicketCard({
   };
 
   const hasFooter = ticket.branch || ticket.pipeline_status || ticket.due_date || ticket.total_tokens > 0;
+
+  async function handleLaunchPipeline(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (launching || !canLaunch) return;
+    setLaunching(true);
+    try {
+      const res = await fetch("/api/pipeline/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticket_number: ticket.number,
+          action: "launch",
+          workspace_id: workspace.id,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        console.error("Launch failed:", (data as Record<string, unknown>).error);
+      }
+    } catch (err) {
+      console.error("Launch error:", err);
+    } finally {
+      setLaunching(false);
+    }
+  }
 
   function handleCopyNumber(e: React.MouseEvent) {
     e.stopPropagation();
@@ -122,6 +153,19 @@ export function TicketCard({
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
               </span>
+            )}
+            {canLaunch && (
+              <button
+                onClick={handleLaunchPipeline}
+                disabled={launching}
+                className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-emerald-400 text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+              >
+                {launching ? (
+                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                ) : (
+                  <Play className="h-2.5 w-2.5 fill-emerald-600" />
+                )}
+              </button>
             )}
           </div>
           <p className="text-sm font-medium leading-snug line-clamp-3">

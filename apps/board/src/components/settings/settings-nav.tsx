@@ -14,6 +14,7 @@ const TABS = [
   { label: "Members", href: (slug: string) => `/${slug}/settings/members` },
   { label: "API Keys", href: (slug: string) => `/${slug}/settings/api-keys` },
   { label: "Notifications", href: (slug: string) => `/${slug}/settings/notifications` },
+  { label: "Pipeline", href: (slug: string) => `/${slug}/settings/pipeline` },
   { label: "General", href: (slug: string) => `/${slug}/settings/general` },
 ];
 
