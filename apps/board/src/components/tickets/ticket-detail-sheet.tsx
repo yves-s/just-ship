@@ -396,7 +396,7 @@ export function TicketDetailSheet({
       >
         <SheetTitle className="sr-only">{current.title}</SheetTitle>
 
-        {/* Header strip — T-number aligned with X close button */}
+        {/* Header strip — T-number + action buttons aligned with X close button */}
         <div className="flex items-center px-8 h-12 shrink-0 pr-14">
           <Tooltip open={copiedNumber ? true : undefined}>
             <TooltipTrigger asChild>
@@ -416,6 +416,50 @@ export function TicketDetailSheet({
               {copiedNumber ? "Kopiert!" : "Kopieren"}
             </TooltipContent>
           </Tooltip>
+
+          <div className="flex items-center gap-2 ml-auto">
+            {actionError && (
+              <span className="text-xs text-destructive max-w-[200px] truncate">{actionError}</span>
+            )}
+            {canLaunch && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleLaunchPipeline}
+                    disabled={launching}
+                    className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-50"
+                  >
+                    {launching ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Play className="h-3 w-3 fill-current" />
+                    )}
+                    {launching ? "Starting…" : "Run Pipeline"}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Pipeline für dieses Ticket starten</TooltipContent>
+              </Tooltip>
+            )}
+            {canShip && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleShip}
+                    disabled={shipping}
+                    className="flex items-center gap-1.5 rounded-md bg-foreground text-background px-2.5 py-1 text-xs font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50"
+                  >
+                    {shipping ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <img src="/brand/logos/mark/mark-mono-white.svg" alt="" className="h-3.5 w-3.5" />
+                    )}
+                    {shipping ? "Shipping…" : "Just Ship"}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">PR mergen & Ticket abschließen</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
@@ -836,55 +880,6 @@ export function TicketDetailSheet({
             {copied ? "Copied!" : "Copy link"}
           </Button>
 
-          {canLaunch && (
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              onClick={handleLaunchPipeline}
-              disabled={launching}
-              className="gap-2 bg-emerald-600 hover:bg-emerald-700"
-            >
-              {launching ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Play className="h-4 w-4 fill-white" />
-              )}
-              {launching ? "Starting…" : "Run Pipeline"}
-            </Button>
-          )}
-
-          {canShip && (
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              onClick={handleShip}
-              disabled={shipping}
-              className="gap-2 bg-black hover:bg-gray-800"
-            >
-              {shipping ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <svg
-                  viewBox="0 0 24 24"
-                  className="h-4 w-4 fill-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              )}
-              {shipping ? "Shipping…" : "Just Ship"}
-            </Button>
-          )}
-
           <div className="flex-1" />
 
           {saving && (
@@ -895,10 +890,6 @@ export function TicketDetailSheet({
 
           {saveError && (
             <span className="text-xs text-destructive">{saveError}</span>
-          )}
-
-          {actionError && (
-            <span className="text-xs text-destructive">{actionError}</span>
           )}
 
           <Button

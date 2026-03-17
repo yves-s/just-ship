@@ -158,12 +158,12 @@ export function TicketCard({
                   <button
                     onClick={handleLaunchPipeline}
                     disabled={launching}
-                    className="ml-auto flex h-5 w-5 items-center justify-center rounded hover:bg-emerald-100 transition-colors"
+                    className="ml-auto flex h-4 w-4 items-center justify-center rounded opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
                   >
                     {launching ? (
-                      <Loader2 className="h-3 w-3 animate-spin text-emerald-600" />
+                      <Loader2 className="h-2.5 w-2.5 animate-spin text-muted-foreground" />
                     ) : (
-                      <Play className="h-3 w-3 text-emerald-600 fill-emerald-600" />
+                      <Play className="h-2.5 w-2.5 text-muted-foreground fill-muted-foreground" />
                     )}
                   </button>
                 </TooltipTrigger>
