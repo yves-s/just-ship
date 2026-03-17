@@ -70,7 +70,7 @@ export function useDesktopNotifications(
 
       const notification = new Notification(title, {
         body,
-        icon: "/brand/logos/app-icon/app-icon-192.png",
+        icon: "/logos/png/icons/mark-dark-icon-256.png",
         tag: ticketNumber ? `ticket-${ticketNumber}` : undefined,
       });
 
