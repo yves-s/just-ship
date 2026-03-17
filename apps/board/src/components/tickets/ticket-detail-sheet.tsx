@@ -22,7 +22,6 @@ import {
   Zap,
   Wrench,
   Loader2,
-  Rocket,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { TICKET_STATUSES, TICKET_PRIORITIES } from "@/lib/constants";
@@ -457,7 +456,7 @@ export function TicketDetailSheet({
                     {shipping ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      <Rocket className="h-3.5 w-3.5" />
+                      <svg width="14" height="14" viewBox="0 0 88 88" fill="none"><path d="M40 18L40 58L20 58Z" fill="currentColor" opacity="0.4"/><path d="M44 28L44 58L68 58Z" fill="currentColor"/></svg>
                     )}
                     {shipping ? "Shipping…" : "Just Ship"}
                   </button>
