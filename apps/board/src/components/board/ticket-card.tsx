@@ -51,9 +51,7 @@ export function TicketCard({
 
   const workspace = useWorkspace();
   const canLaunch =
-    ticket.status === "ready_to_develop" &&
-    !ticket.pipeline_status &&
-    !!workspace.vps_url;
+    ticket.status === "ready_to_develop" && !ticket.pipeline_status;
 
   const {
     attributes,

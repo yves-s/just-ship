@@ -137,10 +137,8 @@ export function TicketDetailSheet({
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const canLaunch =
-    current?.status === "ready_to_develop" &&
-    !current?.pipeline_status &&
-    !!workspace.vps_url;
-  const canShip = current?.status === "in_review" && !!workspace.vps_url;
+    current?.status === "ready_to_develop" && !current?.pipeline_status;
+  const canShip = current?.status === "in_review";
 
   useEffect(() => {
     setCurrent(ticket);
