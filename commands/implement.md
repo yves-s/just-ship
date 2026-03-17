@@ -11,9 +11,9 @@ Kein Board, kein Ticket, keine Status-Updates erforderlich.
 
 ## WICHTIGSTE REGEL
 
-**STOPPE NICHT ZWISCHEN DEN SCHRITTEN.** Alle Schritte 1–6 hintereinander ausführen.
+**STOPPE NICHT ZWISCHEN DEN SCHRITTEN.** Alle Schritte 1–7 hintereinander ausführen.
 Kein "Soll ich...?", kein "Möchtest du...?". ALLES DURCHLAUFEN.
-Schritt 7 endet mit einem offenen PR — **KEIN Merge**, nicht warten auf Bestätigung.
+Schritt 8 endet mit einem offenen PR — **KEIN Merge**, nicht warten auf Bestätigung.
 
 ## NICHT verwenden
 
@@ -122,7 +122,36 @@ Ausgabe nach Abschluss: `✓ qa abgeschlossen`
 
 **NICHT STOPPEN.** SOFORT weiter zu Schritt 7.
 
-### 7. Abschließen — Commit + Push + PR (KEIN Merge)
+### 7. Docs-Check
+
+Ausgabe: `▶ docs — Dokumentation prüfen`
+
+Ermittle alle geänderten Dateien auf diesem Branch:
+```bash
+git diff --name-only $(git merge-base main HEAD) HEAD
+git status --porcelain
+```
+
+Bestimme anhand der geänderten Dateien, welche Docs geprüft werden müssen:
+
+| Geänderte Dateien | Zu prüfende Docs |
+|---|---|
+| `commands/*.md` | README.md → Commands-Tabelle + Architecture-Abschnitt |
+| `agents/*.md` | README.md → Agents-Tabelle |
+| `skills/*.md` | README.md → Skills-Tabelle |
+| `pipeline/**`, `agents/*.md`, `commands/*.md` | README.md → Workflow-Diagramm |
+| Pipeline/Architektur-Strukturen | CLAUDE.md |
+| Keine der obigen | Schritt überspringen |
+
+Falls Anpassung nötig: direkt mit Edit-Tool ändern. Nur `README.md` und `CLAUDE.md` — keine anderen Docs.
+
+Ausgabe:
+- `✓ docs — README.md aktualisiert` (falls Änderungen gemacht)
+- `✓ docs — keine Änderungen nötig` (falls nichts zu tun)
+
+**NICHT STOPPEN.** SOFORT weiter zu Schritt 8.
+
+### 8. Abschließen — Commit + Push + PR (KEIN Merge)
 
 ```bash
 git status
