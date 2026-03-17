@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { execSync } from "node:child_process";
 import { loadProjectConfig, type ProjectConfig } from "./lib/config.ts";
 import { executePipeline } from "./run.ts";
 
@@ -194,6 +195,86 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse): Promise<
     });
 }
 
+// --- Ship logic ---
+async function handleShip(ticketNumber: number, res: ServerResponse): Promise<void> {
+  // 1. Fetch ticket
+  const ticket = await fetchTicket(ticketNumber);
+  if (!ticket) {
+    sendJson(res, 404, { status: "not_found", ticket_number: ticketNumber, message: "Ticket not found" });
+    return;
+  }
+
+  // 2. Validate status
+  const status = ticket.status as string;
+  if (status !== "in_review") {
+    sendJson(res, 409, {
+      status: "conflict",
+      ticket_number: ticketNumber,
+      message: `Ticket status is "${status}", expected "in_review"`,
+    });
+    return;
+  }
+
+  // 3. Get branch
+  const branch = ticket.branch as string | null;
+  if (!branch) {
+    sendJson(res, 400, {
+      status: "bad_request",
+      ticket_number: ticketNumber,
+      message: "Ticket has no branch set",
+    });
+    return;
+  }
+
+  // 4. Respond immediately
+  sendJson(res, 202, {
+    status: "accepted",
+    ticket_number: ticketNumber,
+    message: "Ship process started",
+  });
+
+  // 5. Merge PR in background
+  log(`Ship started: T-${ticketNumber} -- branch ${branch}`);
+
+  (async () => {
+    try {
+      // Find PR number for branch
+      const prListOutput = execSync(
+        `gh pr list --head "${branch}" --json number --jq '.[0].number'`,
+        { cwd: PROJECT_DIR, encoding: "utf-8", timeout: 30000 }
+      ).trim();
+
+      if (!prListOutput) {
+        log(`Ship failed: T-${ticketNumber} -- no PR found for branch ${branch}`);
+        await patchTicket(ticketNumber, {
+          summary: `Ship failed: No PR found for branch ${branch}`,
+        });
+        return;
+      }
+
+      const prNumber = prListOutput;
+
+      // Merge PR
+      execSync(
+        `gh pr merge ${prNumber} --squash --delete-branch`,
+        { cwd: PROJECT_DIR, encoding: "utf-8", timeout: 60000 }
+      );
+
+      log(`Ship completed: T-${ticketNumber} -- PR #${prNumber} merged`);
+      await patchTicket(ticketNumber, {
+        status: "done",
+        pipeline_status: "done",
+      });
+    } catch (err: unknown) {
+      const reason = err instanceof Error ? err.message : "Unknown error";
+      log(`Ship failed: T-${ticketNumber} -- ${reason}`);
+      await patchTicket(ticketNumber, {
+        summary: `Ship error: ${reason}`,
+      });
+    }
+  })();
+}
+
 // --- Request handler ---
 async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const method = req.method ?? "GET";
@@ -277,6 +358,33 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     }
 
     await handleLaunch(ticketNumber, res);
+    return;
+  }
+
+  // POST /api/ship
+  if (method === "POST" && url === "/api/ship") {
+    const apiKey = req.headers["x-pipeline-key"] as string | undefined;
+    if (!apiKey || apiKey !== PIPELINE_SERVER_KEY) {
+      sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Pipeline-Key" });
+      return;
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      const raw = await readBody(req);
+      body = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
+      return;
+    }
+
+    const ticketNumber = body.ticket_number;
+    if (typeof ticketNumber !== "number" || !Number.isInteger(ticketNumber) || ticketNumber <= 0) {
+      sendJson(res, 400, { status: "bad_request", message: "Missing or invalid field: ticket_number" });
+      return;
+    }
+
+    await handleShip(ticketNumber, res);
     return;
   }
 

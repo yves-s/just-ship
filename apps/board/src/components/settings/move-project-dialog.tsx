@@ -80,6 +80,7 @@ export function MoveProjectDialog({
         created_by: null,
         created_at: "",
         updated_at: "",
+        vps_url: null,
       }));
 
       setWorkspaces(otherWorkspaces);

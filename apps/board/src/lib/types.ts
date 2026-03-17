@@ -7,6 +7,8 @@ export interface Workspace {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  vps_url: string | null;
+  // SECURITY: vps_api_key is never sent to frontend — only accessible server-side
 }
 
 export interface WorkspaceMember {

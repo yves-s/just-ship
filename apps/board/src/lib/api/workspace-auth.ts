@@ -25,7 +25,7 @@ export async function requireWorkspaceMember(
 
   const { data: workspace } = await supabase
     .from("workspaces")
-    .select("*")
+    .select("id, name, slug, created_by, created_at, updated_at, vps_url")
     .eq("slug", slug)
     .single();
 

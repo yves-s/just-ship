@@ -21,6 +21,7 @@ import {
   XCircle,
   Zap,
   Wrench,
+  Loader2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { TICKET_STATUSES, TICKET_PRIORITIES } from "@/lib/constants";
@@ -130,7 +131,16 @@ export function TicketDetailSheet({
   const [copiedNumber, setCopiedNumber] = useState(false);
   const [editingBody, setEditingBody] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [launching, setLaunching] = useState(false);
+  const [shipping, setShipping] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+  const canLaunch =
+    current?.status === "ready_to_develop" &&
+    !current?.pipeline_status &&
+    !!workspace.vps_url;
+  const canShip = current?.status === "in_review" && !!workspace.vps_url;
 
   useEffect(() => {
     setCurrent(ticket);
@@ -295,10 +305,71 @@ export function TicketDetailSheet({
     onOpenChange(false);
   }
 
+  async function handleLaunchPipeline() {
+    if (!current || launching) return;
+    setLaunching(true);
+    setActionError(null);
+    try {
+      const res = await fetch("/api/pipeline/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticket_number: current.number,
+          action: "launch",
+          workspace_id: workspace.id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setActionError(
+          (((data as Record<string, unknown>).error as Record<string, unknown>)
+            ?.message as string) ?? "Pipeline start failed"
+        );
+      } else {
+        setActionError(null);
+      }
+    } catch {
+      setActionError("Could not reach pipeline server");
+    } finally {
+      setLaunching(false);
+    }
+  }
+
+  async function handleShip() {
+    if (!current || shipping) return;
+    setShipping(true);
+    setActionError(null);
+    try {
+      const res = await fetch("/api/pipeline/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticket_number: current.number,
+          action: "ship",
+          workspace_id: workspace.id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setActionError(
+          (((data as Record<string, unknown>).error as Record<string, unknown>)
+            ?.message as string) ?? "Ship failed"
+        );
+      } else {
+        setActionError(null);
+      }
+    } catch {
+      setActionError("Could not reach pipeline server");
+    } finally {
+      setShipping(false);
+    }
+  }
+
   function handleOpenChange(isOpen: boolean) {
     if (!isOpen) {
       setConfirmDelete(false);
       setSaveError(null);
+      setActionError(null);
     }
     onOpenChange(isOpen);
   }
@@ -767,6 +838,55 @@ export function TicketDetailSheet({
             {copied ? "Copied!" : "Copy link"}
           </Button>
 
+          {canLaunch && (
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              onClick={handleLaunchPipeline}
+              disabled={launching}
+              className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+            >
+              {launching ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4 fill-white" />
+              )}
+              {launching ? "Starting…" : "Run Pipeline"}
+            </Button>
+          )}
+
+          {canShip && (
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              onClick={handleShip}
+              disabled={shipping}
+              className="gap-2 bg-black hover:bg-gray-800"
+            >
+              {shipping ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4 fill-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+              {shipping ? "Shipping…" : "Just Ship"}
+            </Button>
+          )}
+
           <div className="flex-1" />
 
           {saving && (
@@ -777,6 +897,10 @@ export function TicketDetailSheet({
 
           {saveError && (
             <span className="text-xs text-destructive">{saveError}</span>
+          )}
+
+          {actionError && (
+            <span className="text-xs text-destructive">{actionError}</span>
           )}
 
           <Button
