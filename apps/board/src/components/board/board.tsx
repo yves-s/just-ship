@@ -315,7 +315,7 @@ export function Board({
     return () => window.removeEventListener("open-ticket", handleOpenTicket);
   }, [tickets, searchParams, pathname, router, workspaceId]);
 
-  const { isActive, getActivity, activeAgents } = useAgentActivity(workspaceId, ticketIds, doneTicketIds);
+  const { isActive, getActivity, activeAgents, hasHadEvents } = useAgentActivity(workspaceId, ticketIds, doneTicketIds);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -593,6 +593,7 @@ export function Board({
         activeAgents={activeAgents}
         tickets={tickets}
         onTicketClick={handleTicketClick}
+        hasHadEvents={hasHadEvents}
       />
       <BoardToolbar
         filters={filters}
