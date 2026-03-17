@@ -427,14 +427,14 @@ export function TicketDetailSheet({
                   <button
                     onClick={handleLaunchPipeline}
                     disabled={launching}
-                    className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1.5 rounded-md border border-emerald-300 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-50"
                   >
                     {launching ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
                     ) : (
-                      <Play className="h-3 w-3 fill-current" />
+                      <Play className="h-3 w-3 fill-emerald-700" />
                     )}
-                    {launching ? "Starting…" : "Run Pipeline"}
+                    {launching ? "Starting…" : "Develop"}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Pipeline für dieses Ticket starten</TooltipContent>
@@ -451,7 +451,12 @@ export function TicketDetailSheet({
                     {shipping ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      <img src="/brand/logos/mark/mark-mono-white.svg" alt="" className="h-3.5 w-3.5" />
+                      <svg viewBox="0 0 256 256" className="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M 28.54 75.12 L 31.35 71.16 L 35.22 67.82 L 40.10 65.13 L 45.94 63.14 L 52.69 61.86 L 60.25 61.30 L 68.57 61.48 L 77.53 62.38 L 87.04 64.00 L 97.01 66.32 L 107.31 69.32 L 117.84 72.96 L 128.48 77.21 L 139.12 82.01 L 149.63 87.31 L 159.91 93.06 L 169.84 99.20 L 179.31 105.65 L 188.22 112.34 L 196.46 119.21 L 203.96 126.17 L 210.63 133.15 L 216.39 140.07 L 221.18 146.87 L 224.95 153.45 L 227.66 159.76 L 229.27 165.72 L 229.78 171.27 L 229.17 176.34 L 227.46 180.88" fill="none" stroke="currentColor" strokeWidth="14.08" strokeLinecap="round"/>
+                        <circle cx="128" cy="128" r="28.16" fill="currentColor"/>
+                        <path d="M 227.46 180.88 L 224.65 184.84 L 220.78 188.18 L 215.90 190.87 L 210.06 192.86 L 203.31 194.14 L 195.75 194.70 L 187.43 194.52 L 178.47 193.62 L 168.96 192.00 L 158.99 189.68 L 148.69 186.68 L 138.16 183.04 L 127.52 178.79 L 116.88 173.99 L 106.37 168.69 L 96.09 162.94 L 86.16 156.80 L 76.69 150.35 L 67.78 143.66 L 59.54 136.79 L 52.04 129.83 L 45.37 122.85 L 39.61 115.93 L 34.82 109.13 L 31.05 102.55 L 28.34 96.24 L 26.73 90.28 L 26.22 84.73 L 26.83 79.66 L 28.54 75.12" fill="none" stroke="currentColor" strokeWidth="14.08" strokeLinecap="round"/>
+                        <circle cx="37.91" cy="113.64" r="16.64" fill="currentColor"/>
+                      </svg>
                     )}
                     {shipping ? "Shipping…" : "Just Ship"}
                   </button>

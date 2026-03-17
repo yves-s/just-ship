@@ -153,22 +153,18 @@ export function TicketCard({
               </span>
             )}
             {canLaunch && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={handleLaunchPipeline}
-                    disabled={launching}
-                    className="ml-auto flex h-4 w-4 items-center justify-center rounded opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
-                  >
-                    {launching ? (
-                      <Loader2 className="h-2.5 w-2.5 animate-spin text-muted-foreground" />
-                    ) : (
-                      <Play className="h-2.5 w-2.5 text-muted-foreground fill-muted-foreground" />
-                    )}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top">Pipeline starten</TooltipContent>
-              </Tooltip>
+              <button
+                onClick={handleLaunchPipeline}
+                disabled={launching}
+                className="ml-auto flex items-center gap-1 rounded border border-emerald-300 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+              >
+                {launching ? (
+                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                ) : (
+                  <Play className="h-2.5 w-2.5 fill-emerald-700" />
+                )}
+                Develop
+              </button>
             )}
           </div>
           <p className="text-sm font-medium leading-snug line-clamp-3">
