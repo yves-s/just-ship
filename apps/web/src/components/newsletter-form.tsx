@@ -153,7 +153,7 @@ export function NewsletterForm() {
         </button>
       </form>
 
-      <div className="mt-2 min-h-[20px]">
+      <div className="mt-1.5 min-h-[20px]">
         {validationError && (
           <p id="newsletter-error" className="text-sm text-red-400" role="alert">
             {validationError}
@@ -166,7 +166,7 @@ export function NewsletterForm() {
         )}
       </div>
 
-      <p className="mt-3 text-center text-xs text-brand-500 sm:text-left">
+      <p className="mt-1 text-center text-xs text-brand-500">
         No spam. Unsubscribe anytime.
       </p>
     </div>
