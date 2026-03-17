@@ -53,7 +53,7 @@ export function Hero() {
         </h1>
 
         {/* Subtitle */}
-        <p className="mx-auto mb-14 max-w-[620px] text-[clamp(1rem,2.2vw,1.2rem)] font-normal leading-[1.65] text-brand-400">
+        <p className="mx-auto mb-10 max-w-[620px] text-[clamp(1rem,2.2vw,1.2rem)] font-normal leading-[1.65] text-brand-400">
           A portable multi-agent framework for autonomous software development.
           Ship complex projects from ticket to ship — fully autonomous.
         </p>

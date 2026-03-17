@@ -166,7 +166,7 @@ export function NewsletterForm() {
         )}
       </div>
 
-      <p className="mt-3 text-center text-xs text-brand-500 sm:text-left">
+      <p className="mt-3 text-center text-xs text-brand-500">
         No spam. Unsubscribe anytime.
       </p>
     </div>
