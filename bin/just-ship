@@ -1,0 +1,65 @@
+#!/bin/bash
+# =============================================================================
+# just-ship — CLI entrypoint
+#
+# Install once:
+#   ln -sf ~/.just-ship/bin/just-ship /usr/local/bin/just-ship
+#
+# Or add to PATH in ~/.zshrc:
+#   export PATH="$HOME/.just-ship/bin:$PATH"
+#
+# Commands:
+#   just-ship setup        First-time setup in current project
+#   just-ship update       Pull latest framework + update current project
+#   just-ship self-update  Pull latest framework only
+# =============================================================================
+
+set -euo pipefail
+
+JUST_SHIP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+cmd="${1:-help}"
+
+case "$cmd" in
+  setup)
+    "$JUST_SHIP_DIR/setup.sh" "${@:2}"
+    ;;
+
+  update)
+    echo "Pulling latest just-ship..."
+    (cd "$JUST_SHIP_DIR" && git pull)
+    echo ""
+    "$JUST_SHIP_DIR/setup.sh" --update "${@:2}"
+    ;;
+
+  self-update)
+    echo "Pulling latest just-ship..."
+    (cd "$JUST_SHIP_DIR" && git pull)
+    echo "✓ just-ship up to date"
+    ;;
+
+  version|-v|--version)
+    if [ -d "$JUST_SHIP_DIR/.git" ]; then
+      hash=$(git -C "$JUST_SHIP_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+      date=$(git -C "$JUST_SHIP_DIR" log -1 --format=%cs 2>/dev/null || echo "")
+      echo "just-ship ${hash} (${date})"
+    else
+      echo "just-ship (local)"
+    fi
+    echo "Installed at: $JUST_SHIP_DIR"
+    ;;
+
+  help|--help|-h|*)
+    echo ""
+    echo "Usage: just-ship <command>"
+    echo ""
+    echo "Commands:"
+    echo "  setup        First-time setup in current project"
+    echo "  update       Pull latest framework + update current project"
+    echo "  self-update  Pull latest framework only (no project update)"
+    echo "  version      Show installed version"
+    echo ""
+    echo "Installed at: $JUST_SHIP_DIR"
+    echo ""
+    ;;
+esac

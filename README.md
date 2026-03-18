@@ -42,12 +42,13 @@ Two modes of operation:
 ## Quick Start
 
 ```bash
-# 1. Clone the framework
+# 1. Clone the framework + add CLI to PATH
 git clone https://github.com/yves-s/just-ship.git ~/.just-ship
+echo 'export PATH="$HOME/.just-ship/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 
 # 2. Go to your project and run setup
 cd /path/to/your-project
-~/.just-ship/setup.sh
+just-ship setup
 
 # 3. Connect to the Just Ship Board (optional)
 #    Create a workspace + project at https://board.just-ship.io
@@ -290,8 +291,9 @@ Interactive setup: asks for project name, generates config files, installs depen
 
 ```bash
 cd /path/to/your-project
-~/.just-ship/setup.sh --update                # apply updates
-~/.just-ship/setup.sh --update --dry-run      # preview changes only
+just-ship update                # git pull + apply updates to current project
+just-ship update --dry-run      # preview changes only
+just-ship self-update           # pull latest framework only (no project update)
 ```
 
 Updates framework files. Your project-specific content is never overwritten:
