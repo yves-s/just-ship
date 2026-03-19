@@ -246,6 +246,39 @@ NICHT fragen ob committed/gepusht werden soll.
 
 **NICHT automatisch mergen.** Der PR bleibt offen bis der User ihn freigibt (via `/ship` oder "passt").
 
+### 9a. Vercel Preview URL (optional, nur mit Pipeline)
+
+Nach PR-Erstellung: Vercel Preview URL holen und im Ticket speichern.
+
+```bash
+PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)
+```
+
+Falls eine URL gefunden wurde (`$PREVIEW_URL` nicht leer), ins Ticket schreiben:
+
+**Board API:**
+```bash
+if [ -n "$PREVIEW_URL" ]; then
+  curl -s -X PATCH -H "X-Pipeline-Key: {pipeline.api_key}" \
+    -H "Content-Type: application/json" \
+    -d '{"preview_url": "'"$PREVIEW_URL"'"}' \
+    "{pipeline.api_url}/api/tickets/{N}"
+fi
+```
+
+**Legacy Supabase MCP (Fallback):**
+```bash
+if [ -n "$PREVIEW_URL" ]; then
+  mcp__claude_ai_Supabase__execute_sql "UPDATE public.tickets SET preview_url = '$PREVIEW_URL' WHERE number = {N} AND workspace_id = '{pipeline.workspace_id}' RETURNING number, preview_url;"
+fi
+```
+
+Ausgabe:
+- `✓ preview — {PREVIEW_URL}` (falls URL gefunden)
+- `✓ preview — kein Vercel-Deployment gefunden, übersprungen` (falls keine URL)
+
+**Kein Fehler wenn keine URL gefunden wird.** Das Script exits immer mit Code 0. Projekte ohne Vercel-Integration überspringen diesen Schritt automatisch.
+
 ### Checkliste vor Abschluss
 
 Bevor du den Workflow als fertig meldest, prüfe:
