@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Check if git is installed
+if ! command -v git &>/dev/null; then
+  echo "Error: git is required but not installed."
+  echo "Install it with: xcode-select --install"
+  exit 1
+fi
+
+# Clone or update ~/.just-ship
+if [ -d "$HOME/.just-ship" ]; then
+  if ! git -C "$HOME/.just-ship" pull --ff-only; then
+    echo "Could not update ~/.just-ship — local changes detected."
+    echo "Run: cd ~/.just-ship && git pull"
+    exit 1
+  fi
+else
+  git clone https://github.com/yves-s/just-ship.git "$HOME/.just-ship"
+fi
+
+# Shell detection and PATH setup
+PATH_ADDED=false
+
+case "$SHELL" in
+  *zsh*)  RC_FILE="$HOME/.zshrc" ;;
+  *bash*) RC_FILE="$HOME/.bash_profile" ;;
+  *)      RC_FILE="$HOME/.profile" ;;
+esac
+
+if ! echo "$PATH" | grep -qF ".just-ship/bin"; then
+  echo 'export PATH="$HOME/.just-ship/bin:$PATH"' >> "$RC_FILE"
+  PATH_ADDED=true
+fi
+
+# Print success output
+echo ""
+echo "✓ just-ship installed → ~/.just-ship"
+
+if [ "$PATH_ADDED" = true ]; then
+  echo "✓ Added ~/.just-ship/bin to PATH in $RC_FILE"
+  echo ""
+  echo "Restart your terminal, then run in any project directory:"
+else
+  echo "✓ ~/.just-ship/bin already in PATH"
+  echo ""
+  echo "Run in any project directory:"
+fi
+
+echo ""
+echo "  just-ship setup"
+echo ""
+echo "The setup wizard guides you through project configuration"
+echo "and optionally connects to the Just Ship Board (board.just-ship.io)."
