@@ -1002,7 +1002,7 @@ Permissions and hook configuration:
 ### First Installation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yves-s/just-ship/main/install.sh | bash
+curl -fsSL https://just-ship.io/install | bash
 ```
 
 Then open a new terminal and run in your project:

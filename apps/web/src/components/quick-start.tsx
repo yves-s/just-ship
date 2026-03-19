@@ -1,16 +1,15 @@
 const lines = [
-  { type: "comment" as const, text: "# Clone and install" },
+  { type: "comment" as const, text: "# Install just-ship" },
   {
     type: "command" as const,
-    text: "git clone https://github.com/yves-s/just-ship.git",
-  },
-  {
-    type: "command" as const,
-    text: "cd your-project && ./setup.sh",
+    text: "curl -fsSL https://just-ship.io/install | bash",
   },
   { type: "blank" as const, text: "" },
-  { type: "comment" as const, text: "# Configure your project" },
-  { type: "command" as const, text: "vim project.json" },
+  { type: "comment" as const, text: "# Set up in your project" },
+  {
+    type: "command" as const,
+    text: "cd your-project && just-ship setup",
+  },
   { type: "blank" as const, text: "" },
   { type: "comment" as const, text: "# Start shipping" },
   { type: "command" as const, text: "claude" },

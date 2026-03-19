@@ -42,7 +42,7 @@ Two modes of operation:
 ## Quick Start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yves-s/just-ship/main/install.sh | bash
+curl -fsSL https://just-ship.io/install | bash
 ```
 
 Then open a new terminal and run in your project:
@@ -279,7 +279,7 @@ Project-specific instructions -- architecture, conventions, domain knowledge. Ge
 ### First Installation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yves-s/just-ship/main/install.sh | bash
+curl -fsSL https://just-ship.io/install | bash
 ```
 
 Then open a new terminal and run in your project:
