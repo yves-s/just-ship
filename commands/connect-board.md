@@ -19,6 +19,31 @@ Verbindet einen Workspace mit dem Just Ship Board. Schreibt Workspace-Daten in `
 
 ## Ausführung
 
+### Schritt 0: Bestehende Workspaces prüfen
+
+Bevor du nach Credentials fragst, lies die globale Config:
+
+```bash
+cat "$HOME/.just-ship/config.json" 2>/dev/null || echo "{}"
+```
+
+Falls bereits Workspaces vorhanden sind, zeige sie dem User:
+```
+Verbundene Workspaces: agentic-dev, another-workspace
+
+Möchtest du einen bestehenden Workspace für dieses Projekt nutzen,
+oder einen neuen Workspace verbinden?
+
+1. Bestehenden Workspace nutzen
+2. Neuen Workspace verbinden
+```
+
+**Falls User bestehenden Workspace wählt:** Nur `--project` abfragen (falls nicht bekannt) und `set-project` aufrufen — KEINE Credentials abfragen.
+
+**Falls kein Workspace existiert oder User neuen Workspace will:** Weiter mit Modus 1 oder 2.
+
+---
+
 ### Modus 1: Alle Flags vorhanden
 
 Wenn alle Pflicht-Flags übergeben wurden:
