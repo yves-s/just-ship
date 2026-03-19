@@ -519,8 +519,9 @@ PROJECT_DESC=${PROJECT_DESC:-""}
 
 echo ""
 echo "How do you want to work?"
-echo "  1) CLI-only — just agents & pipeline, no board"
-echo "  2) Connect to a board"
+echo "  1) CLI-only — agents & pipeline, no board"
+echo "  2) Connect to Just Ship Board (board.just-ship.io)"
+echo "     → track tickets visually, run the pipeline 24/7 on a VPS"
 echo ""
 read -p "  Choice (1/2): " SETUP_MODE
 SETUP_MODE=${SETUP_MODE:-1}
