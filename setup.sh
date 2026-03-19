@@ -47,11 +47,13 @@ DRY_RUN=false
 for arg in "$@"; do
   case "$arg" in
     --update)  MODE="update" ;;
+    --auto)    MODE="auto" ;;
     --dry-run) DRY_RUN=true ;;
     --help|-h)
-      echo "Usage: setup.sh [--update] [--dry-run]"
+      echo "Usage: setup.sh [--update] [--auto] [--dry-run]"
       echo ""
       echo "  (no flags)   Interactive first-time setup"
+      echo "  --auto       Non-interactive setup (called by Claude Code)"
       echo "  --update     Update framework files only (non-interactive)"
       echo "  --dry-run    Preview changes without applying them"
       exit 0
@@ -499,34 +501,46 @@ fi
 
 # =============================================================================
 # SETUP MODE — Interactive first-time installation
+# AUTO MODE  — Non-interactive (called from Claude Code /setup-just-ship)
 # =============================================================================
 
-OVERWRITE_CONFIG="Y"
-if [ -f "project.json" ]; then
-  echo "project.json already exists."
-  read -p "Overwrite project.json? (y/N): " OVERWRITE_CONFIG
-  OVERWRITE_CONFIG=${OVERWRITE_CONFIG:-N}
+if [ "$MODE" = "auto" ]; then
+  # Derive project name from directory name (kebab-case)
+  PROJECT_NAME=$(basename "$PROJECT_DIR" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-\|-$//g')
+  PROJECT_NAME=${PROJECT_NAME:-myproject}
+  PROJECT_DESC=""
+  OVERWRITE_CONFIG="N"
+  SETUP_MODE="1"  # CLI-only — board connection handled by Claude after
+  echo "Auto mode — project name: $PROJECT_NAME"
+  echo ""
+else
+  OVERWRITE_CONFIG="Y"
+  if [ -f "project.json" ]; then
+    echo "project.json already exists."
+    read -p "Overwrite project.json? (y/N): " OVERWRITE_CONFIG
+    OVERWRITE_CONFIG=${OVERWRITE_CONFIG:-N}
+  fi
+
+  echo "Project configuration:"
+  echo ""
+
+  read -p "  Project name (kebab-case, e.g. my-app): " PROJECT_NAME
+  PROJECT_NAME=${PROJECT_NAME:-myproject}
+
+  read -p "  Description (optional): " PROJECT_DESC
+  PROJECT_DESC=${PROJECT_DESC:-""}
+
+  echo ""
+  echo "How do you want to work?"
+  echo "  1) CLI-only — agents & pipeline, no board"
+  echo "  2) Connect to Just Ship Board (board.just-ship.io)"
+  echo "     → track tickets visually, run the pipeline 24/7 on a VPS"
+  echo ""
+  read -p "  Choice (1/2): " SETUP_MODE
+  SETUP_MODE=${SETUP_MODE:-1}
+
+  echo ""
 fi
-
-echo "Project configuration:"
-echo ""
-
-read -p "  Project name (kebab-case, e.g. my-app): " PROJECT_NAME
-PROJECT_NAME=${PROJECT_NAME:-myproject}
-
-read -p "  Description (optional): " PROJECT_DESC
-PROJECT_DESC=${PROJECT_DESC:-""}
-
-echo ""
-echo "How do you want to work?"
-echo "  1) CLI-only — agents & pipeline, no board"
-echo "  2) Connect to Just Ship Board (board.just-ship.io)"
-echo "     → track tickets visually, run the pipeline 24/7 on a VPS"
-echo ""
-read -p "  Choice (1/2): " SETUP_MODE
-SETUP_MODE=${SETUP_MODE:-1}
-
-echo ""
 
 # --- Copy agents ---
 echo "Installing agents..."

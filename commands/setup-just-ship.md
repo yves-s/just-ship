@@ -1,21 +1,32 @@
 ---
 name: setup-just-ship
-description: Projekt konfigurieren — Stack erkennen, project.json befüllen
+description: Just Ship installieren und Projekt konfigurieren — Stack erkennen, project.json befüllen, Board verbinden
 disable-model-invocation: true
 ---
 
-# /setup-just-ship — Projekt konfigurieren
+# /setup-just-ship — Projekt einrichten
 
-Erkennt automatisch den Tech-Stack, befüllt `project.json` und ergänzt `CLAUDE.md`. Board-Verbindung separat via `/connect-board`.
-
-## Voraussetzungen
-
-- `project.json` muss existieren (wird von `setup.sh` erstellt)
-- `CLAUDE.md` muss existieren (wird von `setup.sh` erstellt)
-
-Falls eine der Dateien fehlt: Hinweis geben, dass zuerst `setup.sh` ausgeführt werden muss.
+Installiert Just Ship im aktuellen Projekt (falls noch nicht geschehen), erkennt den Tech-Stack automatisch, befüllt `project.json` und `CLAUDE.md`, und verbindet optional das Just Ship Board.
 
 ## Ausführung
+
+### 0. Just Ship installiert?
+
+Prüfe ob `.claude/agents/` im aktuellen Verzeichnis existiert:
+
+```bash
+ls .claude/agents/ 2>/dev/null | head -1 || echo "NOT_INSTALLED"
+```
+
+Falls `NOT_INSTALLED`:
+
+1. Ausgabe: `Just Ship wird installiert...`
+2. Führe aus:
+   ```bash
+   just-ship setup --auto
+   ```
+3. Warte auf Abschluss (Exit Code 0). Falls Fehler: Ausgabe anzeigen und abbrechen.
+4. Ausgabe: `✓ Just Ship installiert`
 
 ### 1. Projekt analysieren
 
@@ -122,34 +133,50 @@ Lies die aktuelle `CLAUDE.md`. Falls dort noch TODO-Platzhalter stehen:
 - Kurz und prägnant — keine ausschweifenden Beschreibungen
 - Falls kein TODO mehr vorhanden: CLAUDE.md nicht anfassen
 
-### 4. Board verbinden (Hinweis)
+### 4. Zusammenfassung
 
-Falls `pipeline.workspace` in `project.json` nicht gesetzt ist:
-```
-Board noch nicht verbunden.
-Führe /connect-board aus um das Just Ship Board zu verknüpfen.
-```
-
-### 5. Bestätigung
-
-Zeige eine Zusammenfassung:
+Zeige:
 
 ```
-Setup abgeschlossen.
+✓ Just Ship eingerichtet
 
   Stack         : {framework} + {language} + {styling}
   Build         : {build_command}
   Test          : {test_command}
   Package Mgr   : {package_manager}
-```
 
-Falls Board verbunden (`pipeline.workspace` gesetzt):
-```
-  Workspace     : {pipeline.workspace}
-```
-
-```
 Geänderte Dateien:
   ✓ project.json  — Stack, Build, Paths
   ✓ CLAUDE.md     — Beschreibung, Konventionen, Architektur
 ```
+
+### 5. Board verbinden?
+
+Falls `pipeline.workspace` in `project.json` noch nicht gesetzt ist, frage:
+
+```
+Möchtest du das Just Ship Board verbinden? (j/n)
+```
+
+**Falls nein:** Abschließen mit:
+```
+Fertig! Erstelle dein erstes Ticket mit /ticket.
+```
+
+**Falls ja:** Frage weiter:
+```
+Hast du bereits einen Account auf board.just-ship.io? (j/n)
+```
+
+- **Falls nein:**
+  ```
+  Erstelle zuerst einen Account:
+
+    → board.just-ship.io
+
+  Lege dort einen Workspace und ein Projekt an.
+  Beim Projekt findest du einen Connect-Command — komm dann zurück
+  und führe /connect-board aus.
+  ```
+
+- **Falls ja:** Führe `/connect-board` inline aus (Modus 2: interaktiv — frage Board URL, Workspace, ID, Key).

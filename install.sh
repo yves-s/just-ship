@@ -33,6 +33,10 @@ fi
 
 chmod +x "$HOME/.just-ship/bin/"*
 
+# Install global Claude command so /setup-just-ship works before project setup
+mkdir -p "$HOME/.claude/commands"
+cp "$HOME/.just-ship/commands/setup-just-ship.md" "$HOME/.claude/commands/setup-just-ship.md"
+
 # Shell detection and PATH setup
 PATH_ADDED=false
 
@@ -52,19 +56,19 @@ fi
 # Print success output
 echo ""
 echo "✓ just-ship installed → ~/.just-ship"
+echo "✓ /setup-just-ship command available in Claude Code"
 
 if [ "$PATH_ADDED" = true ]; then
   echo "✓ Added ~/.just-ship/bin to PATH in $RC_FILE"
   echo ""
-  echo "Restart your terminal, then run in any project directory:"
+  echo "Restart your terminal, then:"
 else
-  echo "✓ ~/.just-ship/bin already in PATH"
   echo ""
-  echo "Run in any project directory:"
+  echo "Next step:"
 fi
 
 echo ""
-echo "  just-ship setup"
+echo "  Open your project in Claude Code and run:"
 echo ""
-echo "The setup wizard guides you through project configuration"
-echo "and optionally connects to the Just Ship Board (board.just-ship.io)."
+echo "  /setup-just-ship"
+echo ""
