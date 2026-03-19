@@ -21,7 +21,7 @@ To test changes, install the framework into a test project:
 
 ```bash
 cd /path/to/test-project
-/path/to/just-ship/setup.sh
+just-ship setup
 ```
 
 ## Submitting a pull request
