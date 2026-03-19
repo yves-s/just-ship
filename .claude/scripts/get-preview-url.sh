@@ -10,8 +10,8 @@
 # Returns: 0 always (never fails, silent on timeout or no Vercel deployment)
 
 MAX_WAIT="${1:-30}"
-BRANCH=$(git branch --show-current 2>/dev/null)
-[ -z "$BRANCH" ] && exit 0
+SHA=$(git rev-parse HEAD 2>/dev/null)
+[ -z "$SHA" ] && exit 0
 
 REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null)
 [ -z "$REPO" ] && exit 0
@@ -20,23 +20,19 @@ ELAPSED=0
 INTERVAL=5
 
 while [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
-  # Get latest deployment for this branch
-  # GitHub returns deployments in reverse chronological order, so first is newest
-  DEPLOY_ID=$(gh api "repos/${REPO}/deployments?ref=${BRANCH}&per_page=1" \
-    --jq '.[0].id' 2>/dev/null)
+  # Query by commit SHA — Vercel sets deployment ref to the SHA, not the branch name
+  # Filter for Preview environments (Vercel names them "Preview – {project}")
+  DEPLOY_ID=$(gh api "repos/${REPO}/deployments?sha=${SHA}&per_page=10" \
+    --jq '[.[] | select(.environment | test("Preview"))] | .[0].id' 2>/dev/null)
 
   if [ -n "$DEPLOY_ID" ] && [ "$DEPLOY_ID" != "null" ]; then
     # Get the environment URL from successful deployment status
-    # Filter for success state and optional "Preview" environment (Vercel may not set environment)
     PREVIEW_URL=$(gh api "repos/${REPO}/deployments/${DEPLOY_ID}/statuses" \
-      --jq '[.[] | select(.state == "success" and (.environment == "production" | not))] | .[0].environment_url // empty' 2>/dev/null)
+      --jq '[.[] | select(.state == "success")] | .[0].environment_url // empty' 2>/dev/null)
 
     if [ -n "$PREVIEW_URL" ] && [ "$PREVIEW_URL" != "null" ]; then
-      # Validate URL is a Vercel preview (contains *.vercel.app or preview domain pattern)
-      if echo "$PREVIEW_URL" | grep -qE '(vercel\.app|preview|branch)'; then
-        echo "$PREVIEW_URL"
-        exit 0
-      fi
+      echo "$PREVIEW_URL"
+      exit 0
     fi
   fi
 
