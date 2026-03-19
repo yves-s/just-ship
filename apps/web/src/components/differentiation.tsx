@@ -151,7 +151,7 @@ export function Differentiation() {
             </ul>
             <div className="mt-5 rounded-[10px] border border-accent/15 bg-accent/5 p-3 text-center">
               <code className="font-mono text-sm font-bold text-accent">
-                ./setup.sh
+                just-ship setup
               </code>
               <p className="mt-1 text-sm text-brand-400">
                 One command. 60 seconds. Everything included.
