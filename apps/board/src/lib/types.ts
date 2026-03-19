@@ -20,6 +20,15 @@ export interface WorkspaceMember {
   user_email?: string;
 }
 
+export interface ProjectMember {
+  id: string;
+  project_id: string;
+  user_id: string;
+  added_by: string | null;
+  created_at: string;
+  user_email?: string;
+}
+
 export interface WorkspaceInvite {
   id: string;
   workspace_id: string;

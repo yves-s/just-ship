@@ -66,7 +66,7 @@ export async function GET(request: Request) {
       return success([]);
     }
 
-    // 3. For each workspace, fetch its projects
+    // 3. For each workspace, fetch projects filtered by membership
     const workspaces = await Promise.all(
       members.map(async (member) => {
         // workspaces comes back as a single object from the join
@@ -76,16 +76,42 @@ export async function GET(request: Request) {
           slug: string;
         };
 
-        const { data: projects } = await supabase
-          .from("projects")
-          .select("id, name")
-          .eq("workspace_id", workspace.id);
+        // Get user's role in this workspace to determine project visibility
+        const { data: memberRole } = await supabase
+          .from("workspace_members")
+          .select("role")
+          .eq("workspace_id", workspace.id)
+          .eq("user_id", userId)
+          .single();
+
+        const isAdmin =
+          memberRole && ["admin", "owner"].includes(memberRole.role);
+
+        let projects: { id: string; name: string }[];
+        if (isAdmin) {
+          // Admins see all projects in the workspace
+          const { data } = await supabase
+            .from("projects")
+            .select("id, name")
+            .eq("workspace_id", workspace.id);
+          projects = data || [];
+        } else {
+          // Regular members see only projects they are explicitly assigned to
+          const { data: projectMembers } = await supabase
+            .from("project_members")
+            .select("project_id, project:projects(id, name)")
+            .eq("user_id", userId);
+
+          projects = (projectMembers || [])
+            .map((pm) => pm.project as unknown as { id: string; name: string })
+            .filter((p) => p !== null);
+        }
 
         return {
           id: workspace.id,
           name: workspace.name,
           slug: workspace.slug,
-          projects: projects || [],
+          projects,
         };
       })
     );
