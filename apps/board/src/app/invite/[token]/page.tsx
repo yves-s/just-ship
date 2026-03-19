@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import {
   Card,
   CardContent,
@@ -14,7 +14,7 @@ interface InvitePageProps {
 
 export default async function InvitePage({ params }: InvitePageProps) {
   const { token } = await params;
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   const { data: invite } = await supabase
     .from("workspace_invites")

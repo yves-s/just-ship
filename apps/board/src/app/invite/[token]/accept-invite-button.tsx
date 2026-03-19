@@ -34,40 +34,18 @@ export function AcceptInviteButton({
         return;
       }
 
-      // Fetch the invite
-      const { data: invite, error: inviteError } = await supabase
-        .from("workspace_invites")
-        .select("*")
-        .eq("token", token)
-        .is("accepted_at", null)
-        .gt("expires_at", new Date().toISOString())
-        .single();
+      const res = await fetch("/api/invite/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
 
-      if (inviteError || !invite) {
-        setError("This invite is invalid or has expired.");
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error?.message ?? "Something went wrong.");
         return;
       }
-
-      // Add member to workspace
-      const { error: memberError } = await supabase
-        .from("workspace_members")
-        .insert({
-          workspace_id: invite.workspace_id,
-          user_id: user.id,
-          role: "member",
-        });
-
-      if (memberError && memberError.code !== "23505") {
-        // 23505 = unique violation (already a member)
-        setError(memberError.message);
-        return;
-      }
-
-      // Mark invite as accepted
-      await supabase
-        .from("workspace_invites")
-        .update({ accepted_at: new Date().toISOString() })
-        .eq("id", invite.id);
 
       router.push(`/${workspaceSlug}/board`);
       router.refresh();
