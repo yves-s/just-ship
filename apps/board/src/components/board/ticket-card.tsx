@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GitBranch, CalendarDays, Copy, Check, Zap, Play, Loader2 } from "lucide-react";
+import { GitBranch, CalendarDays, Copy, Check, Zap, Play, Loader2, MessageCircle } from "lucide-react";
 import { formatTokenCount } from "@/lib/utils/format-tokens";
 import { cn } from "@/lib/utils";
 import { PriorityBadge } from "@/components/shared/status-badge";
@@ -28,6 +28,7 @@ const PRIORITY_BORDER: Record<string, string> = {
 const PIPELINE_PILL: Record<string, string> = {
   queued: "bg-slate-100 text-slate-600",
   running: "bg-amber-100 text-amber-700",
+  paused: "bg-amber-100 text-amber-700",
   done: "bg-emerald-100 text-emerald-700",
   failed: "bg-red-100 text-red-700",
 };
@@ -116,7 +117,8 @@ export function TicketCard({
         PRIORITY_BORDER[ticket.priority] ?? "border-l-slate-300",
         isDragging && !isDragOverlay && "opacity-40",
         isDragOverlay && "shadow-lg rotate-1",
-        "hover:shadow-md"
+        "hover:shadow-md",
+        ticket.pipeline_status === "paused" && "ring-2 ring-amber-400 ring-offset-1"
       )}
     >
       <div className="p-3 flex flex-col gap-2">
@@ -146,15 +148,23 @@ export function TicketCard({
                 title={
                   agentActivity
                     ? `${agentActivity.agent_type}: ${agentActivity.event_type}`
-                    : ticket.pipeline_status === "running"
-                      ? "Pipeline läuft..."
-                      : ticket.pipeline_status === "queued"
-                        ? "Pipeline wird gestartet..."
-                        : "In Bearbeitung"
+                    : ticket.pipeline_status === "paused"
+                      ? "Agent wartet auf Antwort"
+                      : ticket.pipeline_status === "running"
+                        ? "Pipeline läuft..."
+                        : ticket.pipeline_status === "queued"
+                          ? "Pipeline wird gestartet..."
+                          : "In Bearbeitung"
                 }
               >
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                <span
+                  className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
+                  style={{ backgroundColor: ticket.pipeline_status === "paused" ? "rgb(251 191 36)" : "rgb(52 211 153)" }}
+                />
+                <span
+                  className="relative inline-flex h-2 w-2 rounded-full"
+                  style={{ backgroundColor: ticket.pipeline_status === "paused" ? "rgb(245 158 11)" : "rgb(16 185 129)" }}
+                />
               </span>
             )}
             {canLaunch && (
@@ -177,6 +187,24 @@ export function TicketCard({
                     VPS nicht konfiguriert
                   </TooltipContent>
                 )}
+              </Tooltip>
+            )}
+            {ticket.pipeline_status === "paused" && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      onClick(ticket);
+                    }}
+                    className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-amber-400 text-amber-600 cursor-pointer hover:bg-amber-50 transition-colors animate-pulse"
+                  >
+                    <MessageCircle className="h-2.5 w-2.5 fill-amber-600" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  Agent wartet auf Antwort
+                </TooltipContent>
               </Tooltip>
             )}
           </div>

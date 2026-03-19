@@ -14,16 +14,20 @@ export interface PipelineOptions {
 }
 
 export interface PipelineResult {
-  status: "completed" | "failed";
+  status: "completed" | "failed" | "paused";
   exitCode: number;
   branch: string;
   project: string;
   failureReason?: string;
+  sessionId?: string;
 }
 
 export async function executePipeline(opts: PipelineOptions): Promise<PipelineResult> {
   const { projectDir, ticket, abortSignal } = opts;
   const config = loadProjectConfig(projectDir);
+
+  let pauseReason: string | undefined;
+  let sessionId: string | undefined;
 
   // --- Git: create feature branch ---
   const branchSlug = ticket.title
@@ -55,7 +59,9 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
     apiKey: config.pipeline.apiKey,
     ticketNumber: ticket.ticketId,
   };
-  const hooks = hasPipeline ? createEventHooks(eventConfig) : {};
+  const hooks = hasPipeline ? createEventHooks(eventConfig, {
+    onPause: (reason) => { pauseReason = reason; },
+  }) : {};
 
   // --- Build prompt ---
   const prompt = `${orchestratorPrompt}
@@ -128,8 +134,13 @@ Branch ist bereits erstellt: ${branchName}`;
         hooks,
         maxTurns: 200,
         settingSources: ["project"],
-        persistSession: false,
+        persistSession: true,
         abortController: queryAbortController,
+        env: {
+          TICKET_NUMBER: ticket.ticketId,
+          BOARD_API_URL: config.pipeline.apiUrl,
+          PIPELINE_KEY: config.pipeline.apiKey,
+        },
       },
     })) {
       if (message.type === "result") {
@@ -139,6 +150,21 @@ Branch ist bereits erstellt: ${branchName}`;
           exitCode = 1;
         }
       }
+      // Extract session ID from any message that has it
+      if ('session_id' in message && typeof (message as Record<string, unknown>).session_id === 'string') {
+        sessionId = (message as Record<string, unknown>).session_id as string;
+      }
+    }
+
+    // Check if pipeline was paused for human input
+    if (pauseReason === 'human_in_the_loop') {
+      return {
+        status: "paused",
+        exitCode: 0,
+        branch: branchName,
+        project: config.name,
+        sessionId,
+      };
     }
 
     if (hasPipeline) await postPipelineEvent(eventConfig, "completed", "orchestrator");
@@ -161,6 +187,147 @@ Branch ist bereits erstellt: ${branchName}`;
     branch: branchName,
     project: config.name,
     failureReason,
+    sessionId,
+  };
+}
+
+// --- Resume a paused pipeline session ---
+export interface ResumeOptions {
+  projectDir: string;
+  ticket: TicketArgs;
+  sessionId: string;
+  answer: string;
+  abortSignal?: AbortSignal;
+  timeoutMs?: number;
+}
+
+export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResult> {
+  const { projectDir, ticket, sessionId: resumeSessionId, answer, abortSignal } = opts;
+  const config = loadProjectConfig(projectDir);
+
+  // Branch should already exist — just ensure we're on it
+  const branchSlug = ticket.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 40);
+  const branchName = `${config.conventions.branch_prefix}${ticket.ticketId}-${branchSlug}`;
+
+  try {
+    execSync(`git checkout ${branchName}`, { cwd: projectDir, stdio: "pipe" });
+  } catch { /* branch may already be checked out */ }
+
+  const agents = loadAgents(projectDir);
+  const hasPipeline = !!(config.pipeline.apiUrl && config.pipeline.apiKey);
+  const eventConfig: EventConfig = {
+    apiUrl: config.pipeline.apiUrl,
+    apiKey: config.pipeline.apiKey,
+    ticketNumber: ticket.ticketId,
+  };
+
+  let pauseReason: string | undefined;
+  let newSessionId: string | undefined;
+
+  const hooks = hasPipeline ? createEventHooks(eventConfig, {
+    onPause: (reason) => { pauseReason = reason; },
+  }) : {};
+
+  // Timeout
+  const DEFAULT_TIMEOUT_MS = 1_800_000;
+  const MIN_TIMEOUT_MS = 60_000;
+  const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+  let timeoutMs = opts.timeoutMs ?? (Number(process.env.PIPELINE_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS);
+  if (!Number.isFinite(timeoutMs) || timeoutMs < MIN_TIMEOUT_MS || timeoutMs > MAX_TIMEOUT_MS) {
+    timeoutMs = DEFAULT_TIMEOUT_MS;
+  }
+
+  const queryAbortController = new AbortController();
+  let timedOut = false;
+
+  if (abortSignal) {
+    if (abortSignal.aborted) {
+      queryAbortController.abort();
+    } else {
+      abortSignal.addEventListener("abort", () => queryAbortController.abort(), { once: true });
+    }
+  }
+
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    queryAbortController.abort();
+  }, timeoutMs);
+
+  let exitCode = 0;
+  let failureReason: string | undefined;
+
+  try {
+    if (hasPipeline) await postPipelineEvent(eventConfig, "agent_started", "orchestrator");
+
+    for await (const message of query({
+      prompt: `Antwort auf deine Frage: ${answer}\n\nMach weiter wo du aufgehört hast.`,
+      options: {
+        cwd: projectDir,
+        model: "opus",
+        permissionMode: "bypassPermissions",
+        allowDangerouslySkipPermissions: true,
+        allowedTools: ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent"],
+        agents,
+        hooks,
+        maxTurns: 200,
+        settingSources: ["project"],
+        persistSession: true,
+        resume: resumeSessionId,
+        abortController: queryAbortController,
+        env: {
+          TICKET_NUMBER: ticket.ticketId,
+          BOARD_API_URL: config.pipeline.apiUrl,
+          PIPELINE_KEY: config.pipeline.apiKey,
+        },
+      },
+    })) {
+      if (message.type === "result") {
+        const resultMsg = message as SDKMessage & { type: "result"; subtype: string };
+        if (resultMsg.subtype !== "success") {
+          console.error("[SDK Result]", resultMsg.subtype);
+          exitCode = 1;
+        }
+      }
+      if ('session_id' in message && typeof (message as Record<string, unknown>).session_id === 'string') {
+        newSessionId = (message as Record<string, unknown>).session_id as string;
+      }
+    }
+
+    if (pauseReason === 'human_in_the_loop') {
+      return {
+        status: "paused",
+        exitCode: 0,
+        branch: branchName,
+        project: config.name,
+        sessionId: newSessionId ?? resumeSessionId,
+      };
+    }
+
+    if (hasPipeline) await postPipelineEvent(eventConfig, "completed", "orchestrator");
+  } catch (error) {
+    exitCode = 1;
+    if (timedOut) {
+      failureReason = `Timeout nach ${Math.round(timeoutMs / 60_000)} Minuten`;
+    } else {
+      failureReason = error instanceof Error ? error.message : String(error);
+    }
+    console.error(`Resume pipeline error: ${failureReason}`);
+    if (hasPipeline) await postPipelineEvent(eventConfig, "pipeline_failed", "orchestrator");
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  return {
+    status: exitCode === 0 ? "completed" : "failed",
+    exitCode,
+    branch: branchName,
+    project: config.name,
+    failureReason,
+    sessionId: newSessionId ?? resumeSessionId,
   };
 }
 

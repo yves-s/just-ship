@@ -29,6 +29,7 @@ export const updateTicketSchema = z.object({
   test_results: z.string().max(10000).nullable().optional(),
   preview_url: z.string().url().max(500).nullable().optional(),
   due_date: z.string().nullable().optional(),
+  session_id: z.string().max(500).nullable().optional(),
 });
 
 export type CreateTicketInput = z.infer<typeof createTicketSchema>;

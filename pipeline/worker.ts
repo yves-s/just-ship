@@ -136,6 +136,16 @@ async function runTicketPipeline(ticket: Ticket): Promise<void> {
     abortSignal: abortController.signal,
   });
 
+  if (result.status === "paused") {
+    // Save session_id and set pipeline_status to paused
+    await supabasePatch(
+      `/rest/v1/tickets?number=eq.${ticket.number}`,
+      { pipeline_status: "paused", session_id: result.sessionId }
+    );
+    log(`Pipeline paused: T--${ticket.number} — waiting for human input (session: ${result.sessionId})`);
+    return; // Free worker slot, don't count as failure
+  }
+
   if (result.status === "failed") {
     throw new Error(result.failureReason ?? `Pipeline failed (exit code: ${result.exitCode})`);
   }

@@ -70,8 +70,9 @@ agents/              Agent-Definitionen (Orchestrator, Backend, Frontend, etc.)
 commands/            Slash-Commands (/develop, /ship, etc.)
 skills/              Pipeline-Skills (ticket-writer, frontend-design, etc.)
 pipeline/            SDK Pipeline Runner (TypeScript)
-  ├── run.ts         Einzellauf
+  ├── run.ts         Einzellauf + Session Resume (human-in-the-loop)
   ├── worker.ts      Supabase-Polling Worker
+  ├── server.ts      HTTP Server (Webhooks, /api/answer für Resume)
   └── lib/           Config, Agent-Loading, Event-Hooks
 templates/           CLAUDE.md + project.json Templates
 vps/                 VPS-Infrastruktur (systemd, Setup-Script)

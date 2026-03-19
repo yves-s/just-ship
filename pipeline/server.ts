@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { execSync } from "node:child_process";
 import { loadProjectConfig, type ProjectConfig } from "./lib/config.ts";
-import { executePipeline } from "./run.ts";
+import { executePipeline, resumePipeline } from "./run.ts";
 
 // --- Environment validation ---
 const required = [
@@ -170,6 +170,12 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse): Promise<
           pipeline_status: "done",
           status: "in_review",
           branch: result.branch,
+        });
+      } else if (result.status === "paused") {
+        log(`Pipeline paused: T-${ticketNumber} -- waiting for human input`);
+        await patchTicket(ticketNumber, {
+          pipeline_status: "paused",
+          session_id: result.sessionId,
         });
       } else {
         const reason = result.failureReason ?? `exited with code ${result.exitCode}`;
@@ -358,6 +364,132 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     }
 
     await handleLaunch(ticketNumber, res);
+    return;
+  }
+
+  // POST /api/answer — Resume paused pipeline with human answer
+  if (method === "POST" && url === "/api/answer") {
+    const apiKey = req.headers["x-pipeline-key"] as string | undefined;
+    if (!apiKey || apiKey !== PIPELINE_SERVER_KEY) {
+      sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Pipeline-Key" });
+      return;
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      const raw = await readBody(req);
+      body = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
+      return;
+    }
+
+    const ticketNumber = body.ticket_number;
+    const answer = body.answer;
+    if (typeof ticketNumber !== "number" || !Number.isInteger(ticketNumber) || ticketNumber <= 0) {
+      sendJson(res, 400, { status: "bad_request", message: "Missing or invalid field: ticket_number" });
+      return;
+    }
+    if (typeof answer !== "string" || !answer.trim()) {
+      sendJson(res, 400, { status: "bad_request", message: "Missing or invalid field: answer" });
+      return;
+    }
+
+    // Idempotency guard
+    if (runningTickets.has(ticketNumber)) {
+      sendJson(res, 409, { status: "conflict", message: "Ticket is already being processed" });
+      return;
+    }
+
+    // Fetch ticket to get session_id
+    const ticket = await fetchTicket(ticketNumber);
+    if (!ticket) {
+      sendJson(res, 404, { status: "not_found", message: "Ticket not found" });
+      return;
+    }
+
+    const sessionId = ticket.session_id as string | null;
+    if (!sessionId) {
+      sendJson(res, 400, { status: "bad_request", message: "Ticket has no session_id — cannot resume" });
+      return;
+    }
+
+    if (ticket.pipeline_status !== "paused") {
+      sendJson(res, 409, { status: "conflict", message: `Ticket pipeline_status is "${ticket.pipeline_status}", expected "paused"` });
+      return;
+    }
+
+    // Reserve and respond
+    runningTickets.add(ticketNumber);
+
+    await patchTicket(ticketNumber, {
+      pipeline_status: "running",
+    });
+
+    sendJson(res, 202, {
+      status: "resuming",
+      ticket_number: ticketNumber,
+      message: "Pipeline resuming with answer",
+    });
+
+    // Resume pipeline in background
+    const title = (ticket.title as string) ?? "Untitled";
+    const ticketBody = (ticket.body as string) ?? "No description provided";
+    const tags = Array.isArray(ticket.tags) ? (ticket.tags as string[]).join(",") : "";
+
+    log(`Pipeline resuming: T-${ticketNumber} -- answer received`);
+
+    resumePipeline({
+      projectDir: PROJECT_DIR,
+      ticket: {
+        ticketId: String(ticketNumber),
+        title,
+        description: ticketBody,
+        labels: tags,
+      },
+      sessionId,
+      answer: answer.trim(),
+    })
+      .then(async (result) => {
+        if (result.status === "paused") {
+          log(`Pipeline paused again: T-${ticketNumber} — waiting for next answer`);
+          await patchTicket(ticketNumber, {
+            pipeline_status: "paused",
+            session_id: result.sessionId,
+          });
+        } else if (result.status === "completed") {
+          log(`Pipeline completed: T-${ticketNumber} -> ${result.branch}`);
+          await patchTicket(ticketNumber, {
+            pipeline_status: "done",
+            status: "in_review",
+            branch: result.branch,
+            session_id: null,
+          });
+        } else {
+          const reason = result.failureReason ?? `exited with code ${result.exitCode}`;
+          log(`Pipeline failed: T-${ticketNumber} (${reason})`);
+          await patchTicket(ticketNumber, {
+            pipeline_status: "failed",
+            status: "ready_to_develop",
+            summary: `Pipeline error: ${reason}`,
+            session_id: null,
+          });
+        }
+      })
+      .catch(async (error: unknown) => {
+        const reason = error instanceof Error ? error.message : "Unknown error";
+        log(`Pipeline resume crashed: T-${ticketNumber} -- ${reason}`);
+        await patchTicket(ticketNumber, {
+          pipeline_status: "failed",
+          status: "ready_to_develop",
+          summary: `Resume error: ${reason}`,
+          session_id: null,
+        });
+      })
+      .finally(() => {
+        runningTickets.delete(ticketNumber);
+      });
+
     return;
   }
 

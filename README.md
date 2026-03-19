@@ -121,6 +121,7 @@ Ticket lifecycle (Board):
 ```
 Phase 1: Planning        Orchestrator reads 5-10 affected files, formulates agent instructions
 Phase 2: Implementation  Sub-agents execute in parallel (data-engineer first if schema changes)
+         ask-human       If uncertain: pause pipeline, ask via Board + Telegram, resume on answer
 Phase 3: Build Check     Bash command -- DevOps agent only on failure
 Phase 4: Review          Single QA agent -- acceptance criteria + security quick-check
 Phase 5: Ship            Commit --> Push --> PR --> Board status "in_review" --> STOP
@@ -192,8 +193,9 @@ just-ship/
 │   └── update-just-ship.md
 ├── skills/                     # Framework skills
 ├── pipeline/                   # SDK pipeline runner (TypeScript)
-│   ├── run.ts                  # Single execution (CLI or worker import)
+│   ├── run.ts                  # Single execution + session resume
 │   ├── worker.ts               # Supabase polling worker (VPS)
+│   ├── server.ts               # HTTP server (webhooks, /api/answer)
 │   ├── run.sh                  # Bash wrapper
 │   └── lib/                    # Config, agent loader, event hooks
 ├── templates/                  # CLAUDE.md + project.json templates
