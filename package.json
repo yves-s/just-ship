@@ -2,15 +2,6 @@
   "name": "just-ship",
   "private": true,
   "workspaces": [
-    "pipeline",
-    "apps/*"
-  ],
-  "scripts": {
-    "dev:board": "npm run dev -w apps/board",
-    "dev:bot": "npm run dev -w apps/bot",
-    "dev": "npm run dev:board & npm run dev:bot",
-    "build:board": "npm run build -w apps/board",
-    "start:bot": "npm run start -w apps/bot",
-    "lint": "npm run lint -w apps/board"
-  }
+    "pipeline"
+  ]
 }
