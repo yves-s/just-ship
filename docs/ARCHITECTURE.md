@@ -1002,14 +1002,14 @@ Permissions and hook configuration:
 ### First Installation
 
 ```bash
-# Clone the framework (once)
-git clone https://github.com/yves-s/just-ship.git ~/just-ship
+curl -fsSL https://raw.githubusercontent.com/yves-s/just-ship/main/install.sh | bash
+```
 
-# Switch to your project
+Then open a new terminal and run in your project:
+
+```bash
 cd /path/to/your-project
-
-# Run interactive setup
-~/just-ship/setup.sh
+just-ship setup
 
 # Open a new Claude Code session and configure
 claude

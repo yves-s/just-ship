@@ -279,8 +279,14 @@ Project-specific instructions -- architecture, conventions, domain knowledge. Ge
 ### First Installation
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/yves-s/just-ship/main/install.sh | bash
+```
+
+Then open a new terminal and run in your project:
+
+```bash
 cd /path/to/your-project
-~/.just-ship/setup.sh
+just-ship setup
 ```
 
 Interactive setup: asks for project name, generates config files, installs dependencies, sets up the [superpowers](https://github.com/obra/superpowers-marketplace) plugin.
