@@ -207,4 +207,4 @@ Hast du bereits einen Account auf board.just-ship.io? (j/n)
   und führe /connect-board aus.
   ```
 
-- **Falls ja:** Führe `/connect-board` inline aus (Modus 2: interaktiv — frage Board URL, Workspace, ID, Key).
+- **Falls ja:** Führe `/connect-board` inline aus (Modus 2: interaktiv — stelle alle fehlenden Werte in einer einzigen Nachricht ab, nie einzeln nacheinander).

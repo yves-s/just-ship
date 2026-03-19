@@ -44,11 +44,23 @@ Wenn alle Pflicht-Flags übergeben wurden:
 
 ### Modus 2: Interaktiv (keine oder unvollständige Flags)
 
-Frage nacheinander:
-1. Board URL (Default: `https://board.just-ship.io`)
-2. Workspace Slug
-3. Workspace ID
-4. API Key
+Stelle alle fehlenden Werte in **einer einzigen Nachricht** ab — nie nacheinander einzeln fragen. Zeige Defaults direkt inline:
+
+```
+Um das Board zu verbinden, brauche ich folgende Angaben:
+
+1. Board URL  (Standard: https://board.just-ship.io)
+2. Workspace Slug  (z.B. `mein-team`)
+3. Workspace ID  (UUID aus den Board-Einstellungen)
+4. API Key  (beginnt mit `adp_`)
+
+Tipp: Im Board unter Einstellungen → Projekt findest du einen
+Connect-Command mit allen Werten vorausgefüllt.
+```
+
+Wenn der User antwortet:
+- Fehlende Werte → nochmal nachfragen (alle noch fehlenden auf einmal)
+- Board URL weggelassen oder "Standard" → `https://board.just-ship.io` verwenden
 
 Dann wie Modus 1 ausführen.
 
