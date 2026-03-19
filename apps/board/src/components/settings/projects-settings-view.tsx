@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { ChevronDown, Terminal, Pencil, Trash2, Plus, ArrowRightLeft } from "lucide-react";
+import { ChevronDown, Terminal, Pencil, Trash2, Plus, ArrowRightLeft, Users } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -21,8 +21,9 @@ import { EditProjectDialog } from "./edit-project-dialog";
 import { DeleteProjectDialog } from "./delete-project-dialog";
 import { ProjectSetupDialog } from "@/components/board/project-setup-dialog";
 import { CreateProjectDialog } from "@/components/board/create-project-dialog";
+import { ProjectMembersDialog } from "./project-members-dialog";
 import { createClient } from "@/lib/supabase/client";
-import type { Project, ApiKey } from "@/lib/types";
+import type { Project, ApiKey, WorkspaceMember } from "@/lib/types";
 import type { ProjectWithStats } from "@/app/[slug]/settings/projects/page";
 
 const PROJECT_COLORS = [
@@ -62,6 +63,8 @@ interface ProjectsSettingsViewProps {
   workspaceSlug: string;
   boardUrl: string;
   hasApiKey: boolean;
+  workspaceMembers: WorkspaceMember[];
+  isAdmin: boolean;
 }
 
 export function ProjectsSettingsView({
@@ -70,6 +73,8 @@ export function ProjectsSettingsView({
   workspaceSlug: _workspaceSlug,
   boardUrl,
   hasApiKey,
+  workspaceMembers,
+  isAdmin,
 }: ProjectsSettingsViewProps) {
   const [projectsList, setProjectsList] = useState<ProjectWithStats[]>(projects);
   const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
@@ -81,6 +86,7 @@ export function ProjectsSettingsView({
   const [plaintextKey, setPlaintextKey] = useState<string | null>(null);
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [membersProject, setMembersProject] = useState<Project | null>(null);
 
   function handleMoved() {
     if (!moveDialogProject) return;
@@ -172,10 +178,12 @@ export function ProjectsSettingsView({
               Manage projects in this workspace.
             </CardDescription>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setCreateProjectOpen(true)}>
-            <Plus className="h-4 w-4" />
-            New project
-          </Button>
+          {isAdmin && (
+            <Button variant="outline" size="sm" onClick={() => setCreateProjectOpen(true)}>
+              <Plus className="h-4 w-4" />
+              New project
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {projectsList.length === 0 ? (
@@ -308,6 +316,19 @@ export function ProjectsSettingsView({
 
                           {/* Actions Row */}
                           <div className="flex justify-end gap-1.5">
+                            {isAdmin && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMembersProject(project);
+                                }}
+                              >
+                                <Users className="h-3.5 w-3.5" />
+                                Members
+                              </Button>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"
@@ -319,40 +340,46 @@ export function ProjectsSettingsView({
                               <Terminal className="h-3.5 w-3.5" />
                               Setup
                             </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditProject(project);
-                              }}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                              Edit
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setMoveDialogProject(project);
-                              }}
-                            >
-                              <ArrowRightLeft className="h-3.5 w-3.5" />
-                              Move
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-destructive hover:text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteProject(project);
-                              }}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              Delete
-                            </Button>
+                            {isAdmin && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditProject(project);
+                                }}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                Edit
+                              </Button>
+                            )}
+                            {isAdmin && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMoveDialogProject(project);
+                                }}
+                              >
+                                <ArrowRightLeft className="h-3.5 w-3.5" />
+                                Move
+                              </Button>
+                            )}
+                            {isAdmin && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteProject(project);
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Delete
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </CollapsibleContent>
@@ -421,6 +448,16 @@ export function ProjectsSettingsView({
         workspaceId={workspaceId}
         onCreated={handleCreated}
       />
+
+      {membersProject && (
+        <ProjectMembersDialog
+          open={membersProject !== null}
+          onOpenChange={(open) => !open && setMembersProject(null)}
+          projectId={membersProject.id}
+          projectName={membersProject.name}
+          workspaceMembers={workspaceMembers}
+        />
+      )}
     </>
   );
 }

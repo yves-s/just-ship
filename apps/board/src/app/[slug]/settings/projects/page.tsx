@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ProjectsSettingsView } from "@/components/settings/projects-settings-view";
-import type { Project } from "@/lib/types";
+import type { Project, WorkspaceMember } from "@/lib/types";
 
 export interface ProjectWithStats extends Project {
   ticketStats: {
@@ -29,7 +29,7 @@ export default async function ProjectsSettingsPage({
 
   const wid = workspace.id;
 
-  const [projectsResult, ticketsResult, apiKeyResult] = await Promise.all([
+  const [projectsResult, ticketsResult, apiKeyResult, membersResult, userResult] = await Promise.all([
     supabase
       .from("projects")
       .select("*")
@@ -44,11 +44,20 @@ export default async function ProjectsSettingsPage({
       .select("id", { count: "exact", head: true })
       .eq("workspace_id", wid)
       .is("revoked_at", null),
+    supabase
+      .from("workspace_members")
+      .select("*")
+      .eq("workspace_id", wid),
+    supabase.auth.getUser(),
   ]);
 
   const projects = (projectsResult.data ?? []) as Project[];
   const tickets = ticketsResult.data ?? [];
   const hasApiKey = (apiKeyResult.count ?? 0) > 0;
+  const workspaceMembers = (membersResult.data ?? []) as WorkspaceMember[];
+  const currentUser = userResult.data.user;
+  const currentMember = workspaceMembers.find((m) => m.user_id === currentUser?.id);
+  const isAdmin = currentMember ? ["admin", "owner"].includes(currentMember.role) : false;
 
   // Aggregate ticket stats per project in a single pass
   const statsMap = new Map<string, { open: number; done: number }>();
@@ -87,6 +96,8 @@ export default async function ProjectsSettingsPage({
       workspaceSlug={slug}
       boardUrl={boardUrl}
       hasApiKey={hasApiKey}
+      workspaceMembers={workspaceMembers}
+      isAdmin={isAdmin}
     />
   );
 }

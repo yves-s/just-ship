@@ -7,22 +7,31 @@ export interface EventConfig {
 }
 
 async function postEvent(config: EventConfig, payload: Record<string, unknown>): Promise<void> {
-  try {
-    await fetch(`${config.apiUrl}/api/events`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Pipeline-Key": config.apiKey,
-      },
-      body: JSON.stringify({
-        ticket_number: Number(config.ticketNumber),
-        ...payload,
-      }),
-      signal: AbortSignal.timeout(3000),
-    });
-  } catch {
-    // Silent fail — pipeline continues regardless of Dev Board availability
+  const body = JSON.stringify({
+    ticket_number: Number(config.ticketNumber),
+    ...payload,
+  });
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(`${config.apiUrl}/api/events`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Pipeline-Key": config.apiKey,
+        },
+        body,
+        signal: AbortSignal.timeout(8000),
+      });
+      if (res.ok) return;
+      // Server error — retry
+      if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, 500 * attempt));
+    } catch {
+      // Network/timeout error — retry
+      if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, 500 * attempt));
+    }
   }
+  // All attempts failed — pipeline continues regardless
 }
 
 interface EventHookOptions {
@@ -33,8 +42,12 @@ export function createEventHooks(
   config: EventConfig,
   options?: EventHookOptions,
 ): Partial<Record<HookEvent, HookCallbackMatcher[]>> {
+  // Cache agent_id → agent_type mapping (SubagentStop doesn't include agent_type)
+  const agentTypeByIdMap = new Map<string, string>();
+
   const onAgentStarted: HookCallback = async (input) => {
     const hookInput = input as SubagentStartHookInput;
+    agentTypeByIdMap.set(hookInput.agent_id, hookInput.agent_type);
     await postEvent(config, {
       agent_type: hookInput.agent_type,
       event_type: "agent_started",
@@ -44,8 +57,10 @@ export function createEventHooks(
 
   const onAgentCompleted: HookCallback = async (input) => {
     const hookInput = input as SubagentStopHookInput;
+    const agentType = agentTypeByIdMap.get(hookInput.agent_id) ?? "unknown";
+    agentTypeByIdMap.delete(hookInput.agent_id);
     await postEvent(config, {
-      agent_type: hookInput.agent_type,
+      agent_type: agentType,
       event_type: "completed",
     });
     return { async: true as const };
@@ -55,6 +70,8 @@ export function createEventHooks(
     const hookInput = input as PostToolUseHookInput;
     const toolInput = (hookInput.tool_input ?? {}) as Record<string, unknown>;
     const agentType = (toolInput.subagent_type ?? toolInput.name ?? "unknown") as string;
+    // Only send if SubagentStop didn't already handle it
+    if (agentTypeByIdMap.has(agentType)) return { async: true as const };
     await postEvent(config, {
       agent_type: agentType,
       event_type: "completed",
