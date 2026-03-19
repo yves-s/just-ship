@@ -9,7 +9,7 @@ import {
 import { z } from "zod";
 
 const acceptSchema = z.object({
-  token: z.string().uuid(),
+  token: z.string().min(1),
 });
 
 export async function POST(request: Request) {
