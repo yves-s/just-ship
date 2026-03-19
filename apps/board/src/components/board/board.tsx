@@ -755,6 +755,7 @@ export function Board({
           onOpenChange={(open) => !open && setSetupProject(null)}
           project={setupProject}
           workspaceId={workspaceId}
+          workspaceSlug={workspaceSlug}
           boardUrl={boardUrl}
           apiKey={apiKey}
           plaintextKey={plaintextKey}

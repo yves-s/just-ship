@@ -62,7 +62,6 @@ interface ProjectsSettingsViewProps {
   workspaceId: string;
   workspaceSlug: string;
   boardUrl: string;
-  hasApiKey: boolean;
   workspaceMembers: WorkspaceMember[];
   isAdmin: boolean;
 }
@@ -70,9 +69,8 @@ interface ProjectsSettingsViewProps {
 export function ProjectsSettingsView({
   projects,
   workspaceId,
-  workspaceSlug: _workspaceSlug,
+  workspaceSlug,
   boardUrl,
-  hasApiKey,
   workspaceMembers,
   isAdmin,
 }: ProjectsSettingsViewProps) {
@@ -228,15 +226,6 @@ export function ProjectsSettingsView({
                               </p>
                             )}
                           </div>
-                          <span
-                            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                              hasApiKey
-                                ? "bg-emerald-500/10 text-emerald-500"
-                                : "bg-muted text-muted-foreground"
-                            }`}
-                          >
-                            {hasApiKey ? "Connected" : "Not connected"}
-                          </span>
                           <ChevronDown
                             className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
                               isExpanded ? "rotate-180" : ""
@@ -270,18 +259,6 @@ export function ProjectsSettingsView({
                               </span>
                               <div className="text-xs text-muted-foreground">
                                 {formatDate(project.created_at)}
-                              </div>
-                            </div>
-                            <div>
-                              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                                Pipeline
-                              </span>
-                              <div
-                                className={`text-xs ${
-                                  hasApiKey ? "text-emerald-500" : "text-muted-foreground"
-                                }`}
-                              >
-                                {hasApiKey ? "Connected" : "Not connected"}
                               </div>
                             </div>
                           </div>
@@ -410,6 +387,7 @@ export function ProjectsSettingsView({
           onOpenChange={(open) => !open && setSetupProject(null)}
           project={setupProject}
           workspaceId={workspaceId}
+          workspaceSlug={workspaceSlug}
           boardUrl={boardUrl}
           apiKey={apiKey}
           plaintextKey={plaintextKey}

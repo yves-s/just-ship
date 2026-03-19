@@ -29,7 +29,7 @@ export default async function ProjectsSettingsPage({
 
   const wid = workspace.id;
 
-  const [projectsResult, ticketsResult, apiKeyResult, membersResult, userResult] = await Promise.all([
+  const [projectsResult, ticketsResult, membersResult, userResult] = await Promise.all([
     supabase
       .from("projects")
       .select("*")
@@ -40,11 +40,6 @@ export default async function ProjectsSettingsPage({
       .select("id, project_id, status")
       .eq("workspace_id", wid),
     supabase
-      .from("api_keys")
-      .select("id", { count: "exact", head: true })
-      .eq("workspace_id", wid)
-      .is("revoked_at", null),
-    supabase
       .from("workspace_members")
       .select("*")
       .eq("workspace_id", wid),
@@ -53,7 +48,6 @@ export default async function ProjectsSettingsPage({
 
   const projects = (projectsResult.data ?? []) as Project[];
   const tickets = ticketsResult.data ?? [];
-  const hasApiKey = (apiKeyResult.count ?? 0) > 0;
   const workspaceMembers = (membersResult.data ?? []) as WorkspaceMember[];
   const currentUser = userResult.data.user;
   const currentMember = workspaceMembers.find((m) => m.user_id === currentUser?.id);
@@ -95,7 +89,6 @@ export default async function ProjectsSettingsPage({
       workspaceId={workspace.id}
       workspaceSlug={slug}
       boardUrl={boardUrl}
-      hasApiKey={hasApiKey}
       workspaceMembers={workspaceMembers}
       isAdmin={isAdmin}
     />

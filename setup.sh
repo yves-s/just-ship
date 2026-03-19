@@ -651,15 +651,21 @@ if [ "$SETUP_MODE" = "2" ]; then
   echo ""
   echo "Board connection:"
   echo ""
-  echo "  Paste the connect command from your board,"
-  echo "  or press Enter for manual setup:"
+  echo "  Open board.just-ship.io → Board → click the terminal icon"
+  echo "  next to your project → copy the connect command."
+  echo ""
+  echo "  Paste it below, or press Enter to skip"
+  echo "  (you can connect later with /connect-board in Claude Code)."
   echo ""
   read -p "  > " CONNECT_CMD
 
   if [ -n "$CONNECT_CMD" ]; then
-    # Parse paste-friendly command: /connect-board --board X --workspace Y --workspace-id Z --key K [--project P]
+    # Parse connect command from board (supports both /setup-just-ship and /connect-board formats)
     BOARD_URL="" WS_SLUG="" WS_ID="" API_KEY="" PROJECT_ID=""
-    # Strip leading /connect-board if present
+    # Remove line continuations (backslash + newline) and collapse whitespace
+    CONNECT_CMD=$(echo "$CONNECT_CMD" | tr -d '\\' | tr '\n' ' ' | sed 's/  */ /g')
+    # Strip leading command name if present
+    CONNECT_CMD="${CONNECT_CMD#/setup-just-ship }"
     CONNECT_CMD="${CONNECT_CMD#/connect-board }"
     # Parse flags from the pasted string
     set -- $CONNECT_CMD

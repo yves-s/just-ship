@@ -32,6 +32,7 @@ interface ProjectSetupDialogProps {
   onOpenChange: (open: boolean) => void;
   project: Project;
   workspaceId: string;
+  workspaceSlug: string;
   boardUrl: string;
   apiKey: ApiKey | null;
   plaintextKey: string | null;
@@ -42,15 +43,14 @@ interface ProjectSetupDialogProps {
 
 type CopiedTarget = "cli" | "json" | "install" | "uuid" | null;
 
-const INSTALL_COMMAND = `git clone https://github.com/yves-s/just-ship.git ~/.just-ship
-cd /path/to/your/project
-~/.just-ship/setup.sh`;
+const INSTALL_COMMAND = `curl -fsSL https://raw.githubusercontent.com/yves-s/just-ship/main/install.sh | bash`;
 
 export function ProjectSetupDialog({
   open,
   onOpenChange,
   project,
   workspaceId,
+  workspaceSlug,
   boardUrl,
   apiKey,
   plaintextKey,
@@ -80,6 +80,8 @@ export function ProjectSetupDialog({
 
   const cliCommand = `/setup-just-ship \\
   --board ${boardUrl} \\
+  --workspace ${workspaceSlug} \\
+  --workspace-id ${workspaceId} \\
   --key ${displayKey || "<loading...>"} \\
   --project ${project.id}`;
 
@@ -172,7 +174,7 @@ export function ProjectSetupDialog({
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-sm font-medium">2. Install pipeline in your project</p>
+                    <p className="text-sm font-medium">2. Install Just Ship</p>
                     <div className="relative">
                       <pre className="text-xs bg-background rounded p-3 whitespace-pre-wrap break-all pr-9">
                         {INSTALL_COMMAND}
@@ -180,6 +182,7 @@ export function ProjectSetupDialog({
                       <CopyButton target="install" text={INSTALL_COMMAND} />
                     </div>
                     <p className="text-xs text-muted-foreground">
+                      Restart your terminal after install.{" "}
                       <a
                         href="https://github.com/yves-s/just-ship"
                         target="_blank"
@@ -192,7 +195,13 @@ export function ProjectSetupDialog({
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-sm font-medium">3. Then run the connect command below</p>
+                    <p className="text-sm font-medium">3. Set up your project</p>
+                    <pre className="text-xs bg-background rounded p-3 whitespace-pre-wrap break-all">
+                      {`cd /path/to/your/project\njust-ship setup`}
+                    </pre>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">4. Then run the connect command below</p>
                   </div>
                 </div>
               </CollapsibleContent>
