@@ -30,7 +30,7 @@ export function AcceptInviteButton({
       } = await supabase.auth.getUser();
 
       if (!user) {
-        router.push(`/login?next=/invite/${token}`);
+        router.push(`/register?next=/invite/${token}`);
         return;
       }
 

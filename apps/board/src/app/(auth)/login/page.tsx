@@ -55,7 +55,8 @@ function LoginForm() {
       return;
     }
 
-    router.push("/");
+    const next = searchParams.get("next") ?? "/";
+    router.push(next);
     router.refresh();
   }
 
@@ -119,7 +120,10 @@ function LoginForm() {
             </Button>
             <p className="text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{" "}
-              <Link href="/register" className="text-foreground hover:underline">
+              <Link
+                href={searchParams.get("next") ? `/register?next=${encodeURIComponent(searchParams.get("next")!)}` : "/register"}
+                className="text-foreground hover:underline"
+              >
                 Sign up
               </Link>
             </p>
