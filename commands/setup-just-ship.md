@@ -14,6 +14,7 @@ Installiert Just Ship im aktuellen Projekt (falls noch nicht geschehen), erkennt
 |---|---|
 | `--board` | Board URL (z.B. `https://board.just-ship.io`) |
 | `--workspace` | Workspace Slug |
+| `--workspace-id` | Workspace UUID (für Erstverbindung — kein Secret) |
 | `--project` | Projekt UUID |
 
 Falls diese Flags übergeben wurden: Schritte 1–4 normal ausführen, dann **Schritt 5 überspringen** und stattdessen direkt verbinden:
@@ -30,7 +31,10 @@ Falls diese Flags übergeben wurden: Schritte 1–4 normal ausführen, dann **Sc
     --workspace <workspace> --project-id <project>
   ```
 
-- **NOT_FOUND** → zuerst Workspace verbinden (Modus 2 von `/connect-board` — alle Felder in einer Nachricht abfragen: `--workspace-id` und `--key` zusätzlich zu den bereits bekannten Werten), danach `set-project` aufrufen.
+- **NOT_FOUND** → Workspace muss zuerst verbunden werden:
+  - Falls `--workspace-id` bekannt (aus den Flags): nur noch `--key` abfragen (eine Nachricht)
+  - Falls `--workspace-id` fehlt: beide Werte (`--workspace-id` und `--key`) in einer Nachricht abfragen
+  - Dann `add-workspace` aufrufen, danach `set-project`
 
 ## Ausführung
 
