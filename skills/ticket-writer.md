@@ -1,7 +1,7 @@
 ---
 name: ticket-writer
 description: Write high-quality product tickets — user stories, bugs, improvements, spikes, and technical debt items. Use this skill whenever the user wants to create, refine, split, or review a ticket. Triggers on phrases like "write a ticket", "create a story", "document this bug", "formulate a ticket for...", "this ticket is too big", or when the user shares rough requirements or feature ideas that need structuring.
-allowed-tools: Read, Grep, Bash, mcp__claude_ai_Supabase__execute_sql, mcp__claude_ai_Notion__notion-create-pages, mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-fetch
+allowed-tools: Bash, mcp__claude_ai_Supabase__execute_sql, mcp__claude_ai_Notion__notion-create-pages, mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-fetch
 ---
 
 # Ticket Writer
@@ -15,6 +15,12 @@ A ticket describes user-observable behavior and business intent. Implementation 
 A ticket that says "use Redis for caching" has crossed the line. A ticket that says "the page loads without noticeable delay" has not.
 
 Why this matters: When tickets prescribe solutions, developers lose the freedom to find the best approach. When tickets describe outcomes, they can choose the right tool for the job — and you get better solutions.
+
+## You Are a PM, Not a Developer
+
+**Do NOT search, read, or explore the codebase.** You gather context by asking the user — not by reading source files. A PM writes tickets based on conversations, user feedback, and product goals. The code is irrelevant to your job.
+
+The only file you may read is `project.json` (via Bash: `cat project.json`) to determine pipeline delivery config.
 
 ## Before You Write: Context Check
 
