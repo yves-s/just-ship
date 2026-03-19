@@ -151,19 +151,31 @@ Lies die aktuelle `CLAUDE.md`. Falls dort noch TODO-Platzhalter stehen:
 
 ### 4. Zusammenfassung
 
-Zeige:
+Zeige nur Zeilen für Felder die tatsächlich erkannt wurden (leere Felder weglassen):
 
 ```
 ✓ Just Ship eingerichtet
 
-  Stack         : {framework} + {language} + {styling}
-  Build         : {build_command}
-  Test          : {test_command}
-  Package Mgr   : {package_manager}
+  Stack         : {framework} + {language} + {styling}   ← nur wenn erkannt
+  Build         : {build_command}                         ← nur wenn erkannt
+  Test          : {test_command}                          ← nur wenn erkannt
+  Package Mgr   : {package_manager}                      ← nur wenn erkannt
 
 Geänderte Dateien:
-  ✓ project.json  — Stack, Build, Paths
-  ✓ CLAUDE.md     — Beschreibung, Konventionen, Architektur
+  ✓ project.json
+  ✓ CLAUDE.md
+```
+
+Falls gar kein Stack erkannt wurde (leeres Projekt):
+```
+✓ Just Ship eingerichtet
+
+  Stack noch nicht erkannt — wird automatisch befüllt sobald
+  du Abhängigkeiten installierst und /setup-just-ship erneut ausführst.
+
+Geänderte Dateien:
+  ✓ project.json
+  ✓ CLAUDE.md
 ```
 
 ### 5. Board verbinden?

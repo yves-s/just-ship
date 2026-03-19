@@ -610,8 +610,8 @@ if [ "$OVERWRITE_CONFIG" != "N" ]; then
   "description": "${PROJECT_DESC}",
   "stack": {},
   "build": {
-    "web": "pnpm run build",
-    "test": "npx vitest run"
+    "web": "",
+    "test": ""
   },
   "paths": {},
   "supabase": {

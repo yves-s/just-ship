@@ -8,8 +8,8 @@
     "package_manager": "pnpm"
   },
   "build": {
-    "web": "pnpm run build",
-    "test": "pnpm run test"
+    "web": "",
+    "test": ""
   },
   "paths": {
     "src": "src/",
