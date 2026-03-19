@@ -12,10 +12,10 @@ Installiert Just Ship im aktuellen Projekt (falls noch nicht geschehen), erkennt
 
 ### 0. Just Ship installiert?
 
-Prüfe ob `.claude/agents/` im aktuellen Verzeichnis existiert:
+**0a) Global installiert?** Prüfe ob `~/.just-ship` als git-Repo existiert:
 
 ```bash
-ls .claude/agents/ 2>/dev/null | head -1 || echo "NOT_INSTALLED"
+[ -d "$HOME/.just-ship/.git" ] && echo "OK" || echo "NOT_INSTALLED"
 ```
 
 Falls `NOT_INSTALLED`:
@@ -23,10 +23,26 @@ Falls `NOT_INSTALLED`:
 1. Ausgabe: `Just Ship wird installiert...`
 2. Führe aus:
    ```bash
+   curl -fsSL https://just-ship.io/install | bash
+   ```
+3. Warte auf Abschluss. Falls Fehler: Ausgabe anzeigen und abbrechen.
+4. Ausgabe: `✓ Just Ship installiert`
+
+**0b) Im Projekt installiert?** Prüfe ob `.claude/agents/` existiert:
+
+```bash
+ls .claude/agents/ 2>/dev/null | head -1 || echo "NOT_INSTALLED"
+```
+
+Falls `NOT_INSTALLED`:
+
+1. Ausgabe: `Framework-Dateien werden kopiert...`
+2. Führe aus:
+   ```bash
    just-ship setup --auto
    ```
-3. Warte auf Abschluss (Exit Code 0). Falls Fehler: Ausgabe anzeigen und abbrechen.
-4. Ausgabe: `✓ Just Ship installiert`
+3. Warte auf Abschluss. Falls Fehler: Ausgabe anzeigen und abbrechen.
+4. Ausgabe: `✓ Framework eingerichtet`
 
 ### 1. Projekt analysieren
 
