@@ -42,25 +42,21 @@ Two modes of operation:
 ## Quick Start
 
 ```bash
-# 1. Clone the framework + add CLI to PATH
-git clone https://github.com/yves-s/just-ship.git ~/.just-ship
-echo 'export PATH="$HOME/.just-ship/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
+curl -fsSL https://raw.githubusercontent.com/yves-s/just-ship/main/install.sh | bash
+```
 
-# 2. Go to your project and run setup
+Then open a new terminal and run in your project:
+
+```bash
 cd /path/to/your-project
 just-ship setup
+```
 
-# 3. Connect to the Just Ship Board (optional)
-#    Create a workspace + project at https://board.just-ship.io
-#    Copy the connect command from the project setup dialog:
-claude
-> /setup-just-ship --board https://board.just-ship.io --key adp_... --project <uuid>
+The setup wizard guides you through project configuration and optionally connects to the [Just Ship Board](https://board.just-ship.io).
 
-# 4. Write your first ticket
-> /ticket Add dark mode toggle to the settings page
-
-# 5. Implement it
-> /develop
+**Update just-ship itself:**
+```bash
+just-ship self-update
 ```
 
 ---
