@@ -19,24 +19,31 @@ export default async function MembersPage({
 
   if (!workspace) redirect("/");
 
-  // Fetch members — join with auth.users via user_email stored on member or via a view
-  const { data: membersData } = await supabase
-    .from("workspace_members")
-    .select("*")
-    .eq("workspace_id", workspace.id)
-    .order("joined_at");
+  const { data: { user } } = await supabase.auth.getUser();
 
-  const { data: invitesData } = await supabase
-    .from("workspace_invites")
-    .select("*")
-    .eq("workspace_id", workspace.id)
-    .order("created_at", { ascending: false });
+  const [{ data: membersData }, { data: invitesData }] = await Promise.all([
+    supabase
+      .from("workspace_members")
+      .select("*")
+      .eq("workspace_id", workspace.id)
+      .order("joined_at"),
+    supabase
+      .from("workspace_invites")
+      .select("*")
+      .eq("workspace_id", workspace.id)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const members = (membersData ?? []) as WorkspaceMember[];
+  const currentMember = members.find((m) => m.user_id === user?.id);
+  const currentUserRole = currentMember?.role ?? "member";
 
   return (
     <MembersView
-      members={(membersData ?? []) as WorkspaceMember[]}
+      members={members}
       invites={(invitesData ?? []) as WorkspaceInvite[]}
       workspaceId={workspace.id}
+      currentUserRole={currentUserRole}
     />
   );
 }
