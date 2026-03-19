@@ -35,7 +35,7 @@ function lineColor(type: "comment" | "command" | "blank" | "input") {
 
 export function QuickStart() {
   return (
-    <section className="bg-brand-900 py-24 sm:py-32">
+    <section id="quick-start" className="bg-brand-900 py-24 sm:py-32">
       <div className="mx-auto max-w-3xl px-6">
         <h2 className="mb-16 text-center text-3xl font-bold text-white sm:text-4xl">
           Get Started in 60 Seconds
