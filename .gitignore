@@ -57,3 +57,6 @@ screenshots/
 scripts/*
 !scripts/write-config.sh
 .worktrees/
+
+# Git worktrees
+.worktrees/
