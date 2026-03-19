@@ -8,6 +8,30 @@ disable-model-invocation: true
 
 Installiert Just Ship im aktuellen Projekt (falls noch nicht geschehen), erkennt den Tech-Stack automatisch, befüllt `project.json` und `CLAUDE.md`, und verbindet optional das Just Ship Board.
 
+## Argumente (optional — vom Board vorausgefüllt)
+
+| Flag | Beschreibung |
+|---|---|
+| `--board` | Board URL (z.B. `https://board.just-ship.io`) |
+| `--workspace` | Workspace Slug |
+| `--project` | Projekt UUID |
+
+Falls diese Flags übergeben wurden: Schritte 1–4 normal ausführen, dann **Schritt 5 überspringen** und stattdessen direkt verbinden:
+
+**a) Workspace bereits verbunden?** Prüfe ob der Workspace-Slug in `~/.just-ship/config.json` existiert:
+
+```bash
+"$HOME/.just-ship/scripts/write-config.sh" read-workspace --slug <workspace> 2>/dev/null && echo "EXISTS" || echo "NOT_FOUND"
+```
+
+- **EXISTS** → direkt `set-project` aufrufen:
+  ```bash
+  ".claude/scripts/write-config.sh" set-project \
+    --workspace <workspace> --project-id <project>
+  ```
+
+- **NOT_FOUND** → zuerst Workspace verbinden (Modus 2 von `/connect-board` — alle Felder in einer Nachricht abfragen: `--workspace-id` und `--key` zusätzlich zu den bereits bekannten Werten), danach `set-project` aufrufen.
+
 ## Ausführung
 
 ### 0. Just Ship installiert?
