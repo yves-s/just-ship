@@ -77,6 +77,19 @@ export interface TelegramAuthCode {
   created_at: string;
 }
 
+export interface TicketQuestion {
+  id: string;
+  ticket_id: string;
+  workspace_id: string;
+  question: string;
+  options: { key: string; label: string }[] | null;
+  context: string | null;
+  answer: string | null;
+  answered_via: string | null;
+  created_at: string;
+  answered_at: string | null;
+}
+
 export interface Ticket {
   id: string;
   workspace_id: string;
@@ -91,6 +104,7 @@ export interface Ticket {
   assignee_id: string | null;
   branch: string | null;
   pipeline_status: string | null;
+  session_id: string | null;
   assigned_agents: string[];
   summary: string | null;
   test_results: string | null;

@@ -25,7 +25,14 @@ async function postEvent(config: EventConfig, payload: Record<string, unknown>):
   }
 }
 
-export function createEventHooks(config: EventConfig): Partial<Record<HookEvent, HookCallbackMatcher[]>> {
+interface EventHookOptions {
+  onPause?: (reason: string) => void;
+}
+
+export function createEventHooks(
+  config: EventConfig,
+  options?: EventHookOptions,
+): Partial<Record<HookEvent, HookCallbackMatcher[]>> {
   const onAgentStarted: HookCallback = async (input) => {
     const hookInput = input as SubagentStartHookInput;
     await postEvent(config, {
@@ -69,12 +76,23 @@ export function createEventHooks(config: EventConfig): Partial<Record<HookEvent,
     return { async: true as const };
   };
 
+  const onBashResult: HookCallback = async (input) => {
+    const hookInput = input as PostToolUseHookInput;
+    const toolResponse = String(hookInput.tool_response ?? "");
+    if (toolResponse.includes("__WAITING_FOR_INPUT__")) {
+      options?.onPause?.("human_in_the_loop");
+      return { continue: false, stopReason: "human_in_the_loop" };
+    }
+    return { async: true as const };
+  };
+
   return {
     SubagentStart: [{ matcher: ".*", hooks: [onAgentStarted] }],
     SubagentStop: [{ matcher: ".*", hooks: [onAgentCompleted] }],
     PostToolUse: [
       { matcher: "Write|Edit", hooks: [onFileChanged] },
       { matcher: "Agent", hooks: [onSubagentDispatchCompleted] },
+      { matcher: "Bash", hooks: [onBashResult] },
     ],
   };
 }

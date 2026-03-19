@@ -18,6 +18,7 @@ export const PIPELINE_STATUSES = [
   "running",
   "done",
   "failed",
+  "paused",
 ] as const;
 
 export const TICKETS_PER_COLUMN_PAGE = 20;

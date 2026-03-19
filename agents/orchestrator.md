@@ -151,9 +151,27 @@ Standardmäßig übernimmt der QA-Agent den Security-Quick-Check. Für sicherhei
 8. **Sonnet für Kreatives** — UI-Komponenten, Business Logic
 9. **Implementation-Agents bekommen den exakten Code** den sie schreiben sollen, soweit möglich
 
+## Rückfragen an den User (ask-human)
+
+Wenn du bei einer Entscheidung unsicher bist, die das Ergebnis wesentlich beeinflusst — Architektur, UX, Scope — nutze `ask-human` via Bash:
+
+```bash
+bash .claude/scripts/ask-human.sh \
+  --question "Soll die API REST oder GraphQL sein?" \
+  --option "REST — passt zum bestehenden Stack" \
+  --option "GraphQL — flexibler für Frontend" \
+  --context "Baue User-Profile Endpunkt, brauche Architektur-Entscheidung"
+```
+
+- Stelle klare Fragen mit konkreten Optionen
+- Triff keine Annahmen bei wichtigen Weichenstellungen
+- Das Script handelt den Rest (Board-Notification, Pipeline-Pause, Telegram-Push)
+- Im Pipeline-Modus: Du wirst automatisch pausiert und resumed wenn die Antwort kommt
+- Lokal: Die Frage erscheint im Chat, der User antwortet direkt
+
 ## Regeln
 
-- **Kein manueller Input nötig** — arbeite vollständig autonom
+- **Frag wenn nötig** — nutze `ask-human` bei wichtigen Entscheidungen statt zu raten
 - **Keine Dateien löschen** ohne explizite Anweisung
 - **Conventional Commits** — `feat:`, `fix:`, `chore:` auf Englisch
 - **Feature-Branch** — Prefix aus `project.json`
