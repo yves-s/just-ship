@@ -19,8 +19,12 @@ else
   git clone https://github.com/yves-s/just-ship.git "$HOME/.just-ship"
 fi
 
+chmod +x "$HOME/.just-ship/bin/"*
+
 # Shell detection and PATH setup
 PATH_ADDED=false
+
+SHELL="${SHELL:-}"
 
 case "$SHELL" in
   *zsh*)  RC_FILE="$HOME/.zshrc" ;;
@@ -28,7 +32,7 @@ case "$SHELL" in
   *)      RC_FILE="$HOME/.profile" ;;
 esac
 
-if ! echo "$PATH" | grep -qF ".just-ship/bin"; then
+if ! echo "$PATH" | grep -qF "$HOME/.just-ship/bin"; then
   echo 'export PATH="$HOME/.just-ship/bin:$PATH"' >> "$RC_FILE"
   PATH_ADDED=true
 fi
