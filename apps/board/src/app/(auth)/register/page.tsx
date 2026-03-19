@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   Card,
@@ -31,6 +32,7 @@ const registerSchema = z
 type RegisterInput = z.infer<typeof registerSchema>;
 
 function RegisterForm() {
+  const searchParams = useSearchParams();
   const [serverError, setServerError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
@@ -45,9 +47,12 @@ function RegisterForm() {
   async function onSubmit(data: RegisterInput) {
     setServerError(null);
     const supabase = createClient();
+    const next = searchParams.get("next") ?? "/";
+    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
     const { error } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
+      options: { emailRedirectTo: redirectTo },
     });
 
     if (error) {
@@ -143,7 +148,10 @@ function RegisterForm() {
             </Button>
             <p className="text-center text-sm text-muted-foreground">
               Already have an account?{" "}
-              <Link href="/login" className="text-foreground hover:underline">
+              <Link
+                href={searchParams.get("next") ? `/login?next=${encodeURIComponent(searchParams.get("next")!)}` : "/login"}
+                className="text-foreground hover:underline"
+              >
                 Sign in
               </Link>
             </p>
