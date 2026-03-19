@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, LayoutGrid, ListTodo, Settings, LogOut, ChevronDown, Check, Plus } from "lucide-react";
@@ -64,15 +65,45 @@ export function MobileNav({ workspace, userEmail, workspaces }: MobileNavProps) 
         >
           <Menu className="h-5 w-5" />
         </Button>
-        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-primary text-[10px] font-bold text-primary-foreground">
-          {workspace.name[0].toUpperCase()}
-        </div>
-        <span className="font-medium truncate text-sm">{workspace.name}</span>
+        <Image
+          src="/logos/svg/mark-dark.svg"
+          alt="Just Ship"
+          width={22}
+          height={22}
+          className="shrink-0 dark:hidden"
+        />
+        <Image
+          src="/logos/svg/mark-white.svg"
+          alt="Just Ship"
+          width={22}
+          height={22}
+          className="shrink-0 hidden dark:block"
+        />
+        <span className="font-semibold truncate text-sm tracking-tight">Just Ship</span>
       </header>
 
       {/* Mobile navigation drawer */}
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="left" className="w-72 p-0 flex flex-col">
+          {/* Brand */}
+          <div className="flex items-center gap-2.5 px-5 pt-4 pb-3">
+            <Image
+              src="/logos/svg/mark-dark.svg"
+              alt="Just Ship"
+              width={22}
+              height={22}
+              className="shrink-0 dark:hidden"
+            />
+            <Image
+              src="/logos/svg/mark-white.svg"
+              alt="Just Ship"
+              width={22}
+              height={22}
+              className="shrink-0 hidden dark:block"
+            />
+            <span className="text-sm font-semibold tracking-tight">Just Ship</span>
+          </div>
+
           {/* Workspace switcher */}
           <div className="border-b p-3">
             <DropdownMenu>

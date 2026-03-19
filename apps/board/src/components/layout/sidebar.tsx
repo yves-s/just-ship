@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -67,6 +68,25 @@ export function Sidebar({ workspace, userEmail, workspaces }: SidebarProps) {
 
   return (
     <aside className="hidden md:flex h-screen w-56 shrink-0 flex-col border-r bg-background">
+      {/* Brand */}
+      <div className="flex items-center gap-2.5 px-5 pt-4 pb-3">
+        <Image
+          src="/logos/svg/mark-dark.svg"
+          alt="Just Ship"
+          width={22}
+          height={22}
+          className="shrink-0 dark:hidden"
+        />
+        <Image
+          src="/logos/svg/mark-white.svg"
+          alt="Just Ship"
+          width={22}
+          height={22}
+          className="shrink-0 hidden dark:block"
+        />
+        <span className="text-sm font-semibold tracking-tight">Just Ship</span>
+      </div>
+
       {/* Workspace switcher */}
       <div className="border-b p-3">
         <DropdownMenu>
