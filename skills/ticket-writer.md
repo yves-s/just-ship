@@ -247,8 +247,14 @@ When in doubt: if the ticket has no clear urgency signal, default to `medium`.
 
 Read `project.json` and determine the pipeline mode:
 
-1. **Board API** (bevorzugt): Falls `pipeline.api_url` UND `pipeline.api_key` gesetzt → Board REST API verwenden
-2. **Legacy Supabase MCP**: Falls nur `pipeline.project_id` gesetzt (ohne `api_url`/`api_key`) → `execute_sql` verwenden, Warnung ausgeben: "Kein Board API konfiguriert. Nutze Legacy Supabase MCP. Fuehre /setup-just-ship aus um zu upgraden."
+1. **Board API** (bevorzugt): Credentials auflösen:
+   - **Neues Format:** Falls `pipeline.workspace` gesetzt → Workspace-Config aus globaler Config lesen:
+     ```bash
+     bash .claude/scripts/write-config.sh read-workspace --slug <workspace>
+     ```
+     Aus dem JSON-Output `board_url` als API URL und `api_key` verwenden. `pipeline.project_id` aus `project.json`.
+   - **Altes Format (Fallback):** Falls `pipeline.api_url` UND `pipeline.api_key` direkt in `project.json` → diese verwenden.
+2. **Legacy Supabase MCP**: Falls nur `pipeline.project_id` gesetzt (ohne `workspace` und ohne `api_url`/`api_key`) → `execute_sql` verwenden, Warnung ausgeben: "Kein Board API konfiguriert. Nutze Legacy Supabase MCP. Fuehre /setup-just-ship aus um zu upgraden."
 3. **Kein Pipeline**: Falls weder Board API noch `pipeline.project_id` konfiguriert → User fragen wo das Ticket hin soll
 
 ### Board API (bevorzugt) — Primary & Automatic

@@ -15,8 +15,28 @@ METADATA="${4:-{}}"
 # Read pipeline config from project.json
 if [ ! -f "project.json" ]; then exit 0; fi
 
-API_URL=$(python3 -c "import json; d=json.load(open('project.json')); print(d.get('pipeline',{}).get('api_url',''))" 2>/dev/null)
-API_KEY=$(python3 -c "import json; d=json.load(open('project.json')); print(d.get('pipeline',{}).get('api_key',''))" 2>/dev/null)
+# Try new format first: workspace slug → global config
+WORKSPACE=$(python3 -c "import json; d=json.load(open('project.json')); print(d.get('pipeline',{}).get('workspace',''))" 2>/dev/null)
+GLOBAL_CONFIG="$HOME/.just-ship/config.json"
+
+if [ -n "$WORKSPACE" ] && [ -f "$GLOBAL_CONFIG" ]; then
+  API_URL=$(JS_GC="$GLOBAL_CONFIG" JS_WS="$WORKSPACE" python3 -c "
+import json, os
+c = json.load(open(os.environ['JS_GC']))
+w = c.get('workspaces', {}).get(os.environ['JS_WS'], {})
+print(w.get('board_url', ''))" 2>/dev/null)
+  API_KEY=$(JS_GC="$GLOBAL_CONFIG" JS_WS="$WORKSPACE" python3 -c "
+import json, os
+c = json.load(open(os.environ['JS_GC']))
+w = c.get('workspaces', {}).get(os.environ['JS_WS'], {})
+print(w.get('api_key', ''))" 2>/dev/null)
+fi
+
+# Fallback: old format (api_url/api_key directly in project.json)
+if [ -z "$API_URL" ] || [ -z "$API_KEY" ]; then
+  API_URL=$(python3 -c "import json; d=json.load(open('project.json')); print(d.get('pipeline',{}).get('api_url',''))" 2>/dev/null)
+  API_KEY=$(python3 -c "import json; d=json.load(open('project.json')); print(d.get('pipeline',{}).get('api_key',''))" 2>/dev/null)
+fi
 
 [ -z "$API_URL" ] || [ -z "$API_KEY" ] && exit 0
 
