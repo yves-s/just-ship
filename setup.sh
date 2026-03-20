@@ -5,7 +5,7 @@
 # Usage:
 #   cd /path/to/your/project
 #
-#   # Initial setup (interactive)
+#   # Initial setup (non-interactive, auto-detect)
 #   /path/to/just-ship/setup.sh
 #
 #   # Update framework files only (non-interactive)
@@ -52,9 +52,9 @@ for arg in "$@"; do
     --help|-h)
       echo "Usage: setup.sh [--update] [--auto] [--dry-run]"
       echo ""
-      echo "  (no flags)   Interactive first-time setup"
-      echo "  --auto       Non-interactive setup (called by Claude Code)"
-      echo "  --update     Update framework files only (non-interactive)"
+      echo "  (no flags)   Non-interactive setup (default)"
+      echo "  --auto       Alias for default (backward compat)"
+      echo "  --update     Update framework files only"
       echo "  --dry-run    Preview changes without applying them"
       exit 0
       ;;
@@ -448,7 +448,7 @@ if [ "$MODE" = "update" ]; then
     if [ "$HAS_OLD_KEY" = "yes" ]; then
       echo ""
       echo "  ⚠  project.json contains api_key (deprecated format)"
-      echo "     Run /connect-board in Claude Code to migrate"
+      echo "     Führe 'just-ship connect' im Terminal aus um zu migrieren"
       echo "     to ~/.just-ship/config.json"
     fi
   fi
@@ -500,46 +500,24 @@ if [ "$MODE" = "update" ]; then
 fi
 
 # =============================================================================
-# SETUP MODE — Interactive first-time installation
-# AUTO MODE  — Non-interactive (called from Claude Code /setup-just-ship)
+# SETUP MODE — Non-interactive, auto-detect everything
 # =============================================================================
 
+# --- Derive project name from directory ---
+PROJECT_NAME=$(basename "$PROJECT_DIR" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-\|-$//g')
+PROJECT_NAME=${PROJECT_NAME:-myproject}
+PROJECT_DESC=""
+OVERWRITE_CONFIG="N"
+
 if [ "$MODE" = "auto" ]; then
-  # Derive project name from directory name (kebab-case)
-  PROJECT_NAME=$(basename "$PROJECT_DIR" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-\|-$//g')
-  PROJECT_NAME=${PROJECT_NAME:-myproject}
-  PROJECT_DESC=""
-  OVERWRITE_CONFIG="N"
-  SETUP_MODE="1"  # CLI-only — board connection handled by Claude after
   echo "Auto mode — project name: $PROJECT_NAME"
   echo ""
-else
-  OVERWRITE_CONFIG="Y"
-  if [ -f "project.json" ]; then
-    echo "project.json already exists."
-    read -p "Overwrite project.json? (y/N): " OVERWRITE_CONFIG
-    OVERWRITE_CONFIG=${OVERWRITE_CONFIG:-N}
-  fi
+fi
 
-  echo "Project configuration:"
-  echo ""
-
-  read -p "  Project name (kebab-case, e.g. my-app): " PROJECT_NAME
-  PROJECT_NAME=${PROJECT_NAME:-myproject}
-
-  read -p "  Description (optional): " PROJECT_DESC
-  PROJECT_DESC=${PROJECT_DESC:-""}
-
-  echo ""
-  echo "How do you want to work?"
-  echo "  1) CLI-only — agents & pipeline, no board"
-  echo "  2) Connect to Just Ship Board (board.just-ship.io)"
-  echo "     → track tickets visually, run the pipeline 24/7 on a VPS"
-  echo ""
-  read -p "  Choice (1/2): " SETUP_MODE
-  SETUP_MODE=${SETUP_MODE:-1}
-
-  echo ""
+if [ -f "project.json" ] && [ "$MODE" != "auto" ]; then
+  echo "project.json already exists."
+  read -p "Overwrite project.json? (y/N): " OVERWRITE_CONFIG
+  OVERWRITE_CONFIG=${OVERWRITE_CONFIG:-N}
 fi
 
 # --- Copy agents ---
@@ -660,66 +638,6 @@ cp "$FRAMEWORK_DIR/scripts/write-config.sh" "$PROJECT_DIR/.claude/scripts/write-
 chmod +x "$PROJECT_DIR/.claude/scripts/write-config.sh"
 echo "  ✓ write-config.sh (shared config script)"
 
-# --- Board connection ---
-if [ "$SETUP_MODE" = "2" ]; then
-  echo ""
-  echo "Board connection:"
-  echo ""
-  echo "  Open board.just-ship.io → Board → click the terminal icon"
-  echo "  next to your project → copy the connect command."
-  echo ""
-  echo "  Paste it below, or press Enter to skip"
-  echo "  (you can connect later with /connect-board in Claude Code)."
-  echo ""
-  read -p "  > " CONNECT_CMD
-
-  if [ -n "$CONNECT_CMD" ]; then
-    # Parse connect command from board (supports both /setup-just-ship and /connect-board formats)
-    BOARD_URL="" WS_SLUG="" WS_ID="" API_KEY="" PROJECT_ID=""
-    # Remove line continuations (backslash + newline) and collapse whitespace
-    CONNECT_CMD=$(echo "$CONNECT_CMD" | tr -d '\\' | tr '\n' ' ' | sed 's/  */ /g')
-    # Strip leading command name if present
-    CONNECT_CMD="${CONNECT_CMD#/setup-just-ship }"
-    CONNECT_CMD="${CONNECT_CMD#/connect-board }"
-    # Parse flags from the pasted string
-    set -- $CONNECT_CMD
-    while [[ $# -gt 0 ]]; do
-      case "$1" in
-        --board) BOARD_URL="$2"; shift 2 ;;
-        --workspace) WS_SLUG="$2"; shift 2 ;;
-        --workspace-id) WS_ID="$2"; shift 2 ;;
-        --key) API_KEY="$2"; shift 2 ;;
-        --project) PROJECT_ID="$2"; shift 2 ;;
-        *) shift ;;
-      esac
-    done
-  else
-    # Manual entry
-    read -p "  Board URL (default: https://board.just-ship.io): " BOARD_URL
-    BOARD_URL=${BOARD_URL:-"https://board.just-ship.io"}
-    read -p "  Workspace slug: " WS_SLUG
-    read -p "  Workspace ID: " WS_ID
-    read -p "  API Key: " API_KEY
-    read -p "  Project ID (optional): " PROJECT_ID
-  fi
-
-  if [ -n "$BOARD_URL" ] && [ -n "$WS_SLUG" ] && [ -n "$WS_ID" ] && [ -n "$API_KEY" ]; then
-    "$FRAMEWORK_DIR/scripts/write-config.sh" add-workspace \
-      --slug "$WS_SLUG" --board "$BOARD_URL" --workspace-id "$WS_ID" --key "$API_KEY"
-
-    if [ -n "$PROJECT_ID" ]; then
-      "$FRAMEWORK_DIR/scripts/write-config.sh" set-project \
-        --workspace "$WS_SLUG" --project-id "$PROJECT_ID" --project-name "$PROJECT_NAME" \
-        --project-dir "$PROJECT_DIR"
-    fi
-  else
-    echo "  ⚠ Incomplete board info — skipping. Run /connect-board later."
-  fi
-else
-  echo ""
-  echo "  ✓ CLI-only mode — run /connect-board anytime to add a board"
-fi
-
 # --- Write version + template hash ---
 echo "$FRAMEWORK_VERSION" > "$VERSION_FILE"
 if command -v md5 &>/dev/null; then
@@ -733,15 +651,7 @@ echo "================================================"
 echo "  Setup complete → $FRAMEWORK_VERSION"
 echo "================================================"
 echo ""
-echo "Next steps:"
-echo "  1. Open a new Claude Code session"
-echo "  2. Run /setup-just-ship (detects stack, fills project.json)"
-if [ "$SETUP_MODE" = "2" ]; then
-  echo "  ✓ Board already connected!"
-else
-  echo "  3. Run /connect-board to connect the Just Ship Board (optional)"
-fi
-echo ""
-echo "Framework updaten:"
-echo "  $(basename "$FRAMEWORK_DIR")/setup.sh --update"
+echo "Nächster Schritt:"
+echo "  Öffne Claude Code und führe /setup-just-ship aus"
+echo "  (erkennt Stack, füllt project.json, verbindet Board)"
 echo ""
