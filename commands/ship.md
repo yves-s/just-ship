@@ -1,7 +1,6 @@
 ---
 name: ship
 description: Alles abschliessen — commit, push, PR, merge, zurück auf main. Vollständig autonom, NULL Rückfragen.
-disable-model-invocation: true
 ---
 
 # /ship — ALLES abschliessen, ein Befehl
@@ -85,9 +84,9 @@ EOF
 
 SOFORT WEITER ZU SCHRITT 3a.
 
-### 3a. Vercel Preview URL (optional, nur mit Pipeline)
+### 3a. Vercel Preview URL (nur wenn `pipeline.hosting` === "vercel")
 
-Falls Pipeline konfiguriert ist und ein Ticket bekannt ist, Vercel Preview URL holen und im Ticket speichern:
+**Nur ausführen wenn `pipeline.hosting` in `project.json` den Wert `"vercel"` hat.** Ohne dieses Feld: Schritt komplett überspringen.
 
 ```bash
 PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)

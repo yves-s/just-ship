@@ -1,5 +1,5 @@
 ---
-name: ticket-writer
+name: just-ship-ticket-writer
 description: Write high-quality product tickets — user stories, bugs, improvements, spikes, and technical debt items. Use this skill whenever the user wants to create, refine, split, or review a ticket. Triggers on phrases like "write a ticket", "create a story", "document this bug", "formulate a ticket for...", "this ticket is too big", or when the user shares rough requirements or feature ideas that need structuring.
 allowed-tools: Bash, mcp__claude_ai_Supabase__execute_sql, mcp__claude_ai_Notion__notion-create-pages, mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-fetch
 ---
