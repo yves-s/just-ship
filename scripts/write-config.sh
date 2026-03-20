@@ -539,7 +539,7 @@ cmd_connect() {
       console.error('Error: Invalid API Key in token (must start with adp_)');
       process.exit(1);
     }
-    console.log(JSON.stringify({ b: json.b, w: json.w, i: json.i, k: json.k }));
+    console.log(JSON.stringify({ b: json.b.trim(), w: json.w.trim(), i: json.i.trim(), k: json.k.trim() }));
   ") || exit 1
 
   local board workspace workspace_id key
