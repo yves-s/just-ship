@@ -81,7 +81,7 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
   if (rawPipeline.api_key) {
     console.warn(
       "\u26a0 api_key in project.json is deprecated.\n" +
-      "  Run /connect-board to migrate to ~/.just-ship/config.json"
+      "  Führe 'just-ship connect' im Terminal aus um zu migrieren"
     );
 
     // Try global config first (takes priority)
@@ -100,7 +100,7 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
     if (!globalConfig) {
       console.warn(
         `\u26a0 Workspace '${slug}' configured but ~/.just-ship/config.json not found.\n` +
-        `  Run /connect-board to set it up.`
+        `  Führe 'just-ship connect' im Terminal aus um die Verbindung einzurichten.`
       );
       pipeline = buildPipelineConfig(rawPipeline);
     } else {
@@ -108,7 +108,7 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
       if (!ws) {
         console.error(
           `Workspace '${slug}' not found in ~/.just-ship/config.json.\n` +
-          `Run /connect-board to set it up.`
+          `Führe 'just-ship connect' im Terminal aus um die Verbindung einzurichten.`
         );
         pipeline = buildPipelineConfig(rawPipeline);
       } else {

@@ -21,4 +21,4 @@ Entfernt die Board-Anbindung für den aktuellen Workspace. Die Pipeline läuft d
    ✓ Pipeline läuft jetzt im CLI-only Modus
    ```
 
-**Hinweis:** `project.json` wird nicht verändert — der `workspace` Verweis bleibt bestehen, damit ein erneutes `/connect-board` den Workspace wiederherstellen kann.
+**Hinweis:** `project.json` wird nicht verändert — der `workspace` Verweis bleibt bestehen, damit ein erneutes 'just-ship connect' den Workspace wiederherstellen kann.
