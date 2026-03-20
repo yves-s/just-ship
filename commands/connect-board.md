@@ -22,11 +22,9 @@ Um einen anderen Workspace zu verbinden, führe
 
 ### 2. Falls nicht verbunden
 
-Ausgabe:
-```
-Öffne board.just-ship.io — das Board führt dich durch die Einrichtung.
-Sag Bescheid wenn du fertig bist.
-```
+Ausgabe (NICHT in einem Code-Block, damit der Link klickbar ist):
+
+Öffne https://board.just-ship.io — das Board führt dich durch die Einrichtung. Sag Bescheid wenn du fertig bist.
 
 Das ist alles. Keine weiteren Erklärungen, keine Schritte. Das Board hat einen Onboarding-Stepper der alles erklärt.
 

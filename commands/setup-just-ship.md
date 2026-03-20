@@ -257,11 +257,9 @@ Möchtest du das Just Ship Board verbinden? (j/n)
 Fertig! Erstelle dein erstes Ticket mit /ticket.
 ```
 
-**Falls ja:** Ausgabe:
-```
-Öffne board.just-ship.io — das Board führt dich durch die Einrichtung.
-Sag Bescheid wenn du fertig bist.
-```
+**Falls ja:** Ausgabe (NICHT in einem Code-Block, damit der Link klickbar ist):
+
+Öffne https://board.just-ship.io — das Board führt dich durch die Einrichtung. Sag Bescheid wenn du fertig bist.
 
 Keine weiteren Erklärungen. Das Board hat einen Onboarding-Stepper der alles erklärt.
 
