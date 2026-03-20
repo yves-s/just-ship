@@ -11,7 +11,7 @@ fi
 # Clone or update ~/.just-ship
 if [ -d "$HOME/.just-ship" ]; then
   if [ ! -d "$HOME/.just-ship/.git" ]; then
-    # Directory exists but is not a git repo (e.g. config-only dir from /connect-board)
+    # Directory exists but is not a git repo (e.g. config-only dir from just-ship connect)
     # Backup config.json if present, then do a fresh clone
     if [ -f "$HOME/.just-ship/config.json" ]; then
       cp "$HOME/.just-ship/config.json" "/tmp/.just-ship-config-backup.json"

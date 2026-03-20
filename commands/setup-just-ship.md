@@ -90,12 +90,12 @@ Falls Stack erkannt aber Board NICHT verbunden:
 
 Projekt ist bereits eingerichtet. Was möchtest du tun?
 
-  1. Board verbinden → startet /connect-board
+  1. Board verbinden → zeige Anleitung für 'just-ship connect' im Terminal
   2. Nein, CLI-only nutzen
   3. Setup komplett neu ausführen → Stack-Erkennung + Config überschreiben
 ```
 
-- **Option 1:** Führe `/connect-board` inline aus (Modus 2: interaktiv) und beende danach.
+- **Option 1:** Zeige die Board-Verbindungs-Anleitung (wie in Schritt 5) und beende danach.
 - **Option 2:** Abschließen mit "Fertig! Erstelle dein erstes Ticket mit /ticket."
 - **Option 3:** Weiter mit Schritt 1 (normale Stack-Erkennung).
 

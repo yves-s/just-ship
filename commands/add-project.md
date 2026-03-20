@@ -19,7 +19,7 @@ Verknüpft ein neues Board-Projekt mit dem lokalen Projekt. Schreibt nur `worksp
 1. Prüfe ob ein Workspace konfiguriert ist:
    - Lies `project.json` → `pipeline.workspace`
    - Falls nicht vorhanden: Lies `~/.just-ship/config.json` → `default_workspace`
-   - Falls beides fehlt: Fehler: "Kein Workspace konfiguriert. Führe zuerst /connect-board aus."
+   - Falls beides fehlt: Fehler: "Kein Workspace konfiguriert. Führe zuerst 'just-ship connect' im Terminal aus."
 
 2. Schreibe Projekt-Referenz:
    ```bash
