@@ -72,9 +72,9 @@ Lies die aktuelle `project.json`. Vergleiche gegen die erwartete Struktur:
     "project_id": ""
   },
   "pipeline": {
+    "workspace": "",
     "project_id": "",
-    "project_name": null,
-    "workspace_id": ""
+    "project_name": null
   },
   "conventions": {
     "commit_format": "conventional",
