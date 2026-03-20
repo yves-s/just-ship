@@ -10,6 +10,7 @@
 #
 # Commands:
 #   just-ship setup        First-time setup in current project
+#   just-ship connect      Connect workspace using a jsp_ token from the Board
 #   just-ship update       Pull latest framework + update current project
 #   just-ship self-update  Pull latest framework only
 # =============================================================================
@@ -23,6 +24,10 @@ cmd="${1:-help}"
 case "$cmd" in
   setup)
     "$JUST_SHIP_DIR/setup.sh" "${@:2}"
+    ;;
+
+  connect)
+    "$JUST_SHIP_DIR/scripts/write-config.sh" connect --token "${2:-}" --project-dir "${3:-.}" "${@:4}"
     ;;
 
   update)
@@ -55,6 +60,7 @@ case "$cmd" in
     echo ""
     echo "Commands:"
     echo "  setup        First-time setup in current project"
+    echo "  connect      Connect workspace using a jsp_ token from the Board"
     echo "  update       Pull latest framework + update current project"
     echo "  self-update  Pull latest framework only (no project update)"
     echo "  version      Show installed version"

@@ -78,37 +78,42 @@ Board verbinden
 
 #### Weg 1: "Ich habe den Key"
 
-Zeige ein Eingabefeld:
+**WICHTIG: Secrets niemals in den Chat eingeben lassen.** Der Verbindungs-Code enthält den API Key und darf nicht in der Conversation History landen.
+
+Zeige dem User den Terminal-Befehl zum Kopieren:
+
 ```
-Füge den API Key oder Verbindungs-Code aus dem Board ein:
+Kopiere den Verbindungs-Code aus dem Board (Settings → Connect) und führe
+diesen Befehl in deinem Terminal aus — NICHT hier im Chat einfügen:
+
+  just-ship connect "DEIN_CODE_HIER"
+
+Das Board hat einen Copy-Button der den kompletten Befehl kopiert.
+Sag mir Bescheid wenn du es ausgeführt hast.
 ```
 
-**Smart Detection — prüfe was der User eingegeben hat:**
+Warte bis der User bestätigt. Prüfe dann ob die Verbindung geschrieben wurde:
 
-**Fall A: Eingabe startet mit `jsp_`** → Verbindungs-Code erkannt.
+```bash
+cat "$HOME/.just-ship/config.json" 2>/dev/null | node -e "const c=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); const ws=Object.keys(c.workspaces||{}); console.log(ws.length ? 'Connected: ' + ws.join(', ') : 'NOT_CONNECTED')"
+```
 
-1. Dekodiere via write-config.sh:
-   ```bash
-   ".claude/scripts/write-config.sh" parse-jsp --token "<eingabe>"
-   ```
-2. Falls Fehler: Zeige die Fehlermeldung und biete an:
-   ```
-   ✗ Verbindungs-Code ungültig
-   Der Code konnte nicht dekodiert werden. Kopiere ihn erneut aus dem Board.
+Falls `NOT_CONNECTED`: Frage ob der Befehl einen Fehler ausgegeben hat und hilf bei der Fehlersuche.
 
-   Erneut versuchen oder manuell eingeben?
-     1. Erneut versuchen
-     2. Manuell eingeben (Einzelwerte)
-   ```
-3. Falls OK: Extrahierte Werte nutzen, direkt `add-workspace` aufrufen.
-4. Falls `add-workspace` mit Slug-Kollision fehlschlägt (gleicher Slug, andere Board URL):
-   ```
-   ⚠ Workspace "{slug}" ist bereits mit {andere-url} verbunden.
+Falls `Connected`: Prüfe ob `project.json` aktualisiert wurde (pipeline.workspace gesetzt). Falls nicht, setze es:
+```bash
+node -e "const fs=require('fs'); const c=JSON.parse(fs.readFileSync('$HOME/.just-ship/config.json','utf-8')); console.log(c.default_workspace || Object.keys(c.workspaces)[0])"
+```
+Dann mit dem Workspace-Slug:
+```bash
+".claude/scripts/write-config.sh" set-project --workspace <slug> --project-id <project-id>
+```
 
-     1. Bestehende Verbindung aktualisieren (überschreibt die alte URL)
-     2. Abbrechen
-   ```
-   Bei Option 1: `remove-board --slug <slug>` und dann erneut `add-workspace`.
+Falls der User stattdessen den Code direkt in den Chat schreibt: **Akzeptieren** und den Befehl für ihn ausführen:
+```bash
+".claude/scripts/write-config.sh" connect --token "<eingabe>"
+```
+Aber darauf hinweisen dass Secrets im Terminal sicherer sind als im Chat.
 5. Weiter zu Validierung.
 
 **Fall B: Eingabe startet mit `adp_`** → Manueller API Key erkannt.

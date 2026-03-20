@@ -67,6 +67,10 @@ Commands:
   parse-jsp       Decode and validate a jsp_ connection string
     --token         The jsp_ token string (required)
 
+  connect         Connect workspace using a jsp_ token (parse + save + verify)
+    --token         The jsp_ token string (required)
+    --project-dir   Directory containing project.json (default: ".")
+
 USAGE
   exit 1
 }
@@ -486,6 +490,109 @@ cmd_parse_jsp() {
 }
 
 # ---------------------------------------------------------------------------
+# Command: connect
+# ---------------------------------------------------------------------------
+
+cmd_connect() {
+  local token="" project_dir="."
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --token) token="$2"; shift 2 ;;
+      --project-dir) project_dir="$2"; shift 2 ;;
+      *) echo "Error: Unknown option '$1' for connect"; exit 1 ;;
+    esac
+  done
+
+  if [ -z "$token" ]; then
+    echo "Error: connect requires --token"
+    echo ""
+    echo "Usage: write-config.sh connect --token \"jsp_...\""
+    echo ""
+    echo "Get your connection code from the Board: Settings → Connect"
+    exit 1
+  fi
+
+  # Step 1: Parse the jsp_ token
+  local parsed
+  parsed=$(JS_TOKEN="$token" node -e "
+    const token = process.env.JS_TOKEN;
+    if (!token.startsWith('jsp_')) {
+      console.error('Error: Token must start with jsp_');
+      process.exit(1);
+    }
+    let json;
+    try {
+      json = JSON.parse(Buffer.from(token.slice(4), 'base64').toString('utf-8'));
+    } catch (e) {
+      console.error('Error: Could not decode token — invalid Base64 or JSON');
+      process.exit(1);
+    }
+    const required = { v: 'number', b: 'string', w: 'string', i: 'string', k: 'string' };
+    for (const [key, type] of Object.entries(required)) {
+      if (typeof json[key] !== type) {
+        console.error('Error: Invalid token — missing or wrong type for field: ' + key);
+        process.exit(1);
+      }
+    }
+    if (!json.k.startsWith('adp_')) {
+      console.error('Error: Invalid API Key in token (must start with adp_)');
+      process.exit(1);
+    }
+    console.log(JSON.stringify({ b: json.b, w: json.w, i: json.i, k: json.k }));
+  ") || exit 1
+
+  local board workspace workspace_id key
+  board=$(echo "$parsed" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).b)")
+  workspace=$(echo "$parsed" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).w)")
+  workspace_id=$(echo "$parsed" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).i)")
+  key=$(echo "$parsed" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).k)")
+
+  # Step 2: Write workspace to global config
+  echo "Connecting workspace '${workspace}' to ${board}..."
+  cmd_add_workspace --slug "$workspace" --board "$board" --workspace-id "$workspace_id" --key "$key"
+
+  # Step 3: Update project.json if it exists
+  local pjson="${project_dir}/project.json"
+  if [ -f "$pjson" ]; then
+    JS_PJSON="$pjson" \
+    JS_WORKSPACE="$workspace" \
+    node -e "
+      const fs = require('fs');
+      const pj = JSON.parse(fs.readFileSync(process.env.JS_PJSON, 'utf-8'));
+      if (!pj.pipeline) pj.pipeline = {};
+      pj.pipeline.workspace = process.env.JS_WORKSPACE;
+      // Remove old format fields if present
+      delete pj.pipeline.api_key;
+      delete pj.pipeline.api_url;
+      delete pj.pipeline.workspace_id;
+      fs.writeFileSync(process.env.JS_PJSON, JSON.stringify(pj, null, 2) + '\n');
+    "
+    echo "project.json updated: pipeline.workspace = '${workspace}'"
+  fi
+
+  # Step 4: Validate connection
+  local http_code
+  http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "X-Pipeline-Key: ${key}" "${board}/api/projects" 2>/dev/null || echo "000")
+
+  if [ "$http_code" = "200" ]; then
+    echo ""
+    echo "✓ Workspace '${workspace}' connected"
+    echo "✓ Board connection verified"
+    echo ""
+    echo "Next: Run /add-project in Claude Code to link a board project"
+  elif [ "$http_code" = "401" ]; then
+    echo ""
+    echo "⚠ Workspace saved but API key was rejected (HTTP 401)"
+    echo "  Check your API key in Board → Settings → API Keys"
+  else
+    echo ""
+    echo "✓ Workspace '${workspace}' saved (offline — could not verify connection)"
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # Main dispatch
 # ---------------------------------------------------------------------------
 
@@ -503,6 +610,7 @@ case "$COMMAND" in
   remove-board)   cmd_remove_board "$@" ;;
   migrate)        cmd_migrate "$@" ;;
   parse-jsp)      cmd_parse_jsp "$@" ;;
+  connect)        cmd_connect "$@" ;;
   --help|-h)      usage ;;
   *)
     echo "Error: Unknown command '${COMMAND}'"
