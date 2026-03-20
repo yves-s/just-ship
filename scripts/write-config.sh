@@ -549,8 +549,7 @@ cmd_connect() {
   key=$(echo "$parsed" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).k)")
 
   # Step 2: Write workspace to global config
-  echo "Connecting workspace '${workspace}' to ${board}..."
-  cmd_add_workspace --slug "$workspace" --board "$board" --workspace-id "$workspace_id" --key "$key"
+  cmd_add_workspace --slug "$workspace" --board "$board" --workspace-id "$workspace_id" --key "$key" >/dev/null
 
   # Step 3: Update project.json if it exists
   local pjson="${project_dir}/project.json"
@@ -568,12 +567,12 @@ cmd_connect() {
       delete pj.pipeline.workspace_id;
       fs.writeFileSync(process.env.JS_PJSON, JSON.stringify(pj, null, 2) + '\n');
     "
-    echo "project.json updated: pipeline.workspace = '${workspace}'"
   fi
 
   # Step 4: Validate connection and auto-link project
   local http_code response_body
   response_body=$(mktemp)
+  trap "rm -f '$response_body'" EXIT
   http_code=$(curl -s -o "$response_body" -w "%{http_code}" \
     -H "X-Pipeline-Key: ${key}" "${board}/api/projects" 2>/dev/null || echo "000")
 
