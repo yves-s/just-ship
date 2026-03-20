@@ -571,24 +571,125 @@ cmd_connect() {
     echo "project.json updated: pipeline.workspace = '${workspace}'"
   fi
 
-  # Step 4: Validate connection
-  local http_code
-  http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+  # Step 4: Validate connection and auto-link project
+  local http_code response_body
+  response_body=$(mktemp)
+  http_code=$(curl -s -o "$response_body" -w "%{http_code}" \
     -H "X-Pipeline-Key: ${key}" "${board}/api/projects" 2>/dev/null || echo "000")
 
   if [ "$http_code" = "200" ]; then
-    echo ""
-    echo "✓ Workspace '${workspace}' connected"
-    echo "✓ Board connection verified"
-    echo ""
-    echo "Next: Run /add-project in Claude Code to link a board project"
+    if [ ! -f "$pjson" ]; then
+      # No project.json in this directory
+      echo ""
+      echo "✓ Workspace '${workspace}' verbunden"
+      echo ""
+      echo "Workspace verbunden. Führe 'just-ship connect' in deinem"
+      echo "Projektverzeichnis erneut aus um ein Projekt zu verknüpfen."
+      rm -f "$response_body"
+      return 0
+    fi
+
+    # Parse project list from API response
+    local project_count selected_id selected_name
+    project_count=$(JS_BODY="$(cat "$response_body")" node -e "
+      try {
+        const data = JSON.parse(process.env.JS_BODY);
+        const projects = data.data && data.data.projects ? data.data.projects : [];
+        process.stdout.write(String(projects.length));
+      } catch (e) {
+        process.stdout.write('0');
+      }
+    ") || project_count="0"
+
+    if [ "$project_count" = "0" ]; then
+      echo ""
+      echo "✓ Workspace '${workspace}' verbunden"
+      echo ""
+      echo "⚠ Kein Projekt im Board gefunden."
+      echo "  Erstelle ein Projekt im Board unter Settings → Projects,"
+      echo "  dann führe 'just-ship connect' erneut aus."
+    elif [ "$project_count" = "1" ]; then
+      # Auto-link the single project
+      selected_id=$(JS_BODY="$(cat "$response_body")" node -e "
+        const data = JSON.parse(process.env.JS_BODY);
+        process.stdout.write(data.data.projects[0].id);
+      ")
+      selected_name=$(JS_BODY="$(cat "$response_body")" node -e "
+        const data = JSON.parse(process.env.JS_BODY);
+        process.stdout.write(data.data.projects[0].name);
+      ")
+      cmd_set_project --workspace "$workspace" --project-id "$selected_id" --project-name "$selected_name" --project-dir "$project_dir" > /dev/null
+      echo ""
+      echo "✓ Workspace '${workspace}' verbunden"
+      echo "✓ Projekt '${selected_name}' verknüpft"
+      echo "✓ Board-Verbindung verifiziert"
+      echo ""
+      echo "Erstelle dein erstes Ticket mit /ticket in Claude Code."
+    else
+      # Multiple projects — show numbered list
+      echo ""
+      echo "✓ Workspace '${workspace}' verbunden"
+      echo ""
+      echo "Mehrere Projekte gefunden:"
+      echo ""
+      JS_BODY="$(cat "$response_body")" node -e "
+        const data = JSON.parse(process.env.JS_BODY);
+        data.data.projects.forEach((p, i) => {
+          console.log('  ' + (i + 1) + ') ' + p.name);
+        });
+      "
+      echo ""
+      local choice
+      read -p "Projekt auswählen (Nummer): " choice
+
+      # Validate choice
+      local valid_choice
+      valid_choice=$(JS_BODY="$(cat "$response_body")" JS_CHOICE="$choice" node -e "
+        const data = JSON.parse(process.env.JS_BODY);
+        const idx = parseInt(process.env.JS_CHOICE, 10) - 1;
+        if (isNaN(idx) || idx < 0 || idx >= data.data.projects.length) {
+          process.stdout.write('invalid');
+        } else {
+          process.stdout.write('valid');
+        }
+      ")
+
+      if [ "$valid_choice" != "valid" ]; then
+        echo ""
+        echo "⚠ Ungültige Auswahl. Führe 'just-ship connect' erneut aus."
+        rm -f "$response_body"
+        return 1
+      fi
+
+      selected_id=$(JS_BODY="$(cat "$response_body")" JS_CHOICE="$choice" node -e "
+        const data = JSON.parse(process.env.JS_BODY);
+        const idx = parseInt(process.env.JS_CHOICE, 10) - 1;
+        process.stdout.write(data.data.projects[idx].id);
+      ")
+      selected_name=$(JS_BODY="$(cat "$response_body")" JS_CHOICE="$choice" node -e "
+        const data = JSON.parse(process.env.JS_BODY);
+        const idx = parseInt(process.env.JS_CHOICE, 10) - 1;
+        process.stdout.write(data.data.projects[idx].name);
+      ")
+      cmd_set_project --workspace "$workspace" --project-id "$selected_id" --project-name "$selected_name" --project-dir "$project_dir" > /dev/null
+      echo ""
+      echo "✓ Workspace '${workspace}' verbunden"
+      echo "✓ Projekt '${selected_name}' verknüpft"
+      echo "✓ Board-Verbindung verifiziert"
+      echo ""
+      echo "Erstelle dein erstes Ticket mit /ticket in Claude Code."
+    fi
+
+    rm -f "$response_body"
   elif [ "$http_code" = "401" ]; then
+    rm -f "$response_body"
     echo ""
-    echo "⚠ Workspace saved but API key was rejected (HTTP 401)"
-    echo "  Check your API key in Board → Settings → API Keys"
+    echo "⚠ Workspace gespeichert, aber API-Key wurde abgelehnt (HTTP 401)"
+    echo "  Prüfe deinen API-Key im Board unter Settings → API Keys"
   else
+    rm -f "$response_body"
     echo ""
-    echo "✓ Workspace '${workspace}' saved (offline — could not verify connection)"
+    echo "✓ Workspace '${workspace}' gespeichert (offline — Verbindung konnte nicht verifiziert werden)"
   fi
 }
 
