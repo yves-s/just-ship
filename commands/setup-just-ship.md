@@ -257,20 +257,20 @@ Möchtest du das Just Ship Board verbinden? (j/n)
 Fertig! Erstelle dein erstes Ticket mit /ticket.
 ```
 
-**Falls ja:** Frage weiter:
+**Falls ja:** Ausgabe:
 ```
-Hast du bereits einen Account auf board.just-ship.io? (j/n)
+Um das Board zu verbinden:
+
+1. Öffne board.just-ship.io → Settings → Connect
+2. Kopiere den Terminal-Befehl
+3. Führe ihn in deinem Projekt-Terminal aus:
+   just-ship connect "DEIN_CODE"
+
+Der Befehl verbindet Workspace und Projekt automatisch.
 ```
 
-- **Falls nein:**
-  ```
-  Erstelle zuerst einen Account:
+Keine Zwischenfrage ("Hast du Account?"). Kein inline `/connect-board`. Kein Secret-Handling.
 
-    → board.just-ship.io
-
-  Lege dort einen Workspace und ein Projekt an.
-  Beim Projekt findest du einen Connect-Command — komm dann zurück
-  und führe /connect-board aus.
-  ```
-
-- **Falls ja:** Führe `/connect-board` inline aus (Modus 2: interaktiv — stelle alle fehlenden Werte in einer einzigen Nachricht ab, nie einzeln nacheinander).
+Falls Board-Flags übergeben wurden (`--board`, `--workspace`, `--project`):
+- Verhalten bleibt wie bisher (direkt `add-workspace` + `set-project`)
+- Das ist der Flow wenn der User vom Board-ProjectSetupDialog kommt
