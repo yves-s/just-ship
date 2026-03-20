@@ -19,11 +19,9 @@
     "project_id": ""
   },
   "pipeline": {
+    "workspace": "",
     "project_id": "",
-    "project_name": null,
-    "workspace_id": "",
-    "api_url": "",
-    "api_key": ""
+    "project_name": null
   },
   "conventions": {
     "commit_format": "conventional",

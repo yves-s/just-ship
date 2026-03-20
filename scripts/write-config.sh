@@ -64,6 +64,9 @@ Commands:
     --project-dir   Directory containing project.json (default: ".")
     --slug          Workspace slug to use (optional, derived from project_name)
 
+  parse-jsp       Decode and validate a jsp_ connection string
+    --token         The jsp_ token string (required)
+
 USAGE
   exit 1
 }
@@ -405,6 +408,84 @@ cmd_migrate() {
 }
 
 # ---------------------------------------------------------------------------
+# Command: parse-jsp
+# ---------------------------------------------------------------------------
+
+cmd_parse_jsp() {
+  local token=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --token) token="$2"; shift 2 ;;
+      *) echo "Error: Unknown option '$1' for parse-jsp"; exit 1 ;;
+    esac
+  done
+
+  if [ -z "$token" ]; then
+    echo "Error: parse-jsp requires --token"
+    exit 1
+  fi
+
+  JS_TOKEN="$token" \
+  node -e "
+    const token = process.env.JS_TOKEN;
+
+    // Strip jsp_ prefix
+    if (!token.startsWith('jsp_')) {
+      console.error('Error: Token must start with jsp_');
+      process.exit(1);
+    }
+    const b64 = token.slice(4);
+
+    // Decode Base64
+    let json;
+    try {
+      json = JSON.parse(Buffer.from(b64, 'base64').toString('utf-8'));
+    } catch (e) {
+      console.error('Error: Could not decode token — invalid Base64 or JSON');
+      process.exit(1);
+    }
+
+    // Validate version
+    if (!json.v || typeof json.v !== 'number') {
+      console.error('Error: Missing or invalid version field (v)');
+      process.exit(1);
+    }
+
+    // Validate required fields
+    const required = { b: 'Board URL', w: 'Workspace Slug', i: 'Workspace ID', k: 'API Key' };
+    for (const [key, label] of Object.entries(required)) {
+      if (!json[key] || typeof json[key] !== 'string') {
+        console.error('Error: Missing or invalid field: ' + label + ' (' + key + ')');
+        process.exit(1);
+      }
+    }
+
+    // Validate API key prefix
+    if (!json.k.startsWith('adp_')) {
+      console.error('Error: API Key must start with adp_');
+      process.exit(1);
+    }
+
+    // Validate UUID format for workspace ID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(json.i)) {
+      console.error('Error: Workspace ID is not a valid UUID');
+      process.exit(1);
+    }
+
+    // Output clean JSON
+    console.log(JSON.stringify({
+      board_url: json.b,
+      workspace: json.w,
+      workspace_id: json.i,
+      api_key: json.k,
+      version: json.v
+    }, null, 2));
+  "
+}
+
+# ---------------------------------------------------------------------------
 # Main dispatch
 # ---------------------------------------------------------------------------
 
@@ -421,6 +502,7 @@ case "$COMMAND" in
   read-workspace) cmd_read_workspace "$@" ;;
   remove-board)   cmd_remove_board "$@" ;;
   migrate)        cmd_migrate "$@" ;;
+  parse-jsp)      cmd_parse_jsp "$@" ;;
   --help|-h)      usage ;;
   *)
     echo "Error: Unknown command '${COMMAND}'"

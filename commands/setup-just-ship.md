@@ -72,6 +72,44 @@ Falls `NOT_INSTALLED`:
 3. Warte auf Abschluss. Falls Fehler: Ausgabe anzeigen und abbrechen.
 4. Ausgabe: `✓ Framework eingerichtet`
 
+**0c) Bestehendes Setup erkennen**
+
+Falls `.claude/agents/` bereits existiert UND `project.json` bereits existiert mit gesetzten Stack-Feldern (mindestens `stack.framework` oder `stack.language` sind non-empty):
+
+Prüfe den Status:
+- `project.json` → `pipeline.workspace` gesetzt? → Board verbunden
+- `~/.just-ship/config.json` → Workspace-Einträge vorhanden?
+
+Falls Stack erkannt aber Board NICHT verbunden:
+
+```
+✓ project.json gefunden ({stack.framework}, {stack.language})
+✓ CLAUDE.md gefunden
+✓ .claude/agents/ vorhanden
+⚠ Board nicht verbunden
+
+Projekt ist bereits eingerichtet. Was möchtest du tun?
+
+  1. Board verbinden → startet /connect-board
+  2. Nein, CLI-only nutzen
+  3. Setup komplett neu ausführen → Stack-Erkennung + Config überschreiben
+```
+
+- **Option 1:** Führe `/connect-board` inline aus (Modus 2: interaktiv) und beende danach.
+- **Option 2:** Abschließen mit "Fertig! Erstelle dein erstes Ticket mit /ticket."
+- **Option 3:** Weiter mit Schritt 1 (normale Stack-Erkennung).
+
+Falls Stack erkannt UND Board verbunden: Zeige Status und frage ob Re-Setup gewünscht:
+
+```
+✓ Projekt vollständig eingerichtet
+  Stack: {framework}, Board: {workspace}
+
+Setup erneut ausführen? (Überschreibt Stack-Erkennung)
+  1. Ja, neu erkennen
+  2. Nein, alles gut
+```
+
 ### 1. Projekt analysieren
 
 Lies die vorhandenen Dateien im Projekt-Root um den Stack zu erkennen:
