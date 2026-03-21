@@ -1,7 +1,6 @@
 ---
 name: develop
 description: Nächstes ready_to_develop Ticket holen und autonom implementieren
-disable-model-invocation: true
 ---
 
 # /develop — Nächstes Ticket implementieren
@@ -252,9 +251,9 @@ NICHT fragen ob committed/gepusht werden soll.
 
 **NICHT automatisch mergen.** Der PR bleibt offen bis der User ihn freigibt (via `/ship` oder "passt").
 
-### 9a. Vercel Preview URL (optional, nur mit Pipeline)
+### 9a. Vercel Preview URL (nur wenn `pipeline.hosting` === "vercel")
 
-Nach PR-Erstellung: Vercel Preview URL holen und im Ticket speichern.
+**Nur ausführen wenn `pipeline.hosting` in `project.json` den Wert `"vercel"` hat.** Ohne dieses Feld: Schritt komplett überspringen.
 
 ```bash
 PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)
