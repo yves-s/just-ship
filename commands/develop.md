@@ -236,20 +236,64 @@ Ausgabe:
 
 **NICHT STOPPEN.** SOFORT weiter zu Schritt 9.
 
-### 9. Ship — `/ship` ausführen
+### 9. Commit → Push → PR (KEIN `/ship`, KEIN Merge)
 
 **Pipeline-Event senden** (Orchestrator abgeschlossen):
 ```bash
 bash .claude/scripts/send-event.sh {N} orchestrator completed
 ```
 
-**Führe den `/ship` Command aus.** Dieser macht autonom: Commit → Push → PR → Supabase "in_review".
+**WICHTIG: `/ship` wird NICHT aufgerufen.** `/ship` mergt automatisch — das darf nur der User auslösen.
+Stattdessen: Commit, Push und PR manuell durchführen.
 
 NICHT den Skill `finishing-a-development-branch` aufrufen.
 NICHT dem User Optionen präsentieren.
 NICHT fragen ob committed/gepusht werden soll.
+NICHT mergen. NICHT auf main wechseln. NICHT Status auf "done" setzen.
 
-**NICHT automatisch mergen.** Der PR bleibt offen bis der User ihn freigibt (via `/ship` oder "passt").
+**9a. Commit:**
+```bash
+git add <betroffene-dateien>
+git commit -m "feat(T-{N}): {englische Beschreibung}
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
+```
+
+**9b. Push:**
+```bash
+git push -u origin $(git branch --show-current)
+```
+
+**9c. PR erstellen:**
+```bash
+gh pr view 2>/dev/null || gh pr create --title "feat(T-{N}): {Beschreibung}" --body "$(cat <<'EOF'
+## Summary
+- {Bullet Points}
+
+## Test plan
+- {Was wurde getestet}
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+EOF
+)"
+```
+
+**9d. Status auf "in_review":**
+
+**Board API (bevorzugt):**
+```bash
+curl -s -X PATCH -H "X-Pipeline-Key: {pipeline.api_key}" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "in_review"}' \
+  "{pipeline.api_url}/api/tickets/{N}"
+```
+
+**Legacy Supabase MCP (Fallback):**
+```sql
+UPDATE public.tickets SET status = 'in_review' WHERE number = {N} AND workspace_id = '{pipeline.workspace_id}' RETURNING number, title, status;
+```
+
+Der PR bleibt offen bis der User ihn freigibt (via `/ship` oder "passt").
 
 ### 9a. Vercel Preview URL (nur wenn `pipeline.hosting` === "vercel")
 
@@ -288,5 +332,5 @@ Ausgabe:
 
 Bevor du den Workflow als fertig meldest, prüfe:
 - [ ] **Falls Pipeline konfiguriert:** Status wurde auf "in_progress" gesetzt (Schritt 3)
-- [ ] **Falls Pipeline konfiguriert:** Status wurde auf "in_review" gesetzt (Schritt 9 via `/ship`)
+- [ ] **Falls Pipeline konfiguriert:** Status wurde auf "in_review" gesetzt (Schritt 9d)
 Falls ein Status-Update fehlt und Pipeline konfiguriert ist: **JETZT nachholen**, nicht überspringen.
