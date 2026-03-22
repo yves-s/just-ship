@@ -1,12 +1,12 @@
 ---
-name: update-just-ship
+name: just-ship-update
 description: CLAUDE.md und project.json gegen aktuelle Framework-Templates abgleichen und ergänzen
 disable-model-invocation: true
 ---
 
-# /update-just-ship — Projekt-Dateien aktualisieren
+# /just-ship-update — Projekt-Dateien aktualisieren
 
-Gleicht `CLAUDE.md` und `project.json` gegen die aktuellen Framework-Templates ab und ergänzt fehlende Abschnitte/Felder. Wird nach `setup.sh --update` ausgeführt, wenn sich Templates geändert haben.
+Gleicht `CLAUDE.md` und `project.json` gegen die aktuellen Framework-Templates ab und ergänzt fehlende Abschnitte/Felder. Wird automatisch von `just-ship update` aufgerufen, wenn sich Templates geändert haben.
 
 ## Wichtigste Regel
 
@@ -98,7 +98,7 @@ Lies die aktuelle `project.json`. Vergleiche gegen die erwartete Struktur:
 Zeige eine Zusammenfassung der Änderungen:
 
 ```
-/update-just-ship abgeschlossen.
+/just-ship-update abgeschlossen.
 
 CLAUDE.md:
   ✓ Ticket-Workflow-Tabelle aktualisiert (/ticket → /develop Trennung)
@@ -117,7 +117,7 @@ Alles aktuell — keine Änderungen nötig.
 
 ### 6. Template-Hash speichern
 
-Speichere den aktuellen Template-Stand damit `setup.sh --update` beim nächsten Mal erkennen kann ob sich etwas geändert hat:
+Speichere den aktuellen Template-Stand damit `just-ship update` beim nächsten Mal erkennen kann ob sich etwas geändert hat:
 
 ```bash
 # In .claude/.template-hash schreiben

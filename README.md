@@ -71,7 +71,7 @@ just-ship self-update
 | `/ship` | Commit + push + PR + squash merge + board status "done" | Yes |
 | `/status` | Show current ticket, branch, and changes | -- |
 | `/setup-just-ship` | Auto-detect stack, configure project, connect Dev Board | Interactive |
-| `/update-just-ship` | Sync project files after framework update | Interactive |
+| `/just-ship-update` | Sync project files after framework update (auto-run by `just-ship update`) | Interactive |
 
 **Conversational triggers:** Saying "passt", "done", "fertig", or "sieht gut aus" automatically executes `/ship`.
 
@@ -186,7 +186,7 @@ just-ship/
 │   ├── ship.md
 │   ├── status.md
 │   ├── setup-just-ship.md
-│   └── update-just-ship.md
+│   └── just-ship-update.md
 ├── skills/                     # Framework skills
 ├── pipeline/                   # SDK pipeline runner (TypeScript)
 │   ├── run.ts                  # Single execution + session resume
@@ -315,7 +315,7 @@ Installed: abc1234 (2026-02-28)
 Available: def5678 (2026-03-02)
 ```
 
-Tracked in `.claude/.pipeline-version`. If templates changed, you will be prompted to run `/update-just-ship`.
+Tracked in `.claude/.pipeline-version`. If templates changed, `just-ship update` automatically runs `/just-ship-update` via Claude to merge them.
 
 ---
 
