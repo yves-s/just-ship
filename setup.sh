@@ -487,12 +487,11 @@ if [ "$MODE" = "update" ]; then
 
   echo ""
   if [ "$TEMPLATES_CHANGED" = true ]; then
-    echo "  ⚠  Templates haben sich geändert!"
-    echo "     Führe /update-just-ship in Claude Code aus,"
-    echo "     um CLAUDE.md und project.json abzugleichen."
+    echo "  Templates geändert — gleiche CLAUDE.md/project.json ab..."
+    echo ""
+    claude -p "/just-ship-update"
   else
-    echo "  → Führe /update-just-ship in Claude Code aus,"
-    echo "    um neue Config-Felder zu übernehmen."
+    echo "  Alles aktuell."
   fi
 
   echo ""
