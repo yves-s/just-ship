@@ -301,7 +301,7 @@ RETURNING number, title, status;
 ### HARD RULES
 
 1. **`project_id` ist PFLICHT.** Bei Board API: `pipeline.project_id` aus `project.json`. Bei Legacy: Subquery verwenden. NIEMALS weglassen, NIEMALS NULL.
-2. **`body` ist PFLICHT.** Vollständiges Ticket-Markdown (Problem, Desired Behavior, ACs, Out of Scope). NIEMALS leer oder NULL.
+2. **`body` ist PFLICHT.** Vollständiges Ticket-Markdown (Problem, Desired Behavior, ACs, Out of Scope). NIEMALS leer oder NULL. **Das Feld heißt `body`, NICHT `description`.** Die API lehnt unbekannte Felder ab.
 3. **Bestätigung MUSS `T-` Prefix verwenden:** `Ticket T-{number} erstellt: {title}` — das `number` kommt aus der API Response bzw. `RETURNING`. **NIEMALS `#` verwenden.** Falsch: `#272`. Richtig: `T-272`.
 
 > ⚠️ STOP: Bevor du die Bestätigung schreibst — prüfe nochmals: Verwendest du `T-{number}` (korrekt) oder `#{number}` (FALSCH)? Das `#`-Prefix ist **verboten**.
