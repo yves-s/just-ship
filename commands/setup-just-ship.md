@@ -278,3 +278,129 @@ Falls NOT_CONNECTED: Frage ob etwas nicht geklappt hat.
 Falls Board-Flags übergeben wurden (`--board`, `--workspace`, `--project`):
 - Verhalten bleibt wie bisher (direkt `add-workspace` + `set-project`)
 - Das ist der Flow wenn der User vom Board-ProjectSetupDialog kommt
+
+### 6. Sidekick einrichten
+
+**Nur ausführen wenn Board verbunden** (`pipeline.workspace` und `pipeline.project_id` in `project.json` gesetzt). Falls kein Board verbunden: Schritt überspringen.
+
+Ausgabe: `Sidekick wird eingerichtet...`
+
+**6a) Projekt-Slug ermitteln:**
+
+Workspace-Credentials auflösen (nutze workspace aus `project.json` `pipeline.workspace`):
+```bash
+WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --slug <workspace>)
+board_url=$(echo "$WS_JSON" | node -e "console.log(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).board_url || '')")
+api_key=$(echo "$WS_JSON" | node -e "console.log(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).api_key || '')")
+```
+
+Projekt-ID und Projekt-Name aus `project.json` auslesen:
+```bash
+project_id=$(node -e "console.log(require('./project.json').pipeline?.project_id || '')")
+project_name=$(node -e "console.log(require('./project.json').pipeline?.project_name || '')")
+```
+
+Projekt-Slug vom Board holen:
+```bash
+if [ -n "$board_url" ] && [ -n "$api_key" ] && [ -n "$project_id" ]; then
+  SLUG=$(curl -s -H "X-Pipeline-Key: ${api_key}" \
+    "${board_url}/api/projects" | \
+    node -e "
+      try {
+        const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));
+        const p=(d.data?.projects||[]).find(p=>p.id==='${project_id}');
+        console.log(p?.slug||'');
+      } catch(e) { console.log(''); }
+    ")
+fi
+```
+
+Falls leer oder API-Aufruf fehlgeschlagen, Slug aus dem Projektnamen ableiten (kebab-case):
+```bash
+if [ -z "$SLUG" ] && [ -n "$project_name" ]; then
+  SLUG=$(echo "$project_name" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-\|-$//g')
+fi
+```
+
+Falls SLUG immer noch leer → Fehlerausgabe und Snippet mit Platzhalter zeigen:
+```bash
+if [ -z "$SLUG" ]; then
+  echo "⚠ Sidekick: Projekt-Slug nicht verfügbar"
+  echo ""
+  echo "Füge das Snippet manuell in dein HTML ein (ersetze DEIN-SLUG):"
+  echo "  <script src=\"https://board.just-ship.io/sidekick.js\" data-project=\"DEIN-SLUG\"></script>"
+  echo ""
+  echo "Aktivierung: Ctrl+Shift+S oder ?sidekick in der URL"
+  return 0
+fi
+```
+
+Dann zum nächsten Schritt (6b) gehen.
+
+**6b) Layout-Datei erkennen:**
+
+Basierend auf dem in Schritt 1 erkannten Stack, suche die Haupt-Layout-Datei. Prüfe die Dateien der Reihe nach — die erste existierende wird verwendet:
+
+| Stack | Layout-Dateien (Priorität) |
+|---|---|
+| Next.js (App Router) | `src/app/layout.tsx`, `app/layout.tsx`, `src/app/layout.jsx`, `app/layout.jsx` |
+| Next.js (Pages Router) | `src/pages/_document.tsx`, `pages/_document.tsx`, `src/pages/_document.jsx`, `pages/_document.jsx` |
+| Nuxt | `app.vue` |
+| SvelteKit | `src/app.html` |
+| HTML / Vite / andere | `index.html`, `public/index.html` |
+
+Falls Stack nicht erkannt wurde: alle Kandidaten durchprobieren.
+
+**6c) Snippet einfügen:**
+
+Falls Layout-Datei gefunden — lies die Datei und prüfe ob das Sidekick-Snippet bereits vorhanden ist (`sidekick.js` im Inhalt). Falls ja: `✓ Sidekick bereits installiert` und Schritt beenden.
+
+Falls noch nicht vorhanden — füge das Snippet **framework-gerecht** ein (ersetze `{slug}` mit dem Wert aus `$SLUG`):
+
+**Next.js (App Router / Pages Router) — `.tsx` / `.jsx`:**
+- Falls `import Script from 'next/script'` noch nicht vorhanden → folgende Zeile nach anderen Imports hinzufügen:
+  ```tsx
+  import Script from 'next/script'
+  ```
+- Vor dem schließenden `</body>` Tag einfügen:
+  ```tsx
+  <Script src="https://board.just-ship.io/sidekick.js" data-project="{slug}" strategy="afterInteractive" />
+  ```
+
+**HTML / Vite / SvelteKit — `.html`:**
+- Vor `</body>` einfügen:
+  ```html
+  <script src="https://board.just-ship.io/sidekick.js" data-project="{slug}"></script>
+  ```
+
+**Nuxt — `app.vue`:**
+- Im `<script setup>` Block hinzufügen (oder `<script setup>` Block erstellen falls nicht vorhanden):
+  ```ts
+  useHead({ script: [{ src: 'https://board.just-ship.io/sidekick.js', 'data-project': '{slug}' }] })
+  ```
+
+Erfolgreiche Ausgabe: `✓ Sidekick installiert ({layout-datei})`
+
+Falls KEINE Layout-Datei gefunden — Snippet für manuelle Installation anzeigen:
+```
+⚠ Sidekick: Layout-Datei nicht erkannt
+
+Füge dieses Snippet in dein HTML ein:
+  <script src="https://board.just-ship.io/sidekick.js" data-project="{slug}"></script>
+
+Aktivierung: Ctrl+Shift+S oder ?sidekick in der URL
+```
+
+**6d) Fehlerbehandlung:**
+
+Falls beim Einfügen ein Fehler auftritt (Datei nicht schreibbar, unerwartetes Format):
+```
+⚠ Sidekick konnte nicht automatisch installiert werden
+
+Füge dieses Snippet manuell in dein HTML ein:
+  <script src="https://board.just-ship.io/sidekick.js" data-project="{slug}"></script>
+
+Aktivierung: Ctrl+Shift+S oder ?sidekick in der URL
+```
+
+**Kein Abbruch des Setup-Flows** — Sidekick-Fehler sind nicht kritisch. Setup gilt als erfolgreich auch wenn Sidekick manuell eingebettet werden muss.
