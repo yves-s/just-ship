@@ -70,7 +70,7 @@ just-ship self-update
 | `/develop` | Pick next ticket, implement end-to-end, create PR | Yes |
 | `/ship` | Commit + push + PR + squash merge + board status "done" | Yes |
 | `/status` | Show current ticket, branch, and changes | -- |
-| `/setup-just-ship` | Auto-detect stack, configure project, connect Dev Board | Interactive |
+| `/setup-just-ship` | Auto-detect stack, configure project, connect Dev Board, install Sidekick | Interactive |
 | `/just-ship-update` | Sync project files after framework update (auto-run by `just-ship update`) | Interactive |
 
 **Conversational triggers:** Saying "passt", "done", "fertig", or "sieht gut aus" automatically executes `/ship`.
