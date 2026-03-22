@@ -22,8 +22,9 @@ Comprehensive technical reference for the Just Ship system: the portable multi-a
 12. [Configuration](#configuration)
 13. [Setup and Installation](#setup-and-installation)
 14. [VPS Deployment](#vps-deployment)
-15. [Security Model](#security-model)
-16. [Cost Model](#cost-model)
+15. [Sidekick](#sidekick)
+16. [Security Model](#security-model)
+17. [Cost Model](#cost-model)
 
 ---
 
@@ -1112,6 +1113,142 @@ The template unit (`just-ship-pipeline@.service`) provides:
 - Resource limits (4 GB memory, 200% CPU quota, 65536 file descriptors).
 - Graceful shutdown with 120-second timeout (pipelines can run 30-60 minutes).
 - Dual environment files: global keys (`.env`) + project-specific overrides (`.env.{slug}`).
+
+---
+
+## Sidekick
+
+The Sidekick is an AI-powered in-app assistant that lets project admins create, search, and manage tickets directly from any website -- without leaving the page they're working on.
+
+### How It Works
+
+A lightweight JavaScript snippet (~3KB) is embedded in the target website. When activated, it opens a persistent split-view panel on the right side, loading the Sidekick UI from `board.just-ship.io` in an iframe. The chat interface communicates with the Just Ship Board backend, using Claude Sonnet for AI-powered conversations.
+
+```
+┌──────────────────────────────────┬────────────────────┐
+│  Host site (narrowed)            │  iframe             │
+│                                  │  board.just-ship.io │
+│  ┌────────────────────────────┐  │  /sidekick/[slug]   │
+│  │  Snippet (~3KB)            │  │                     │
+│  │  - Activation (Ctrl+Shift+S)│ │  ┌───────────────┐  │
+│  │  - Split-view layout       │  │  │ Sidebar       │  │
+│  │  - postMessage bridge      │  │  │ (History)     │  │
+│  │  - Context updates         │  │  ├───────────────┤  │
+│  └────────────────────────────┘  │  │ Chat          │  │
+│                                  │  │               │  │
+│  Normal page, navigable          │  │ [Input]       │  │
+│                                  │  └───────────────┘  │
+└──────────────────────────────────┴────────────────────┘
+```
+
+### Embedding
+
+```html
+<script
+  src="https://board.just-ship.io/sidekick.js"
+  data-project="my-project-slug"
+></script>
+```
+
+One line. No sensitive data in the HTML -- only the public project slug (not the internal UUID). The server resolves the slug to the internal project ID.
+
+### Activation
+
+- `Ctrl+Shift+S` -- keyboard shortcut
+- `?sidekick` -- URL parameter
+- State persists in `localStorage` -- survives page reloads
+
+### Target Audience
+
+Project admins and workspace members working on their own applications. Not for end users or anonymous visitors. The snippet renders nothing visible -- there's no hint of its existence for regular visitors. Authentication is required before any access.
+
+### AI Capabilities
+
+The Sidekick uses Claude Sonnet with tool use for three actions:
+
+| Tool | Description |
+|------|-------------|
+| `create_ticket` | Creates a ticket in the Board with title, description, tags, priority |
+| `search_tickets` | Searches existing tickets by title and body (`ILIKE`) |
+| `list_my_tickets` | Lists the user's tickets, optionally filtered by status |
+
+The AI automatically captures page context (URL, title) and includes it in ticket descriptions. Before creating a ticket, it searches for duplicates and asks the user if a match is found.
+
+### Architecture
+
+**Snippet (host site):**
+- Vanilla JS, no dependencies, ~3KB minified
+- Wraps `document.body` in a flex container, creates iframe alongside
+- Patches `history.pushState`/`replaceState` for SPA navigation detection
+- Sends context updates to iframe via `postMessage` with origin checks
+
+**Sidekick App (iframe):**
+- Next.js route at `/sidekick/[projectSlug]` -- standalone layout, no Board chrome
+- React + shadcn/ui + TanStack Query (same stack as the Board)
+- Conversation sidebar with history, chat area with streaming responses
+- Inline ticket cards and search result cards
+
+**Auth:**
+- iframe is same-origin with Board -- Supabase session cookie works directly
+- No session: "Sign in with Just Ship" button opens a popup at `board.just-ship.io/auth/sidekick`
+- After login, popup sends `postMessage` to iframe, session refreshes without reload
+
+**Backend API:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/sidekick/conversations` | Create conversation |
+| `GET` | `/api/sidekick/conversations` | List conversations for project |
+| `POST` | `/api/sidekick/conversations/[id]/messages` | Send message, receive SSE stream |
+| `GET` | `/api/sidekick/conversations/[id]/messages` | Load message history |
+
+All endpoints require Supabase session + workspace membership. Rate limited to 30 messages/min per user, 200/day per project.
+
+### Data Model
+
+```
++---------------------------+        +---------------------------+
+|  sidekick_conversations   |        |    sidekick_messages      |
++---------------------------+        +---------------------------+
+| id (uuid, PK)            |<-------| conversation_id (FK)      |
+| workspace_id (FK)         |        | id (uuid, PK)            |
+| project_id (FK)           |        | role (user/assistant)     |
+| user_id (FK)              |        | content (text)            |
+| title                     |        | context (jsonb)           |
+| page_url                  |        | ticket_id (FK, optional)  |
+| page_title                |        | search_results (jsonb)    |
+| created_at / updated_at   |        | created_at                |
++---------------------------+        +---------------------------+
+```
+
+Both tables are protected by RLS -- users can only access their own conversations and messages.
+
+### Board Directory Structure (Sidekick files)
+
+```
+src/
+├── app/
+│   ├── (sidekick)/
+│   │   ├── layout.tsx                      # Standalone layout (no Board chrome)
+│   │   └── sidekick/[projectSlug]/page.tsx # Sidekick main page
+│   ├── (main)/auth/sidekick/page.tsx       # Auth popup for iframe login
+│   └── api/sidekick/
+│       ├── conversations/route.ts          # List/create conversations
+│       └── conversations/[id]/messages/route.ts  # Send/load messages
+├── components/sidekick/
+│   ├── sidekick-client.tsx                 # Main client component
+│   ├── sidekick-auth.tsx                   # Auth gate component
+│   ├── chat-view.tsx                       # Chat interface
+│   ├── message-bubble.tsx                  # Message rendering
+│   └── conversation-sidebar.tsx            # Conversation list
+├── lib/sidekick/
+│   ├── ai.ts                              # Claude Sonnet integration + tools
+│   └── auth.ts                            # Auth helpers
+└── lib/validations/sidekick.ts             # Zod schemas
+
+public/sidekick.js                          # Embeddable snippet
+supabase/migrations/011_sidekick.sql        # DB migration
+```
 
 ---
 
