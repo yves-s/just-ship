@@ -359,6 +359,26 @@ The **[Just Ship Board](https://board.just-ship.io)** is the visual companion fo
 
 Commands (`/ticket`, `/develop`, `/ship`) auto-detect the Board config and use it for ticket operations and status updates.
 
+### Sidekick
+
+An AI-powered in-app assistant that lets project admins create, search, and manage tickets directly from any website -- without leaving the page.
+
+**Embed it with one line:**
+
+```html
+<script src="https://board.just-ship.io/sidekick.js" data-project="my-project-slug"></script>
+```
+
+Activate with `Ctrl+Shift+S` or `?sidekick` in the URL. A persistent split-view panel opens on the right side, powered by Claude Sonnet:
+
+- **Create tickets** from context -- the AI captures the current page URL and title automatically
+- **Search existing tickets** -- find duplicates before creating new ones
+- **Conversation history** -- pick up where you left off across sessions
+
+The Sidekick is for project admins and workspace members only -- it requires Just Ship authentication. Regular visitors never see it.
+
+For the full technical deep dive (architecture, API, data model), see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#sidekick).
+
 ### Event Streaming
 
 Real-time agent activity via two modes:

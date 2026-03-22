@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-03-22
+
+### feat: Sidekick -- AI-powered in-app assistant
+- Embeddable snippet (`sidekick.js`, ~3KB) adds a persistent split-view chat panel to any website
+- AI-powered ticket creation, search, and duplicate detection via Claude Sonnet
+- Conversation history with per-project scoping and workspace-level auth
+- Automatic page context capture (URL, title) included in ticket descriptions
+- Activation via `Ctrl+Shift+S` or `?sidekick` URL parameter
+- Auth via Supabase session (same-origin iframe) with popup login flow
+- Backend API at `/api/sidekick/*` with rate limiting (30 msg/min, 200/day per project)
+- DB migration `011_sidekick.sql` (conversations + messages tables with RLS)
+- Documentation added to README.md and ARCHITECTURE.md
+
 ## 2026-03-03
 
 ### fix: Bash permission syntax (`bb072e7`)
