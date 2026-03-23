@@ -124,7 +124,27 @@ RETURNING number, title, status;
 
 Warte auf die Bestätigung, dass das Update erfolgreich war, bevor du weitermachst.
 
-**3b) Feature-Branch erstellen:**
+**3b) Feature-Branch in Worktree erstellen (parallelsicher):**
+
+Prüfe zuerst ob das aktuelle Verzeichnis bereits ein Worktree ist:
+```bash
+git rev-parse --git-dir 2>/dev/null
+```
+Falls die Ausgabe `.git` enthält (kein Worktree) UND das Projekt `pipeline.max_workers` > 1 hat (oder nicht gesetzt):
+
+```bash
+# Worktree erstellen für parallele Ausführung
+git fetch origin main
+BRANCH="{abgeleiteter-prefix}/{ticket-nummer}-{kurzbeschreibung}"
+WORKTREE_DIR=".worktrees/T-{N}"
+git worktree add "$WORKTREE_DIR" -b "$BRANCH" origin/main
+```
+
+Danach: **Alle weiteren Schritte (4-11) im Worktree-Verzeichnis ausführen.** Nutze `$WORKTREE_DIR` als Arbeitsverzeichnis für alle Bash-Befehle (`cwd`), Read, Edit, Glob, Grep.
+
+Ausgabe: `▶ worktree — .worktrees/T-{N} erstellt`
+
+Falls bereits in einem Worktree (z.B. bei Resume): einfach den Branch erstellen wie bisher:
 ```bash
 git checkout main && git pull origin main
 git checkout -b {abgeleiteter-prefix}/{ticket-nummer}-{kurzbeschreibung}
@@ -160,6 +180,7 @@ Labels: {labels}
 Verarbeite das JSON-Ergebnis des Agents:
 - **verdict = "sufficient"**: Ticket ist klar. Weiter mit Schritt 4.
 - **verdict = "enriched"**: Nutze `enriched_body` als verbesserte Beschreibung für alle weiteren Schritte (Planung, Agent-Prompts).
+- **qa_tier**: Merke `qa_tier` (full/light/skip), `qa_pages` und `qa_flows` für Schritt 10 (Automated QA).
 
 ```bash
 bash .claude/scripts/send-event.sh {N} triage completed '{"verdict": "{verdict}"}'
@@ -361,9 +382,53 @@ Ausgabe:
 
 **Kein Fehler wenn keine URL gefunden wird.** Das Script exits immer mit Code 0. Projekte ohne Vercel-Integration überspringen diesen Schritt automatisch.
 
+### 10. Automated QA
+
+Nutze das `qa_tier` aus der Triage (Schritt 3.5). Falls die Triage kein `qa_tier` lieferte, default auf `light`.
+
+```bash
+bash .claude/scripts/send-event.sh {N} qa-auto agent_started
+```
+Ausgabe: `▶ qa-auto — Automatisierte QA ({qa_tier} tier)`
+
+| Tier | Was passiert |
+|------|-------------|
+| **full** | Build + Tests + Vercel Preview warten + Playwright Screenshots + Smoke Tests + Fix-Loops |
+| **light** | Build + Tests (falls konfiguriert) |
+| **skip** | Nur Build-Check |
+
+**Bei Fehlern:** Automatisch fixen (max 3 Versuche). Jeder Fix als eigener Commit: `fix(qa): address QA failures (attempt {N})`.
+Nach 3 gescheiterten Versuchen: trotzdem weitermachen, Fehler im PR-Kommentar dokumentieren.
+
+**QA-Report als PR-Kommentar + Labels:**
+```bash
+gh pr comment --body-file /tmp/qa-report-{N}.md
+gh pr edit --add-label "qa:passed"        # alles grün
+gh pr edit --add-label "qa:needs-review"  # nach 3 Fix-Versuchen nicht grün
+gh pr edit --add-label "qa:skipped"       # skip tier
+```
+
+```bash
+bash .claude/scripts/send-event.sh {N} qa-auto completed '{"tier": "{qa_tier}", "status": "{passed|failed}"}'
+```
+Ausgabe: `✓ qa-auto — {qa_tier} tier {passed|needs-review|skipped}`
+
+### 11. Worktree Cleanup (falls Worktree erstellt wurde)
+
+Falls in Schritt 3b ein Worktree erstellt wurde:
+```bash
+cd {original-project-dir}
+git worktree remove .worktrees/T-{N} --force 2>/dev/null || true
+```
+Ausgabe: `✓ worktree — .worktrees/T-{N} aufgeräumt`
+
+Falls kein Worktree erstellt wurde: überspringen.
+
 ### Checkliste vor Abschluss
 
 Bevor du den Workflow als fertig meldest, prüfe:
 - [ ] **Falls Pipeline konfiguriert:** Status wurde auf "in_progress" gesetzt (Schritt 3)
 - [ ] **Falls Pipeline konfiguriert:** Status wurde auf "in_review" gesetzt (Schritt 9d)
+- [ ] **Falls Worktree erstellt:** Worktree wurde aufgeräumt (Schritt 11)
+- [ ] **QA-Report:** PR hat ein `qa:*` Label (Schritt 10)
 Falls ein Status-Update fehlt und Pipeline konfiguriert ist: **JETZT nachholen**, nicht überspringen.
