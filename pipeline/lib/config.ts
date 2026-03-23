@@ -10,11 +10,24 @@ export interface PipelineConfig {
   apiKey: string;
 }
 
+export interface QaConfig {
+  maxFixIterations: number;
+  playwrightTimeoutMs: number;
+  previewProvider: "vercel" | "none";
+  vercelProjectId: string;
+  vercelTeamId: string;
+  vercelPreviewPollIntervalMs: number;
+  vercelPreviewMaxWaitMs: number;
+}
+
 export interface ProjectConfig {
   name: string;
   description: string;
   conventions: { branch_prefix: string };
   pipeline: PipelineConfig;
+  maxWorkers: number;
+  qa: QaConfig;
+  stack: { packageManager: string };
 }
 
 export interface TicketArgs {
@@ -66,6 +79,17 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
       description: "",
       conventions: { branch_prefix: "feature/" },
       pipeline: buildPipelineConfig({}),
+      maxWorkers: 1,
+      qa: {
+        maxFixIterations: 3,
+        playwrightTimeoutMs: 60000,
+        previewProvider: "none",
+        vercelProjectId: "",
+        vercelTeamId: "",
+        vercelPreviewPollIntervalMs: 10000,
+        vercelPreviewMaxWaitMs: 300000,
+      },
+      stack: { packageManager: "npm" },
     };
   }
   const raw = JSON.parse(readFileSync(configPath, "utf-8"));
@@ -123,11 +147,25 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
     pipeline = buildPipelineConfig(rawPipeline, defaultWs);
   }
 
+  const rawQa = rawPipeline.qa ?? {};
+  const qa: QaConfig = {
+    maxFixIterations: Number(rawQa.max_fix_iterations ?? 3),
+    playwrightTimeoutMs: Number(rawQa.playwright_timeout_ms ?? 60000),
+    previewProvider: (rawQa.preview_provider as "vercel" | "none") ?? "none",
+    vercelProjectId: (rawQa.vercel_project_id as string) ?? "",
+    vercelTeamId: (rawQa.vercel_team_id as string) ?? "",
+    vercelPreviewPollIntervalMs: Number(rawQa.vercel_preview_poll_interval_ms ?? 10000),
+    vercelPreviewMaxWaitMs: Number(rawQa.vercel_preview_max_wait_ms ?? 300000),
+  };
+
   return {
     name: raw.name ?? "project",
     description: raw.description ?? "",
     conventions: { branch_prefix: raw.conventions?.branch_prefix ?? "feature/" },
     pipeline,
+    maxWorkers: Number(rawPipeline.max_workers ?? 1),
+    qa,
+    stack: { packageManager: raw.stack?.package_manager ?? "npm" },
   };
 }
 
