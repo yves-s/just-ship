@@ -117,7 +117,12 @@ export function createEventHooks(
 export async function postPipelineEvent(
   config: EventConfig,
   eventType: string,
-  agentType = "orchestrator"
+  agentType = "orchestrator",
+  metadata?: Record<string, unknown>,
 ): Promise<void> {
-  await postEvent(config, { agent_type: agentType, event_type: eventType });
+  await postEvent(config, {
+    agent_type: agentType,
+    event_type: eventType,
+    ...(metadata ? { metadata } : {}),
+  });
 }
