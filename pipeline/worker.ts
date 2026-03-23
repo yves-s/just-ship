@@ -151,6 +151,9 @@ log("==========================================");
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+// Wrap in async IIFE — top-level await not supported in CJS
+(async () => {
+
 // --- Crash recovery: clean stale worktrees and reset stuck tickets ---
 log("Cleaning stale worktrees...");
 await worktreeManager.pruneStale(async (branchName) => {
@@ -286,3 +289,5 @@ while (running) {
 }
 
 log("Worker stopped gracefully.");
+
+})();
