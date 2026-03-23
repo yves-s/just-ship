@@ -79,11 +79,21 @@ project-dir/ (main worktree — never used for coding, only as git anchor)
 class WorktreeManager {
   constructor(projectDir: string, maxSlots: number)
   allocate(branchName: string): Promise<{ slotId: number; workDir: string }>
+  reattach(branchName: string): Promise<{ slotId: number; workDir: string }>  // for resume
   release(slotId: number): Promise<void>
-  pruneStale(): Promise<void>  // cleanup on startup
+  park(slotId: number): Promise<void>      // release slot but keep worktree (for pause)
+  pruneStale(): Promise<void>              // cleanup on startup — skips parked worktrees
   getActiveSlots(): number
 }
 ```
+
+**Paused worktree handling:**
+
+When `executePipeline` returns with `status: "paused"` (human-in-the-loop), the worktree must survive but should not block other work:
+
+1. **On pause:** Call `worktreeManager.park(slotId)` — releases the slot (freeing it for other tickets) but marks the worktree directory as "parked" so `pruneStale()` skips it.
+2. **On resume:** Call `worktreeManager.reattach(branchName)` — finds the existing parked worktree by scanning `.worktrees/` for the matching branch, re-acquires a slot (queuing if all slots are full), and returns the `workDir`. `run.ts` uses this `workDir` for the resumed session instead of creating a new worktree.
+3. **Stale parked worktrees:** `pruneStale()` on startup skips worktrees that have a matching ticket with `pipeline_status = "paused"` in Supabase. Parked worktrees whose ticket is no longer paused (e.g., manually cancelled) are cleaned up.
 
 **Worktree lifecycle:**
 
@@ -94,8 +104,15 @@ Ticket claimed
   → Claude Code session in worktree (workDir)
   → Implementation → Push → PR
   → QA phase (incl. fix loops) — still inside executePipeline, worktree still alive
-  → worktreeManager.release(slotId)
-  → Worker slot becomes free for next ticket
+  → executePipeline returns:
+      status "completed" → worktreeManager.release(slotId) → slot free
+      status "paused"    → worktreeManager.park(slotId) → slot free, worktree kept
+
+Resume (triggered via /api/answer):
+  → worktreeManager.reattach(branchName) → re-acquires slot, returns existing workDir
+  → Claude Code session resumes in same worktree
+  → ... continues from where it paused
+  → release or park on completion/re-pause
 ```
 
 **Crash recovery on startup:**
