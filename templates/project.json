@@ -19,19 +19,8 @@
     "project_id": ""
   },
   "pipeline": {
-    "workspace": "",
-    "project_id": "",
-    "project_name": null,
-    "max_workers": 1,
-    "qa": {
-      "max_fix_iterations": 3,
-      "playwright_timeout_ms": 60000,
-      "preview_provider": "none",
-      "vercel_project_id": "",
-      "vercel_team_id": "",
-      "vercel_preview_poll_interval_ms": 10000,
-      "vercel_preview_max_wait_ms": 300000
-    }
+    "workspace_id": "",
+    "project_id": ""
   },
   "conventions": {
     "commit_format": "conventional",

@@ -38,7 +38,7 @@ Dieses Repo nutzt ein Multi-Agent-System. Ob lokal oder auf dem Server:
 
 ## Ticket-Workflow (Just Ship Board)
 
-> Nur aktiv wenn `pipeline.project_id` in `project.json` gesetzt ist. Ohne Pipeline-Config werden diese Schritte übersprungen.
+> Nur aktiv wenn `pipeline.workspace_id` und `pipeline.project_id` in `project.json` gesetzt sind. Ohne Pipeline-Config werden diese Schritte übersprungen.
 
 Falls Pipeline konfiguriert ist, sind Status-Updates **PFLICHT**:
 
@@ -48,16 +48,17 @@ Falls Pipeline konfiguriert ist, sind Status-Updates **PFLICHT**:
 | `/develop` — Ticket implementieren | **`in_progress`** | Sofort nach Ticket-Auswahl, VOR dem Coding |
 | `/ship` — PR mergen & abschließen | **`done`** | Nach erfolgreichem Merge |
 
-Status-Updates via `mcp__claude_ai_Supabase__execute_sql` mit `pipeline.project_id`:
-```sql
-UPDATE public.tickets
-SET status = '{status}'
-WHERE number = {N}
-  AND workspace_id = (SELECT id FROM workspaces WHERE slug = '{pipeline.workspace}')
-RETURNING number, title, status;
+Status-Updates via Board API (Credentials werden aus `~/.just-ship/config.json` aufgelöst):
+```bash
+WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --id <workspace_id>)
+# → { board_url, api_key, ... }
+curl -s -X PATCH -H "X-Pipeline-Key: {api_key}" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "{status}"}' \
+  "{board_url}/api/tickets/{N}"
 ```
 
-**Workspace-Credentials** (API Key, URL) liegen in `~/.just-ship/config.json` — nicht in `project.json`. Führe `/setup-just-ship` aus, um die Pipeline-Verbindung einzurichten.
+**Workspace-Credentials** (API Key) liegen in `~/.just-ship/config.json` — nicht in `project.json`. Führe `/setup-just-ship` aus, um die Pipeline-Verbindung einzurichten.
 
 **Überspringe KEINEN dieser Schritte.** Falls ein Update fehlschlägt, versuche es erneut oder informiere den User.
 
