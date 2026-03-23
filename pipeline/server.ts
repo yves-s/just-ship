@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { execSync } from "node:child_process";
 import { loadProjectConfig, type ProjectConfig } from "./lib/config.ts";
 import { executePipeline, resumePipeline } from "./run.ts";
+import { WorktreeManager } from "./lib/worktree-manager.ts";
 
 // --- Environment validation ---
 const required = [
@@ -24,6 +25,8 @@ const PORT = Number(process.env.PORT ?? "3001");
 
 // --- Config ---
 const config: ProjectConfig = loadProjectConfig(PROJECT_DIR);
+const MAX_WORKERS = config.maxWorkers;
+const worktreeManager = new WorktreeManager(PROJECT_DIR, MAX_WORKERS);
 
 // --- Logging (same style as worker.ts) ---
 function log(msg: string) {
@@ -154,51 +157,44 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse): Promise<
 
   log(`Pipeline started: T-${ticketNumber} -- ${title}`);
 
-  executePipeline({
-    projectDir: PROJECT_DIR,
-    ticket: {
-      ticketId: String(ticketNumber),
-      title,
-      description: body,
-      labels: tags,
-    },
-  })
-    .then(async (result) => {
+  const branchSlug = title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").slice(0, 40);
+  const branchName = `${config.conventions.branch_prefix}${ticketNumber}-${branchSlug}`;
+
+  (async () => {
+    let slotId: number | undefined;
+    try {
+      const slot = await worktreeManager.allocate(branchName);
+      slotId = slot.slotId;
+
+      const result = await executePipeline({
+        projectDir: PROJECT_DIR,
+        workDir: slot.workDir,
+        branchName,
+        ticket: { ticketId: String(ticketNumber), title, description: body, labels: tags },
+      });
+
       if (result.status === "completed") {
-        log(`Pipeline completed: T-${ticketNumber} -> ${result.branch} (status: in_review)`);
-        await patchTicket(ticketNumber, {
-          pipeline_status: "done",
-          status: "in_review",
-          branch: result.branch,
-        });
+        log(`Pipeline completed: T-${ticketNumber} -> ${result.branch}`);
+        await patchTicket(ticketNumber, { pipeline_status: "done", status: "in_review", branch: result.branch });
       } else if (result.status === "paused") {
-        log(`Pipeline paused: T-${ticketNumber} -- waiting for human input`);
-        await patchTicket(ticketNumber, {
-          pipeline_status: "paused",
-          session_id: result.sessionId,
-        });
+        log(`Pipeline paused: T-${ticketNumber}`);
+        await patchTicket(ticketNumber, { pipeline_status: "paused", session_id: result.sessionId });
+        await worktreeManager.park(slotId);
+        slotId = undefined;
       } else {
         const reason = result.failureReason ?? `exited with code ${result.exitCode}`;
         log(`Pipeline failed: T-${ticketNumber} (${reason})`);
-        await patchTicket(ticketNumber, {
-          pipeline_status: "failed",
-          status: "ready_to_develop",
-          summary: `Pipeline error: ${reason}`,
-        });
+        await patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Pipeline error: ${reason}` });
       }
-    })
-    .catch(async (error: unknown) => {
+    } catch (error) {
       const reason = error instanceof Error ? error.message : "Unknown error";
       log(`Pipeline crashed: T-${ticketNumber} -- ${reason}`);
-      await patchTicket(ticketNumber, {
-        pipeline_status: "failed",
-        status: "ready_to_develop",
-        summary: `Server error: ${reason}`,
-      });
-    })
-    .finally(() => {
+      await patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Server error: ${reason}` });
+    } finally {
+      if (slotId !== undefined) await worktreeManager.release(slotId);
       runningTickets.delete(ticketNumber);
-    });
+    }
+  })();
 }
 
 // --- Ship logic ---
@@ -291,6 +287,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     sendJson(res, 200, {
       status: "ok",
       running_count: runningTickets.size,
+      active_slots: worktreeManager.getActiveSlots(),
+      max_workers: MAX_WORKERS,
     });
     return;
   }
@@ -439,56 +437,43 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 
     log(`Pipeline resuming: T-${ticketNumber} -- answer received`);
 
-    resumePipeline({
-      projectDir: PROJECT_DIR,
-      ticket: {
-        ticketId: String(ticketNumber),
-        title,
-        description: ticketBody,
-        labels: tags,
-      },
-      sessionId,
-      answer: answer.trim(),
-    })
-      .then(async (result) => {
+    const branchSlug = title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").slice(0, 40);
+    const branchName = `${config.conventions.branch_prefix}${ticketNumber}-${branchSlug}`;
+
+    (async () => {
+      let slotId: number | undefined;
+      try {
+        const slot = await worktreeManager.reattach(branchName);
+        slotId = slot.slotId;
+
+        const result = await resumePipeline({
+          projectDir: PROJECT_DIR,
+          workDir: slot.workDir,
+          branchName,
+          ticket: { ticketId: String(ticketNumber), title, description: ticketBody, labels: tags },
+          sessionId,
+          answer: answer.trim(),
+        });
+
         if (result.status === "paused") {
-          log(`Pipeline paused again: T-${ticketNumber} — waiting for next answer`);
-          await patchTicket(ticketNumber, {
-            pipeline_status: "paused",
-            session_id: result.sessionId,
-          });
+          await patchTicket(ticketNumber, { pipeline_status: "paused", session_id: result.sessionId });
+          await worktreeManager.park(slotId);
+          slotId = undefined;
         } else if (result.status === "completed") {
-          log(`Pipeline completed: T-${ticketNumber} -> ${result.branch}`);
-          await patchTicket(ticketNumber, {
-            pipeline_status: "done",
-            status: "in_review",
-            branch: result.branch,
-            session_id: null,
-          });
+          await patchTicket(ticketNumber, { pipeline_status: "done", status: "in_review", branch: result.branch, session_id: null });
         } else {
           const reason = result.failureReason ?? `exited with code ${result.exitCode}`;
-          log(`Pipeline failed: T-${ticketNumber} (${reason})`);
-          await patchTicket(ticketNumber, {
-            pipeline_status: "failed",
-            status: "ready_to_develop",
-            summary: `Pipeline error: ${reason}`,
-            session_id: null,
-          });
+          await patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Pipeline error: ${reason}`, session_id: null });
         }
-      })
-      .catch(async (error: unknown) => {
+      } catch (error) {
         const reason = error instanceof Error ? error.message : "Unknown error";
         log(`Pipeline resume crashed: T-${ticketNumber} -- ${reason}`);
-        await patchTicket(ticketNumber, {
-          pipeline_status: "failed",
-          status: "ready_to_develop",
-          summary: `Resume error: ${reason}`,
-          session_id: null,
-        });
-      })
-      .finally(() => {
+        await patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Resume error: ${reason}`, session_id: null });
+      } finally {
+        if (slotId !== undefined) await worktreeManager.release(slotId);
         runningTickets.delete(ticketNumber);
-      });
+      }
+    })();
 
     return;
   }
