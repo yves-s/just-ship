@@ -8,6 +8,8 @@ import { createEventHooks, postPipelineEvent, type EventConfig } from "./lib/eve
 // --- Exported pipeline function (used by worker.ts) ---
 export interface PipelineOptions {
   projectDir: string;
+  workDir?: string;      // Worktree directory — if set, skip git checkout and use this as cwd
+  branchName?: string;   // Pre-computed branch name — if set, skip slug generation
   ticket: TicketArgs;
   abortSignal?: AbortSignal;
   timeoutMs?: number;
@@ -27,10 +29,13 @@ interface TriageResult {
   description: string;
   verdict: string;
   analysis: string;
+  qaTier: "full" | "light" | "skip";
+  qaPages: string[];
+  qaFlows: string[];
 }
 
 async function runTriage(
-  projectDir: string,
+  workDir: string,
   ticket: TicketArgs,
   triagePrompt: string,
   eventConfig: EventConfig,
@@ -48,7 +53,14 @@ Beschreibung:
 ${ticket.description}
 Labels: ${ticket.labels}`;
 
-  const result: TriageResult = { description: ticket.description, verdict: "sufficient", analysis: "" };
+  const result: TriageResult = {
+    description: ticket.description,
+    verdict: "sufficient",
+    analysis: "",
+    qaTier: "light",
+    qaPages: [],
+    qaFlows: [],
+  };
 
   try {
     let responseText = "";
@@ -81,6 +93,9 @@ Labels: ${ticket.labels}`;
       const parsed = JSON.parse(jsonMatch[0]);
       result.verdict = parsed.verdict ?? "sufficient";
       result.analysis = parsed.analysis ?? "";
+      result.qaTier = parsed.qa_tier ?? "light";
+      result.qaPages = Array.isArray(parsed.qa_pages) ? parsed.qa_pages : [];
+      result.qaFlows = Array.isArray(parsed.qa_flows) ? parsed.qa_flows : [];
 
       if (parsed.verdict === "enriched" && parsed.enriched_body) {
         result.description = parsed.enriched_body;
@@ -88,6 +103,7 @@ Labels: ${ticket.labels}`;
       } else {
         console.error(`[Triage] Sufficient — ${result.analysis}`);
       }
+      console.error(`[Triage] QA tier: ${result.qaTier}`);
     }
   } catch (error) {
     console.error(`[Triage] Error: ${error instanceof Error ? error.message : String(error)}`);
@@ -283,6 +299,8 @@ Branch ist bereits erstellt: ${branchName}`;
 // --- Resume a paused pipeline session ---
 export interface ResumeOptions {
   projectDir: string;
+  workDir?: string;
+  branchName?: string;
   ticket: TicketArgs;
   sessionId: string;
   answer: string;
