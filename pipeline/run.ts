@@ -4,10 +4,14 @@ import { execSync } from "node:child_process";
 import { loadProjectConfig, parseCliArgs, type TicketArgs } from "./lib/config.ts";
 import { loadAgents, loadOrchestratorPrompt, loadTriagePrompt } from "./lib/load-agents.ts";
 import { createEventHooks, postPipelineEvent, type EventConfig } from "./lib/event-hooks.ts";
+import { runQaWithFixLoop } from "./lib/qa-fix-loop.ts";
+import type { QaContext } from "./lib/qa-runner.ts";
 
 // --- Exported pipeline function (used by worker.ts) ---
 export interface PipelineOptions {
   projectDir: string;
+  workDir?: string;      // Worktree directory — if set, skip git checkout and use this as cwd
+  branchName?: string;   // Pre-computed branch name — if set, skip slug generation
   ticket: TicketArgs;
   abortSignal?: AbortSignal;
   timeoutMs?: number;
@@ -27,10 +31,13 @@ interface TriageResult {
   description: string;
   verdict: string;
   analysis: string;
+  qaTier: "full" | "light" | "skip";
+  qaPages: string[];
+  qaFlows: string[];
 }
 
 async function runTriage(
-  projectDir: string,
+  workDir: string,
   ticket: TicketArgs,
   triagePrompt: string,
   eventConfig: EventConfig,
@@ -48,7 +55,14 @@ Beschreibung:
 ${ticket.description}
 Labels: ${ticket.labels}`;
 
-  const result: TriageResult = { description: ticket.description, verdict: "sufficient", analysis: "" };
+  const result: TriageResult = {
+    description: ticket.description,
+    verdict: "sufficient",
+    analysis: "",
+    qaTier: "light",
+    qaPages: [],
+    qaFlows: [],
+  };
 
   try {
     let responseText = "";
@@ -56,7 +70,7 @@ Labels: ${ticket.labels}`;
     for await (const message of query({
       prompt,
       options: {
-        cwd: projectDir,
+        cwd: workDir,
         model: "haiku",
         permissionMode: "bypassPermissions",
         allowDangerouslySkipPermissions: true,
@@ -81,6 +95,9 @@ Labels: ${ticket.labels}`;
       const parsed = JSON.parse(jsonMatch[0]);
       result.verdict = parsed.verdict ?? "sufficient";
       result.analysis = parsed.analysis ?? "";
+      result.qaTier = parsed.qa_tier ?? "light";
+      result.qaPages = Array.isArray(parsed.qa_pages) ? parsed.qa_pages : [];
+      result.qaFlows = Array.isArray(parsed.qa_flows) ? parsed.qa_flows : [];
 
       if (parsed.verdict === "enriched" && parsed.enriched_body) {
         result.description = parsed.enriched_body;
@@ -88,6 +105,7 @@ Labels: ${ticket.labels}`;
       } else {
         console.error(`[Triage] Sufficient — ${result.analysis}`);
       }
+      console.error(`[Triage] QA tier: ${result.qaTier}`);
     }
   } catch (error) {
     console.error(`[Triage] Error: ${error instanceof Error ? error.message : String(error)}`);
@@ -110,28 +128,39 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
   let pauseReason: string | undefined;
   let sessionId: string | undefined;
 
-  // --- Git: create feature branch ---
-  const branchSlug = ticket.title
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 40);
-  const branchName = `${config.conventions.branch_prefix}${ticket.ticketId}-${branchSlug}`;
+  // --- Branch name: use pre-computed value if provided, otherwise derive (CLI mode) ---
+  let branchName: string;
+  if (opts.branchName) {
+    branchName = opts.branchName;
+  } else {
+    const branchSlug = ticket.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "-")
+      .replace(/-+/g, "-")
+      .slice(0, 40);
+    branchName = `${config.conventions.branch_prefix}${ticket.ticketId}-${branchSlug}`;
+  }
 
-  try {
-    execSync("git checkout main", { cwd: projectDir, stdio: "pipe" });
-    execSync("git pull origin main", { cwd: projectDir, stdio: "pipe" });
-  } catch { /* continue */ }
+  // workDir: use provided worktree directory, or fall back to projectDir (CLI mode)
+  const workDir = opts.workDir ?? projectDir;
 
-  try {
-    execSync(`git checkout -b ${branchName}`, { cwd: projectDir, stdio: "pipe" });
-  } catch {
-    execSync(`git checkout ${branchName}`, { cwd: projectDir, stdio: "pipe" });
+  if (!opts.workDir) {
+    // CLI mode — no worktree manager, do git checkout as before
+    try {
+      execSync("git checkout main", { cwd: projectDir, stdio: "pipe" });
+      execSync("git pull origin main", { cwd: projectDir, stdio: "pipe" });
+    } catch { /* continue */ }
+
+    try {
+      execSync(`git checkout -b ${branchName}`, { cwd: projectDir, stdio: "pipe" });
+    } catch {
+      execSync(`git checkout ${branchName}`, { cwd: projectDir, stdio: "pipe" });
+    }
   }
 
   // --- Load agents + orchestrator prompt ---
-  const agents = loadAgents(projectDir);
-  const orchestratorPrompt = loadOrchestratorPrompt(projectDir);
+  const agents = loadAgents(workDir);
+  const orchestratorPrompt = loadOrchestratorPrompt(workDir);
 
   // --- Event hooks ---
   const hasPipeline = !!(config.pipeline.apiUrl && config.pipeline.apiKey);
@@ -146,9 +175,10 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
 
   // --- Triage: analyze ticket quality before orchestrator ---
   let ticketDescription = ticket.description;
-  const triagePrompt = loadTriagePrompt(projectDir);
+  let triageResult: TriageResult | undefined;
+  const triagePrompt = loadTriagePrompt(workDir);
   if (triagePrompt) {
-    const triageResult = await runTriage(projectDir, ticket, triagePrompt, eventConfig, hasPipeline);
+    triageResult = await runTriage(workDir, ticket, triagePrompt, eventConfig, hasPipeline);
     ticketDescription = triageResult.description;
   }
 
@@ -214,7 +244,7 @@ Branch ist bereits erstellt: ${branchName}`;
     for await (const message of query({
       prompt,
       options: {
-        cwd: projectDir,
+        cwd: workDir,
         model: "opus",
         permissionMode: "bypassPermissions",
         allowDangerouslySkipPermissions: true,
@@ -270,6 +300,35 @@ Branch ist bereits erstellt: ${branchName}`;
     clearTimeout(timeoutId);
   }
 
+  // --- Phase 3: QA with Fix Loops ---
+  if (exitCode === 0 && !timedOut) {
+    if (hasPipeline) await postPipelineEvent(eventConfig, "agent_started", "qa");
+
+    const qaContext: QaContext = {
+      workDir,
+      branchName,
+      ticketId: ticket.ticketId,
+      qaTier: triageResult?.qaTier ?? "light",
+      qaPages: triageResult?.qaPages ?? [],
+      qaFlows: triageResult?.qaFlows ?? [],
+      qaConfig: config.qa,
+      packageManager: config.stack.packageManager,
+    };
+
+    const { finalReport, iterations } = await runQaWithFixLoop(qaContext);
+    console.error(`[QA] ${finalReport.tier} tier — ${finalReport.status} (${iterations} fix loops)`);
+
+    if (hasPipeline) {
+      await postPipelineEvent(eventConfig, "completed", "qa", {
+        tier: finalReport.tier,
+        status: finalReport.status,
+        fix_iterations: iterations,
+        checks_passed: finalReport.checks.filter((c) => c.passed).length,
+        checks_total: finalReport.checks.length,
+      });
+    }
+  }
+
   return {
     status: exitCode === 0 ? "completed" : "failed",
     exitCode,
@@ -283,6 +342,8 @@ Branch ist bereits erstellt: ${branchName}`;
 // --- Resume a paused pipeline session ---
 export interface ResumeOptions {
   projectDir: string;
+  workDir?: string;
+  branchName?: string;
   ticket: TicketArgs;
   sessionId: string;
   answer: string;
@@ -294,19 +355,30 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
   const { projectDir, ticket, sessionId: resumeSessionId, answer, abortSignal } = opts;
   const config = loadProjectConfig(projectDir);
 
-  // Branch should already exist — just ensure we're on it
-  const branchSlug = ticket.title
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 40);
-  const branchName = `${config.conventions.branch_prefix}${ticket.ticketId}-${branchSlug}`;
+  // Branch name: use pre-computed value if provided, otherwise derive (CLI mode)
+  let branchName: string;
+  if (opts.branchName) {
+    branchName = opts.branchName;
+  } else {
+    const branchSlug = ticket.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "-")
+      .replace(/-+/g, "-")
+      .slice(0, 40);
+    branchName = `${config.conventions.branch_prefix}${ticket.ticketId}-${branchSlug}`;
+  }
 
-  try {
-    execSync(`git checkout ${branchName}`, { cwd: projectDir, stdio: "pipe" });
-  } catch { /* branch may already be checked out */ }
+  // workDir: use provided worktree directory, or fall back to projectDir (CLI mode)
+  const workDir = opts.workDir ?? projectDir;
 
-  const agents = loadAgents(projectDir);
+  if (!opts.workDir) {
+    // CLI mode — no worktree manager, do git checkout as before
+    try {
+      execSync(`git checkout ${branchName}`, { cwd: projectDir, stdio: "pipe" });
+    } catch { /* branch may already be checked out */ }
+  }
+
+  const agents = loadAgents(workDir);
   const hasPipeline = !!(config.pipeline.apiUrl && config.pipeline.apiKey);
   const eventConfig: EventConfig = {
     apiUrl: config.pipeline.apiUrl,
@@ -355,7 +427,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
     for await (const message of query({
       prompt: `Antwort auf deine Frage: ${answer}\n\nMach weiter wo du aufgehört hast.`,
       options: {
-        cwd: projectDir,
+        cwd: workDir,
         model: "opus",
         permissionMode: "bypassPermissions",
         allowDangerouslySkipPermissions: true,

@@ -43,19 +43,39 @@ Antworte AUSSCHLIESSLICH mit einem JSON-Block:
 ```json
 {
   "verdict": "sufficient",
-  "analysis": "1-3 Sätze zur Bewertung"
+  "analysis": "1-3 Sätze zur Bewertung",
+  "qa_tier": "light",
+  "qa_pages": [],
+  "qa_flows": []
 }
 ```
 
-Oder bei Anreicherung:
+Oder bei Anreicherung mit full QA:
 
 ```json
 {
   "verdict": "enriched",
   "analysis": "1-3 Sätze zur Bewertung",
-  "enriched_body": "Der verbesserte Ticket-Body (kompletter Markdown-Text)"
+  "enriched_body": "Der verbesserte Ticket-Body (kompletter Markdown-Text)",
+  "qa_tier": "full",
+  "qa_pages": ["/dashboard", "/settings"],
+  "qa_flows": ["Settings-Button klicken → Modal öffnet sich"]
 }
 ```
+
+## QA-Tiering
+
+Zusätzlich zur Qualitätsprüfung bestimmst du das QA-Level für das Ticket:
+
+| Tier | Wann | Beispiele |
+|------|------|-----------|
+| **full** | UI-sichtbare Änderungen, neue Features, große Refactors | Neuer Button, Layout-Änderung, neue Seite |
+| **light** | Bug-Fixes, kleine Improvements, Backend-only | API-Fix, Typo-Korrektur, Performance-Verbesserung |
+| **skip** | Docs, Chore, Config, CI/CD | README-Update, Dependency-Update, .env-Änderung |
+
+Bei **full** musst du zusätzlich angeben:
+- `qa_pages`: Welche Seiten/Routes betroffen sind (z.B. `["/dashboard", "/settings"]`)
+- `qa_flows`: Klick-Flows aus den Acceptance Criteria (z.B. `["Button 'Speichern' klicken → Toast erscheint"]`)
 
 ## Regeln
 
