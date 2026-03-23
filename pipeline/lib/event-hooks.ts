@@ -57,12 +57,8 @@ export function createEventHooks(
 
   const onAgentCompleted: HookCallback = async (input) => {
     const hookInput = input as SubagentStopHookInput;
-    const agentType = agentTypeByIdMap.get(hookInput.agent_id) ?? "unknown";
+    // Clean up map only — PostToolUse (Agent) sends the completed event with token data
     agentTypeByIdMap.delete(hookInput.agent_id);
-    await postEvent(config, {
-      agent_type: agentType,
-      event_type: "completed",
-    });
     return { async: true as const };
   };
 
@@ -70,11 +66,16 @@ export function createEventHooks(
     const hookInput = input as PostToolUseHookInput;
     const toolInput = (hookInput.tool_input ?? {}) as Record<string, unknown>;
     const agentType = (toolInput.subagent_type ?? toolInput.name ?? "unknown") as string;
-    // Only send if SubagentStop didn't already handle it
-    if (agentTypeByIdMap.has(agentType)) return { async: true as const };
+
+    // Extract token usage from agent response (<usage>total_tokens: N</usage>)
+    const responseText = String(hookInput.tool_response ?? "");
+    const tokensMatch = responseText.match(/total_tokens:\s*(\d+)/);
+    const tokensUsed = tokensMatch ? parseInt(tokensMatch[1], 10) : 0;
+
     await postEvent(config, {
       agent_type: agentType,
       event_type: "completed",
+      ...(tokensUsed > 0 ? { metadata: { tokens_used: tokensUsed } } : {}),
     });
     return { async: true as const };
   };
