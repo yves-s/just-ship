@@ -131,7 +131,7 @@ Standardmäßig übernimmt der QA-Agent den Security-Quick-Check. Für sicherhei
 
 2. **Branch** — Lies `conventions.branch_prefix` aus `project.json`
 3. **Commit** — Gezielt stagen (inkl. `CHANGELOG.md` falls geändert), Conventional Commit:
-   `feat(#{ticket}): {englische Beschreibung}`
+   `feat(T-{ticket}): {englische Beschreibung}`
    `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
 4. **Push** — `git push -u origin {branch}`
 5. **PR** — `gh pr create` mit Summary + Test Plan
