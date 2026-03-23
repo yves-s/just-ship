@@ -4,6 +4,8 @@ import { execSync } from "node:child_process";
 import { loadProjectConfig, parseCliArgs, type TicketArgs } from "./lib/config.ts";
 import { loadAgents, loadOrchestratorPrompt, loadTriagePrompt } from "./lib/load-agents.ts";
 import { createEventHooks, postPipelineEvent, type EventConfig } from "./lib/event-hooks.ts";
+import { runQaWithFixLoop } from "./lib/qa-fix-loop.ts";
+import type { QaContext } from "./lib/qa-runner.ts";
 
 // --- Exported pipeline function (used by worker.ts) ---
 export interface PipelineOptions {
@@ -173,9 +175,10 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
 
   // --- Triage: analyze ticket quality before orchestrator ---
   let ticketDescription = ticket.description;
+  let triageResult: TriageResult | undefined;
   const triagePrompt = loadTriagePrompt(workDir);
   if (triagePrompt) {
-    const triageResult = await runTriage(workDir, ticket, triagePrompt, eventConfig, hasPipeline);
+    triageResult = await runTriage(workDir, ticket, triagePrompt, eventConfig, hasPipeline);
     ticketDescription = triageResult.description;
   }
 
@@ -295,6 +298,35 @@ Branch ist bereits erstellt: ${branchName}`;
     if (hasPipeline) await postPipelineEvent(eventConfig, "pipeline_failed", "orchestrator");
   } finally {
     clearTimeout(timeoutId);
+  }
+
+  // --- Phase 3: QA with Fix Loops ---
+  if (exitCode === 0 && !timedOut) {
+    if (hasPipeline) await postPipelineEvent(eventConfig, "agent_started", "qa");
+
+    const qaContext: QaContext = {
+      workDir,
+      branchName,
+      ticketId: ticket.ticketId,
+      qaTier: triageResult?.qaTier ?? "light",
+      qaPages: triageResult?.qaPages ?? [],
+      qaFlows: triageResult?.qaFlows ?? [],
+      qaConfig: config.qa,
+      packageManager: config.stack.packageManager,
+    };
+
+    const { finalReport, iterations } = await runQaWithFixLoop(qaContext);
+    console.error(`[QA] ${finalReport.tier} tier — ${finalReport.status} (${iterations} fix loops)`);
+
+    if (hasPipeline) {
+      await postPipelineEvent(eventConfig, "completed", "qa", {
+        tier: finalReport.tier,
+        status: finalReport.status,
+        fix_iterations: iterations,
+        checks_passed: finalReport.checks.filter((c) => c.passed).length,
+        checks_total: finalReport.checks.length,
+      });
+    }
   }
 
   return {
