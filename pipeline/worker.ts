@@ -1,6 +1,9 @@
 import { resolve } from "node:path";
 import { mkdirSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { executePipeline } from "./run.ts";
+import { WorktreeManager } from "./lib/worktree-manager.ts";
+import { loadProjectConfig } from "./lib/config.ts";
 
 // --- Environment validation ---
 const required = [
@@ -28,6 +31,10 @@ const LOG_DIR = process.env.LOG_DIR ?? resolve(process.env.HOME ?? "/tmp", "pipe
 const MAX_FAILURES = Number(process.env.MAX_FAILURES ?? "5");
 
 mkdirSync(LOG_DIR, { recursive: true });
+
+const config = loadProjectConfig(PROJECT_DIR);
+const MAX_WORKERS = config.maxWorkers;
+const worktreeManager = new WorktreeManager(PROJECT_DIR, MAX_WORKERS);
 
 // --- Logging ---
 function log(msg: string) {
@@ -120,41 +127,6 @@ async function failTicket(number: number, reason: string): Promise<void> {
 // AbortController for graceful cancellation on shutdown
 const abortController = new AbortController();
 
-async function runTicketPipeline(ticket: Ticket): Promise<void> {
-  log(`Starting pipeline: T--${ticket.number} — ${ticket.title}`);
-
-  const labels = Array.isArray(ticket.tags) ? ticket.tags.join(",") : "";
-
-  const result = await executePipeline({
-    projectDir: PROJECT_DIR,
-    ticket: {
-      ticketId: String(ticket.number),
-      title: ticket.title,
-      description: ticket.body ?? "No description provided",
-      labels,
-    },
-    abortSignal: abortController.signal,
-  });
-
-  if (result.status === "paused") {
-    // Save session_id and set pipeline_status to paused
-    await supabasePatch(
-      `/rest/v1/tickets?number=eq.${ticket.number}`,
-      { pipeline_status: "paused", session_id: result.sessionId }
-    );
-    log(`Pipeline paused: T--${ticket.number} — waiting for human input (session: ${result.sessionId})`);
-    return; // Free worker slot, don't count as failure
-  }
-
-  if (result.status === "failed") {
-    throw new Error(result.failureReason ?? `Pipeline failed (exit code: ${result.exitCode})`);
-  }
-
-  // Update ticket status to in_review
-  await completeTicket(ticket.number, result.branch);
-  log(`Pipeline completed: T--${ticket.number} → ${result.branch} (status: in_review)`);
-}
-
 // --- Graceful shutdown ---
 let running = true;
 process.on("SIGINT", () => {
@@ -174,64 +146,143 @@ log("  Just Ship Pipeline Worker (SDK)");
 log(`  Project: ${PROJECT_DIR.split("/").pop()}`);
 log(`  Supabase-Project: ${SUPABASE_PROJECT_ID}`);
 log(`  Poll-Interval: ${POLL_INTERVAL / 1000}s`);
+log(`  Max Workers: ${MAX_WORKERS}`);
 log("==========================================");
-
-let consecutiveFailures = 0;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-while (running) {
-  // 1. Connectivity check
-  if (!(await checkConnectivity())) {
-    log("WARN: Supabase not reachable, waiting...");
-    await sleep(POLL_INTERVAL);
-    continue;
-  }
+// --- Crash recovery: clean stale worktrees and reset stuck tickets ---
+log("Cleaning stale worktrees...");
+await worktreeManager.pruneStale(async (branchName) => {
+  const match = branchName.match(/(\d+)/);
+  if (!match) return false;
+  const ticketNumber = match[1];
+  const tickets = await supabaseGet<Array<{ pipeline_status: string }>>(
+    `/rest/v1/tickets?number=eq.${ticketNumber}&project_id=eq.${SUPABASE_PROJECT_ID}&select=pipeline_status`
+  );
+  return tickets?.[0]?.pipeline_status === "paused";
+});
 
-  // 2. Find next ticket
-  const ticket = await getNextTicket();
-  if (!ticket) {
-    await sleep(POLL_INTERVAL);
-    continue;
-  }
+// Reset stuck running tickets back to ready_to_develop
+await supabasePatch(
+  `/rest/v1/tickets?pipeline_status=eq.running&project_id=eq.${SUPABASE_PROJECT_ID}`,
+  { pipeline_status: null, status: "ready_to_develop" }
+);
+log("Cleanup done.");
 
-  log(`Ticket found: T--${ticket.number} — ${ticket.title}`);
+// --- Per-slot failure tracking ---
+const slotFailures = new Map<number, number>();
 
-  // 3. Atomic claim
-  const claimed = await claimTicket(ticket.number);
-  if (!claimed) {
-    log(`Ticket T--${ticket.number} claimed by another worker. Skip.`);
-    await sleep(5000);
-    continue;
-  }
+async function runWorkerSlot(ticket: Ticket): Promise<void> {
+  const branchSlug = ticket.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 40);
+  const branchName = `${config.conventions.branch_prefix}${ticket.number}-${branchSlug}`;
 
-  log(`Ticket T--${ticket.number} claimed.`);
-
-  // 4. Run pipeline (calls executePipeline from run.ts directly)
+  let slotId: number | undefined;
   try {
-    await runTicketPipeline(ticket);
-    consecutiveFailures = 0;
-  } catch (error) {
-    consecutiveFailures++;
-    const reason = error instanceof Error ? error.message : "Unknown error";
-    log(`Pipeline failed (${consecutiveFailures}/${MAX_FAILURES} consecutive)`);
+    const slot = await worktreeManager.allocate(branchName);
+    slotId = slot.slotId;
 
-    await failTicket(ticket.number, `Pipeline error: ${reason}`);
-
-    if (consecutiveFailures >= MAX_FAILURES) {
-      log(`CRITICAL: ${MAX_FAILURES} consecutive failures. Worker stopping.`);
-      log(`Check logs: ${LOG_DIR}`);
-      process.exit(1);
+    // Install dependencies in worktree
+    const installCmd = config.stack.packageManager === "pnpm" ? "pnpm install --frozen-lockfile"
+      : config.stack.packageManager === "yarn" ? "yarn install --frozen-lockfile"
+      : config.stack.packageManager === "bun" ? "bun install --frozen-lockfile"
+      : "npm ci";
+    try {
+      execSync(installCmd, { cwd: slot.workDir, stdio: "pipe", timeout: 120_000 });
+    } catch (e) {
+      log(`WARN: Install failed in worktree (${e instanceof Error ? e.message : "unknown"}), continuing...`);
     }
 
-    // 5-minute cooldown after failure
-    log("Waiting 5 minutes after failure...");
-    await sleep(300_000);
-    continue;
+    log(`Starting pipeline: T-${ticket.number} — ${ticket.title} (slot ${slotId})`);
+
+    const result = await executePipeline({
+      projectDir: PROJECT_DIR,
+      workDir: slot.workDir,
+      branchName,
+      ticket: {
+        ticketId: String(ticket.number),
+        title: ticket.title,
+        description: ticket.body ?? "No description provided",
+        labels: Array.isArray(ticket.tags) ? ticket.tags.join(",") : "",
+      },
+      abortSignal: abortController.signal,
+    });
+
+    if (result.status === "paused") {
+      await supabasePatch(
+        `/rest/v1/tickets?number=eq.${ticket.number}`,
+        { pipeline_status: "paused", session_id: result.sessionId }
+      );
+      log(`Pipeline paused: T-${ticket.number} (slot ${slotId})`);
+      await worktreeManager.park(slotId);
+      slotId = undefined; // Don't release — it's parked
+      return;
+    }
+
+    if (result.status === "failed") {
+      throw new Error(result.failureReason ?? `Pipeline failed (exit code: ${result.exitCode})`);
+    }
+
+    await completeTicket(ticket.number, result.branch);
+    log(`Pipeline completed: T-${ticket.number} → ${result.branch} (slot ${slotId})`);
+
+    if (slotId !== undefined) slotFailures.delete(slotId);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "Unknown error";
+    log(`Pipeline failed: T-${ticket.number} (${reason})`);
+    await failTicket(ticket.number, `Pipeline error: ${reason}`);
+
+    if (slotId !== undefined) {
+      const count = (slotFailures.get(slotId) ?? 0) + 1;
+      slotFailures.set(slotId, count);
+    }
+  } finally {
+    if (slotId !== undefined) {
+      await worktreeManager.release(slotId);
+    }
+  }
+}
+
+// --- Main loop: fetch tickets sequentially, run pipelines in parallel ---
+while (running) {
+  const activeSlots = worktreeManager.getActiveSlots();
+  const availableSlots = MAX_WORKERS - activeSlots;
+
+  if (availableSlots > 0) {
+    // Fetch and claim tickets SEQUENTIALLY to avoid race conditions
+    const claimedTickets: Ticket[] = [];
+    for (let i = 0; i < availableSlots; i++) {
+      if (!(await checkConnectivity())) break;
+      const ticket = await getNextTicket();
+      if (!ticket) break;
+
+      const claimed = await claimTicket(ticket.number);
+      if (claimed) {
+        claimedTickets.push(ticket);
+        log(`Ticket T-${ticket.number} claimed.`);
+      }
+    }
+
+    // Run claimed tickets IN PARALLEL
+    if (claimedTickets.length > 0) {
+      const promises = claimedTickets.map((ticket) => runWorkerSlot(ticket));
+      await Promise.allSettled(promises);
+    }
   }
 
-  // Short pause between tickets
-  await sleep(5000);
+  // Check for infrastructure-level failures
+  let totalFailures = 0;
+  for (const count of slotFailures.values()) totalFailures += count;
+  if (totalFailures >= MAX_FAILURES) {
+    log(`CRITICAL: ${totalFailures} total failures across slots. Worker stopping.`);
+    process.exit(1);
+  }
+
+  await sleep(POLL_INTERVAL);
 }
 
 log("Worker stopped gracefully.");
