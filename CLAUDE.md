@@ -50,17 +50,23 @@ Falls Pipeline konfiguriert ist, sind Status-Updates **PFLICHT**:
 | `/develop` — Ticket implementieren | **`in_progress`** | Sofort nach Ticket-Auswahl, VOR dem Coding |
 | `/ship` — PR mergen & abschließen | **`done`** | Nach erfolgreichem Merge |
 
-Status-Updates via Board API (Credentials werden aus `~/.just-ship/config.json` aufgelöst):
+**Board-API-Credentials auflösen** — bei JEDEM API-Call (Tickets lesen, erstellen, updaten, Status ändern) dieses Snippet verwenden:
 ```bash
-WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --id <workspace_id>)
-# → { board_url, api_key, ... }
-curl -s -X PATCH -H "X-Pipeline-Key: {api_key}" \
-  -H "Content-Type: application/json" \
-  -d '{"status": "{status}"}' \
-  "{board_url}/api/tickets/{N}"
+# 1. workspace_id aus project.json lesen
+WS_ID=$(node -e "process.stdout.write(require('./project.json').pipeline?.workspace_id || '')")
+# 2. Credentials via read-workspace auflösen (IMMER --id, NIEMALS --slug)
+WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --id "$WS_ID")
+# 3. board_url und api_key aus dem JSON extrahieren
+BOARD_URL=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).board_url)")
+API_KEY=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).api_key)")
+# 4. API-Call
+curl -s -H "X-Pipeline-Key: $API_KEY" "$BOARD_URL/api/tickets/{N}"
 ```
 
-**Workspace-Credentials** (API Key) liegen in `~/.just-ship/config.json` — nicht in `project.json`. Führe `/setup-just-ship` aus, um die Pipeline-Verbindung einzurichten.
+**WICHTIG:**
+- `api_key` und `board_url` stehen **NICHT** in `project.json` — sie liegen in `~/.just-ship/config.json`
+- **NIEMALS** `cat ~/.just-ship/config.json` ausgeben oder manuell nach Workspaces suchen
+- **IMMER** `read-workspace --id` mit der UUID aus `project.json` verwenden, **NIEMALS** `--slug`
 
 **Überspringe KEINEN dieser Schritte.** Falls ein Update fehlschlägt, versuche es erneut oder informiere den User.
 

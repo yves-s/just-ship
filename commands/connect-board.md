@@ -11,14 +11,41 @@ Verbindet das aktuelle Projekt mit dem Just Ship Board.
 
 ### 1. Status prüfen
 
-Lies `project.json` — falls `pipeline.workspace_id` bereits gesetzt:
+Lies `project.json` und prüfe `pipeline.workspace_id`. Falls gesetzt, validiere die vollständige Verbindung:
 
+```bash
+bash .claude/scripts/write-config.sh read-workspace --id <workspace_id>
 ```
-Board ist bereits verbunden (Workspace: {workspace_id}).
 
-Um einen anderen Workspace zu verbinden, führe
-'just-ship connect' mit einem neuen Code im Terminal aus.
+**Ergebnis auswerten:**
+
+| `project.json` | `config.json` (read-workspace) | Status |
+|---|---|---|
+| `workspace_id` + `project_id` gesetzt | `api_key` vorhanden | **Voll verbunden** |
+| `workspace_id` gesetzt, `project_id` fehlt | `api_key` vorhanden | **Workspace verbunden, Projekt fehlt** |
+| `workspace_id` gesetzt | `api_key` leer oder read-workspace schlägt fehl | **Credentials fehlen** |
+| `workspace_id` nicht gesetzt | — | **Nicht verbunden** |
+
+**Voll verbunden:**
 ```
+✓ Board verbunden (Workspace: {slug || workspace_id}, Projekt: {project_id})
+```
+
+**Workspace verbunden, Projekt fehlt:**
+```
+✓ Workspace verbunden ({slug || workspace_id}), aber kein Projekt verknüpft.
+
+Führe 'just-ship connect' im Terminal aus um ein Projekt auszuwählen.
+```
+
+**Credentials fehlen:**
+```
+⚠ Workspace in project.json gesetzt, aber API-Key fehlt in ~/.just-ship/config.json.
+
+Führe 'just-ship connect' mit einem neuen Code im Terminal aus.
+```
+
+**Nicht verbunden** → weiter zu Schritt 2.
 
 ### 2. Falls nicht verbunden
 
