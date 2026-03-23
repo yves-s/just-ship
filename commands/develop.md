@@ -271,22 +271,35 @@ git diff --name-only $(git merge-base main HEAD) HEAD
 git status --porcelain
 ```
 
-Bestimme anhand der geänderten Dateien, welche Docs geprüft werden müssen:
+Bestimme anhand der geänderten Dateien, welche Docs geprüft werden müssen. **Nur bestehende Dateien aktualisieren** — keine neuen Docs anlegen. Falls eine Zieldatei nicht existiert, diesen Eintrag überspringen.
 
-| Geänderte Dateien | Zu prüfende Docs |
-|---|---|
-| `commands/*.md` | README.md → Commands-Tabelle + Architecture-Abschnitt |
-| `agents/*.md` | README.md → Agents-Tabelle |
-| `skills/*.md` | README.md → Skills-Tabelle |
-| `pipeline/**`, `agents/*.md`, `commands/*.md` | README.md → Workflow-Diagramm |
-| Pipeline/Architektur-Strukturen | CLAUDE.md |
-| Keine der obigen | Schritt überspringen |
+| Geänderte Dateien | Zu prüfende Docs | Aktion |
+|---|---|---|
+| Jede Änderung (immer) | `CHANGELOG.md` | Eintrag unter `[Unreleased]` mit Typ (Added/Changed/Fixed/Removed) nach Keep-a-Changelog Format |
+| `commands/*.md` | `README.md` | Commands-Tabelle + Architecture-Abschnitt |
+| `agents/*.md` | `README.md` | Agents-Tabelle |
+| `skills/*.md` | `README.md` | Skills-Tabelle |
+| `pipeline/**`, `agents/*.md`, `commands/*.md` | `README.md` | Workflow-Diagramm |
+| `pipeline/**`, `agents/*.md`, `.claude/**` | `docs/ARCHITECTURE.md` | Betroffene Sektionen (Agent System, Slash Commands, Pipeline SDK, etc.) |
+| Pipeline/Architektur-Strukturen | `CLAUDE.md` | Architektur-Abschnitt |
+| `commands/*.md`, `agents/*.md`, `skills/*.md` | `templates/CLAUDE.md` | Template aktualisieren falls Commands/Agents/Skills-Referenzen enthalten |
+| `vps/**`, `pipeline/worker.ts`, `pipeline/server.ts` | `vps/README.md` | VPS-spezifische Doku |
+| Workflow, Conventions, Dev-Setup | `CONTRIBUTING.md` | Contributing Guidelines |
+| Keine der obigen Trigger-Dateien | — | Gesamten Schritt überspringen (CHANGELOG ausgenommen — wird immer geprüft) |
 
-Falls Anpassung nötig: direkt mit Edit-Tool ändern. Nur `README.md` und `CLAUDE.md` — keine anderen Docs.
+**CHANGELOG.md — Keep-a-Changelog Format:**
+Falls keine `[Unreleased]`-Sektion existiert, füge sie als erste Sektion nach dem `# Changelog` Header ein. Einträge gruppieren nach: `### Added`, `### Changed`, `### Fixed`, `### Removed`. Beschreibung auf Englisch, 1 Zeile pro Änderung.
 
-Ausgabe:
-- `✓ docs — README.md aktualisiert` (falls Änderungen gemacht)
-- `✓ docs — keine Änderungen nötig` (falls nichts zu tun)
+Falls Anpassung nötig: direkt mit Edit-Tool ändern.
+
+Ausgabe pro geprüfter Datei:
+- `✓ docs — CHANGELOG.md aktualisiert`
+- `✓ docs — README.md aktualisiert`
+- `✓ docs — docs/ARCHITECTURE.md aktualisiert`
+- `✓ docs — templates/CLAUDE.md aktualisiert`
+- `✓ docs — vps/README.md aktualisiert`
+- `✓ docs — CONTRIBUTING.md aktualisiert`
+- `✓ docs — keine Änderungen nötig` (falls nichts zu tun war)
 
 **NICHT STOPPEN.** SOFORT weiter zu Schritt 9.
 
