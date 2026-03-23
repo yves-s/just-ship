@@ -11,10 +11,10 @@ Verbindet das aktuelle Projekt mit dem Just Ship Board.
 
 ### 1. Status prüfen
 
-Lies `project.json` — falls `pipeline.workspace` bereits gesetzt:
+Lies `project.json` — falls `pipeline.workspace_id` bereits gesetzt:
 
 ```
-Board ist bereits verbunden (Workspace: {workspace}).
+Board ist bereits verbunden (Workspace: {workspace_id}).
 
 Um einen anderen Workspace zu verbinden, führe
 'just-ship connect' mit einem neuen Code im Terminal aus.
@@ -35,19 +35,20 @@ Prüfe ob die Verbindung eingerichtet wurde:
 ```bash
 cat "$HOME/.just-ship/config.json" 2>/dev/null | node -e "
   const c=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));
-  const ws=Object.keys(c.workspaces||{});
-  console.log(ws.length ? 'CONNECTED:' + ws.join(',') : 'NOT_CONNECTED');
+  const entries=Object.entries(c.workspaces||{});
+  if(!entries.length){console.log('NOT_CONNECTED');process.exit();}
+  entries.forEach(([id,w])=>console.log('CONNECTED:'+id+':'+(w.slug||id)));
 "
 ```
 
 **Falls CONNECTED:** Prüfe ob `project.json` den Workspace hat. Falls nicht, setze ihn:
 ```bash
-".claude/scripts/write-config.sh" set-project --workspace <slug> --project-id <project-id>
+".claude/scripts/write-config.sh" set-project --workspace-id <uuid> --project-id <project-id>
 ```
 
-Bestätigung:
+Bestätigung (zeige slug wenn verfügbar):
 ```
-✓ Board verbunden (Workspace: {workspace})
+✓ Board verbunden (Workspace: {slug || uuid})
 ```
 
 **Falls NOT_CONNECTED:** Frage ob etwas nicht geklappt hat und hilf weiter.
