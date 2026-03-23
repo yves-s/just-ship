@@ -2,7 +2,7 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { execSync } from "node:child_process";
 import { loadProjectConfig, parseCliArgs, type TicketArgs } from "./lib/config.ts";
-import { loadAgents, loadOrchestratorPrompt } from "./lib/load-agents.ts";
+import { loadAgents, loadOrchestratorPrompt, loadTriagePrompt } from "./lib/load-agents.ts";
 import { createEventHooks, postPipelineEvent, type EventConfig } from "./lib/event-hooks.ts";
 
 // --- Exported pipeline function (used by worker.ts) ---
@@ -20,6 +20,87 @@ export interface PipelineResult {
   project: string;
   failureReason?: string;
   sessionId?: string;
+}
+
+// --- Triage: analyze ticket quality before orchestrator ---
+interface TriageResult {
+  description: string;
+  verdict: string;
+  analysis: string;
+}
+
+async function runTriage(
+  projectDir: string,
+  ticket: TicketArgs,
+  triagePrompt: string,
+  eventConfig: EventConfig,
+  hasPipeline: boolean,
+): Promise<TriageResult> {
+  if (hasPipeline) await postPipelineEvent(eventConfig, "agent_started", "triage");
+
+  const prompt = `${triagePrompt}
+
+Analysiere folgendes Ticket:
+
+Ticket-ID: ${ticket.ticketId}
+Titel: ${ticket.title}
+Beschreibung:
+${ticket.description}
+Labels: ${ticket.labels}`;
+
+  const result: TriageResult = { description: ticket.description, verdict: "sufficient", analysis: "" };
+
+  try {
+    let responseText = "";
+
+    for await (const message of query({
+      prompt,
+      options: {
+        cwd: projectDir,
+        model: "haiku",
+        permissionMode: "bypassPermissions",
+        allowDangerouslySkipPermissions: true,
+        allowedTools: [],
+        maxTurns: 1,
+      },
+    })) {
+      if (message.type === "assistant") {
+        const msg = message as SDKMessage & { content?: Array<{ type: string; text?: string }> };
+        if (Array.isArray(msg.content)) {
+          for (const block of msg.content) {
+            if (block.type === "text" && block.text) {
+              responseText += block.text;
+            }
+          }
+        }
+      }
+    }
+
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      result.verdict = parsed.verdict ?? "sufficient";
+      result.analysis = parsed.analysis ?? "";
+
+      if (parsed.verdict === "enriched" && parsed.enriched_body) {
+        result.description = parsed.enriched_body;
+        console.error(`[Triage] Enriched — ${result.analysis}`);
+      } else {
+        console.error(`[Triage] Sufficient — ${result.analysis}`);
+      }
+    }
+  } catch (error) {
+    console.error(`[Triage] Error: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  if (hasPipeline) {
+    await postPipelineEvent(eventConfig, "completed", "triage", {
+      verdict: result.verdict,
+      analysis: result.analysis,
+    });
+  }
+
+  return result;
 }
 
 export async function executePipeline(opts: PipelineOptions): Promise<PipelineResult> {
@@ -63,6 +144,14 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
     onPause: (reason) => { pauseReason = reason; },
   }) : {};
 
+  // --- Triage: analyze ticket quality before orchestrator ---
+  let ticketDescription = ticket.description;
+  const triagePrompt = loadTriagePrompt(projectDir);
+  if (triagePrompt) {
+    const triageResult = await runTriage(projectDir, ticket, triagePrompt, eventConfig, hasPipeline);
+    ticketDescription = triageResult.description;
+  }
+
   // --- Build prompt ---
   const prompt = `${orchestratorPrompt}
 
@@ -70,7 +159,7 @@ Implementiere folgendes Ticket end-to-end:
 
 Ticket-ID: ${ticket.ticketId}
 Titel: ${ticket.title}
-Beschreibung: ${ticket.description}
+Beschreibung: ${ticketDescription}
 Labels: ${ticket.labels}
 
 Folge deinem Workflow:

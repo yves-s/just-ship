@@ -47,8 +47,8 @@ export function loadAgents(projectDir: string): Record<string, AgentDefinition> 
   for (const file of files) {
     const name = basename(file, ".md");
 
-    // Skip orchestrator — it's the main agent, not a sub-agent
-    if (name === "orchestrator") continue;
+    // Skip orchestrator and triage — they're called directly, not as sub-agents
+    if (name === "orchestrator" || name === "triage") continue;
 
     const content = readFileSync(resolve(agentsDir, file), "utf-8");
     const { frontmatter, body } = parseFrontmatter(content);
@@ -74,4 +74,15 @@ export function loadOrchestratorPrompt(projectDir: string): string {
   const content = readFileSync(orchestratorPath, "utf-8");
   const { body } = parseFrontmatter(content);
   return body.trim();
+}
+
+export function loadTriagePrompt(projectDir: string): string | null {
+  const triagePath = resolve(projectDir, ".claude", "agents", "triage.md");
+  try {
+    const content = readFileSync(triagePath, "utf-8");
+    const { body } = parseFrontmatter(content);
+    return body.trim();
+  } catch {
+    return null;
+  }
 }

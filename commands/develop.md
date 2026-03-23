@@ -137,6 +137,41 @@ git checkout -b {abgeleiteter-prefix}/{ticket-nummer}-{kurzbeschreibung}
 bash .claude/scripts/send-event.sh {N} orchestrator agent_started
 ```
 
+### 3.5 Triage — Ticket-Qualitätsprüfung
+
+```bash
+bash .claude/scripts/send-event.sh {N} triage agent_started
+```
+Ausgabe: `▶ triage — Ticket-Qualität prüfen`
+
+Spawne einen Triage-Agent mit `model: "haiku"` und `subagent_type: "triage"`:
+
+Prompt:
+```
+Lies .claude/agents/triage.md für deine Rolle.
+
+Analysiere folgendes Ticket:
+
+Ticket-ID: T-{N}
+Titel: {title}
+Beschreibung:
+{body}
+Labels: {labels}
+```
+
+Verarbeite das JSON-Ergebnis des Agents:
+- **verdict = "sufficient"**: Ticket ist klar. Weiter mit Schritt 4.
+- **verdict = "enriched"**: Nutze `enriched_body` als verbesserte Beschreibung für alle weiteren Schritte (Planung, Agent-Prompts).
+
+```bash
+bash .claude/scripts/send-event.sh {N} triage completed '{"verdict": "{verdict}"}'
+```
+Ausgabe:
+- `✓ triage — Ticket ausreichend klar` (bei sufficient)
+- `✓ triage — Ticket angereichert` (bei enriched, zeige 1-Zeiler Analysis)
+
+**NICHT STOPPEN.** SOFORT weiter zu Schritt 4.
+
 ### 4. Planung (SELBST, kein Planner-Agent)
 
 **Lies nur die 5-10 betroffenen Dateien** direkt mit Read/Glob/Grep.

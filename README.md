@@ -16,6 +16,11 @@
 Ticket (Board or CLI)
     |
     v
+Triage (Haiku)
+    |-- analyzes ticket quality
+    |-- enriches unclear descriptions
+    |
+    v
 Orchestrator (Opus)
     |-- reads affected files
     |-- plans the work
@@ -82,6 +87,7 @@ just-ship self-update
 | Agent | Model | Role |
 |-------|-------|------|
 | **Orchestrator** | Opus | Plans, delegates, ships -- drives the entire flow |
+| **Triage** | Haiku | Analyzes ticket quality, enriches unclear descriptions before execution |
 | **Backend** | Sonnet | API endpoints, shared hooks, business logic |
 | **Frontend** | Sonnet | UI components and pages (design-aware) |
 | **Data Engineer** | Haiku | DB migrations, RLS policies, TypeScript types |
@@ -115,6 +121,7 @@ Ticket lifecycle (Board):
 ### Orchestrator Phases
 
 ```
+Phase 0: Triage          Haiku analyzes ticket quality, enriches unclear descriptions
 Phase 1: Planning        Orchestrator reads 5-10 affected files, formulates agent instructions
 Phase 2: Implementation  Sub-agents execute in parallel (data-engineer first if schema changes)
          ask-human       If uncertain: pause pipeline, ask via Board + Telegram, resume on answer
@@ -174,6 +181,7 @@ just-ship/
 ├── setup.sh                    # Install + update script
 ├── agents/                     # Agent definitions (markdown + YAML frontmatter)
 │   ├── orchestrator.md
+│   ├── triage.md
 │   ├── backend.md
 │   ├── frontend.md
 │   ├── data-engineer.md
@@ -206,7 +214,7 @@ your-project/
 ├── CLAUDE.md                   # Project instructions (edit to match your project)
 ├── project.json                # Config: stack, build commands, pipeline IDs
 ├── .claude/
-│   ├── agents/                 # 7 agents (from framework, auto-updated)
+│   ├── agents/                 # 8 agents (from framework, auto-updated)
 │   ├── commands/               # 7 commands (from framework, auto-updated)
 │   ├── skills/                 # 8 framework skills + your custom skills
 │   ├── hooks/                  # Event streaming (lifecycle hooks)
