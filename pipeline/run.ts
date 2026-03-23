@@ -68,7 +68,7 @@ Labels: ${ticket.labels}`;
     for await (const message of query({
       prompt,
       options: {
-        cwd: projectDir,
+        cwd: workDir,
         model: "haiku",
         permissionMode: "bypassPermissions",
         allowDangerouslySkipPermissions: true,
@@ -126,28 +126,39 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
   let pauseReason: string | undefined;
   let sessionId: string | undefined;
 
-  // --- Git: create feature branch ---
-  const branchSlug = ticket.title
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 40);
-  const branchName = `${config.conventions.branch_prefix}${ticket.ticketId}-${branchSlug}`;
+  // --- Branch name: use pre-computed value if provided, otherwise derive (CLI mode) ---
+  let branchName: string;
+  if (opts.branchName) {
+    branchName = opts.branchName;
+  } else {
+    const branchSlug = ticket.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "-")
+      .replace(/-+/g, "-")
+      .slice(0, 40);
+    branchName = `${config.conventions.branch_prefix}${ticket.ticketId}-${branchSlug}`;
+  }
 
-  try {
-    execSync("git checkout main", { cwd: projectDir, stdio: "pipe" });
-    execSync("git pull origin main", { cwd: projectDir, stdio: "pipe" });
-  } catch { /* continue */ }
+  // workDir: use provided worktree directory, or fall back to projectDir (CLI mode)
+  const workDir = opts.workDir ?? projectDir;
 
-  try {
-    execSync(`git checkout -b ${branchName}`, { cwd: projectDir, stdio: "pipe" });
-  } catch {
-    execSync(`git checkout ${branchName}`, { cwd: projectDir, stdio: "pipe" });
+  if (!opts.workDir) {
+    // CLI mode — no worktree manager, do git checkout as before
+    try {
+      execSync("git checkout main", { cwd: projectDir, stdio: "pipe" });
+      execSync("git pull origin main", { cwd: projectDir, stdio: "pipe" });
+    } catch { /* continue */ }
+
+    try {
+      execSync(`git checkout -b ${branchName}`, { cwd: projectDir, stdio: "pipe" });
+    } catch {
+      execSync(`git checkout ${branchName}`, { cwd: projectDir, stdio: "pipe" });
+    }
   }
 
   // --- Load agents + orchestrator prompt ---
-  const agents = loadAgents(projectDir);
-  const orchestratorPrompt = loadOrchestratorPrompt(projectDir);
+  const agents = loadAgents(workDir);
+  const orchestratorPrompt = loadOrchestratorPrompt(workDir);
 
   // --- Event hooks ---
   const hasPipeline = !!(config.pipeline.apiUrl && config.pipeline.apiKey);
@@ -162,9 +173,9 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
 
   // --- Triage: analyze ticket quality before orchestrator ---
   let ticketDescription = ticket.description;
-  const triagePrompt = loadTriagePrompt(projectDir);
+  const triagePrompt = loadTriagePrompt(workDir);
   if (triagePrompt) {
-    const triageResult = await runTriage(projectDir, ticket, triagePrompt, eventConfig, hasPipeline);
+    const triageResult = await runTriage(workDir, ticket, triagePrompt, eventConfig, hasPipeline);
     ticketDescription = triageResult.description;
   }
 
@@ -230,7 +241,7 @@ Branch ist bereits erstellt: ${branchName}`;
     for await (const message of query({
       prompt,
       options: {
-        cwd: projectDir,
+        cwd: workDir,
         model: "opus",
         permissionMode: "bypassPermissions",
         allowDangerouslySkipPermissions: true,
@@ -312,19 +323,30 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
   const { projectDir, ticket, sessionId: resumeSessionId, answer, abortSignal } = opts;
   const config = loadProjectConfig(projectDir);
 
-  // Branch should already exist — just ensure we're on it
-  const branchSlug = ticket.title
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 40);
-  const branchName = `${config.conventions.branch_prefix}${ticket.ticketId}-${branchSlug}`;
+  // Branch name: use pre-computed value if provided, otherwise derive (CLI mode)
+  let branchName: string;
+  if (opts.branchName) {
+    branchName = opts.branchName;
+  } else {
+    const branchSlug = ticket.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "-")
+      .replace(/-+/g, "-")
+      .slice(0, 40);
+    branchName = `${config.conventions.branch_prefix}${ticket.ticketId}-${branchSlug}`;
+  }
 
-  try {
-    execSync(`git checkout ${branchName}`, { cwd: projectDir, stdio: "pipe" });
-  } catch { /* branch may already be checked out */ }
+  // workDir: use provided worktree directory, or fall back to projectDir (CLI mode)
+  const workDir = opts.workDir ?? projectDir;
 
-  const agents = loadAgents(projectDir);
+  if (!opts.workDir) {
+    // CLI mode — no worktree manager, do git checkout as before
+    try {
+      execSync(`git checkout ${branchName}`, { cwd: projectDir, stdio: "pipe" });
+    } catch { /* branch may already be checked out */ }
+  }
+
+  const agents = loadAgents(workDir);
   const hasPipeline = !!(config.pipeline.apiUrl && config.pipeline.apiKey);
   const eventConfig: EventConfig = {
     apiUrl: config.pipeline.apiUrl,
@@ -373,7 +395,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
     for await (const message of query({
       prompt: `Antwort auf deine Frage: ${answer}\n\nMach weiter wo du aufgehört hast.`,
       options: {
-        cwd: projectDir,
+        cwd: workDir,
         model: "opus",
         permissionMode: "bypassPermissions",
         allowDangerouslySkipPermissions: true,
