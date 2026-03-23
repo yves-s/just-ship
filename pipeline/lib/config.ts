@@ -4,7 +4,6 @@ import { homedir } from "node:os";
 
 export interface PipelineConfig {
   projectId: string;
-  projectName: string;
   workspaceId: string;
   apiUrl: string;
   apiKey: string;
@@ -38,12 +37,12 @@ export interface TicketArgs {
 }
 
 interface WorkspaceEntry {
-  board_url?: string;
-  workspace_id?: string;
+  slug?: string;
   api_key?: string;
 }
 
 interface GlobalConfig {
+  board_url?: string;
   workspaces: Record<string, WorkspaceEntry>;
   default_workspace: string | null;
 }
@@ -60,14 +59,14 @@ function loadGlobalConfig(): GlobalConfig | null {
 
 function buildPipelineConfig(
   rawPipeline: Record<string, unknown>,
+  globalConfig?: GlobalConfig | null,
   ws?: WorkspaceEntry,
 ): PipelineConfig {
   return {
     projectId:   (rawPipeline.project_id as string) ?? "",
-    projectName: (rawPipeline.project_name as string) ?? "",
-    workspaceId: ws?.workspace_id ?? (rawPipeline.workspace_id as string) ?? "",
-    apiUrl:      ws?.board_url   ?? (rawPipeline.api_url as string) ?? "",
-    apiKey:      ws?.api_key     ?? (rawPipeline.api_key as string) ?? "",
+    workspaceId: (rawPipeline.workspace_id as string) ?? "",
+    apiUrl:      globalConfig?.board_url ?? "",
+    apiKey:      ws?.api_key ?? "",
   };
 }
 
@@ -101,50 +100,58 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
   // Hoist: load global config once for all branches
   const globalConfig = loadGlobalConfig();
 
-  // Check for old format (api_key directly in project.json)
   if (rawPipeline.api_key) {
+    // Old format: credentials in project.json
     console.warn(
       "\u26a0 api_key in project.json is deprecated.\n" +
-      "  Führe 'just-ship connect' im Terminal aus um zu migrieren"
+      "  Run 'just-ship connect' or '.claude/scripts/write-config.sh migrate' to upgrade."
     );
+    pipeline = buildPipelineConfig(rawPipeline, globalConfig);
+    if (!pipeline.apiUrl) pipeline.apiUrl = (rawPipeline.api_url as string) ?? "";
+    if (!pipeline.apiKey) pipeline.apiKey = (rawPipeline.api_key as string) ?? "";
 
-    // Try global config first (takes priority)
-    const workspaceSlug = rawPipeline.workspace;
-    if (globalConfig && workspaceSlug && globalConfig.workspaces[workspaceSlug]) {
-      const ws = globalConfig.workspaces[workspaceSlug];
-      pipeline = buildPipelineConfig(rawPipeline, ws);
-    } else {
-      // Fall back to old format
-      pipeline = buildPipelineConfig(rawPipeline);
-    }
-  } else if (rawPipeline.workspace) {
-    // New format: resolve from global config
-    const slug = rawPipeline.workspace;
-
+  } else if (rawPipeline.workspace_id) {
+    // New format: UUID-based lookup
+    const wsId = rawPipeline.workspace_id as string;
     if (!globalConfig) {
       console.warn(
-        `\u26a0 Workspace '${slug}' configured but ~/.just-ship/config.json not found.\n` +
-        `  Führe 'just-ship connect' im Terminal aus um die Verbindung einzurichten.`
+        `\u26a0 workspace_id '${wsId}' configured but ~/.just-ship/config.json not found.\n` +
+        `  Run 'just-ship connect' to set up the connection.`
       );
-      pipeline = buildPipelineConfig(rawPipeline);
+      pipeline = buildPipelineConfig(rawPipeline, null);
     } else {
-      const ws = globalConfig.workspaces[slug];
+      const ws = globalConfig.workspaces[wsId];
       if (!ws) {
         console.error(
-          `Workspace '${slug}' not found in ~/.just-ship/config.json.\n` +
-          `Führe 'just-ship connect' im Terminal aus um die Verbindung einzurichten.`
+          `Workspace '${wsId}' not found in ~/.just-ship/config.json.\n` +
+          `Run 'just-ship connect' to set up the connection.`
         );
-        pipeline = buildPipelineConfig(rawPipeline);
+        pipeline = buildPipelineConfig(rawPipeline, globalConfig);
       } else {
-        pipeline = buildPipelineConfig(rawPipeline, ws);
+        pipeline = buildPipelineConfig(rawPipeline, globalConfig, ws);
       }
     }
-  } else {
-    // No pipeline config at all — check for default workspace
-    const defaultSlug = globalConfig?.default_workspace;
-    const defaultWs = defaultSlug ? globalConfig?.workspaces[defaultSlug] : undefined;
 
-    pipeline = buildPipelineConfig(rawPipeline, defaultWs);
+  } else if (rawPipeline.workspace) {
+    // Intermediate format: slug-based (deprecated)
+    console.warn(
+      `\u26a0 pipeline.workspace (slug) is deprecated.\n` +
+      `  Run '.claude/scripts/write-config.sh migrate' to upgrade.`
+    );
+    const slug = rawPipeline.workspace as string;
+    let ws: WorkspaceEntry | undefined;
+    if (globalConfig) {
+      for (const [, entry] of Object.entries(globalConfig.workspaces)) {
+        if (entry.slug === slug) { ws = entry; break; }
+      }
+    }
+    pipeline = buildPipelineConfig(rawPipeline, globalConfig, ws);
+
+  } else {
+    // No pipeline config — check for default workspace
+    const defaultId = globalConfig?.default_workspace;
+    const defaultWs = defaultId ? globalConfig?.workspaces[defaultId] : undefined;
+    pipeline = buildPipelineConfig(rawPipeline, globalConfig, defaultWs);
   }
 
   const rawQa = rawPipeline.qa ?? {};
