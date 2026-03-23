@@ -50,7 +50,7 @@ git status
 Falls uncommitted changes:
 ```bash
 git add <betroffene-dateien>
-git commit -m "feat(#{ticket}): {englische Beschreibung}
+git commit -m "feat(T-{ticket}): {englische Beschreibung}
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 ```
@@ -68,7 +68,7 @@ SOFORT WEITER ZU SCHRITT 3.
 ### 3. PR erstellen (falls keiner existiert)
 
 ```bash
-gh pr view 2>/dev/null || gh pr create --title "feat(#{ticket}): {Beschreibung}" --body "$(cat <<'EOF'
+gh pr view 2>/dev/null || gh pr create --title "feat(T-{ticket}): {Beschreibung}" --body "$(cat <<'EOF'
 ## Summary
 - {Bullet Points}
 
@@ -150,7 +150,7 @@ SOFORT WEITER ZU SCHRITT 7.
 ### 7. Bestätigung (EINZIGE Ausgabe an den User)
 
 ```
-✓ Shipped: feat(#{ticket}): {Beschreibung}
+✓ Shipped: feat(T-{ticket}): {Beschreibung}
   PR: {url}
   Branch: {branch} → deleted
   Board: done (falls konfiguriert)
