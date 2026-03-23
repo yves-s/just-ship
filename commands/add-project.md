@@ -5,30 +5,29 @@ description: Neues Projekt im aktuellen Workspace verknüpfen — nur Projekt-ID
 
 # /add-project — Projekt verknüpfen
 
-Verknüpft ein neues Board-Projekt mit dem lokalen Projekt. Schreibt nur `workspace` + `project_id` in `project.json`. Kein API Key nötig — der Workspace muss bereits verbunden sein.
+Verknüpft ein neues Board-Projekt mit dem lokalen Projekt. Schreibt nur `workspace_id` + `project_id` in `project.json`. Kein API Key nötig — der Workspace muss bereits verbunden sein.
 
 ## Argumente
 
 | Flag | Beschreibung | Pflicht |
 |---|---|---|
 | `--project` | Projekt UUID vom Board | Ja |
-| `--name` | Projektname (optional, für Lesbarkeit) | Nein |
 
 ## Ausführung
 
 1. Prüfe ob ein Workspace konfiguriert ist:
-   - Lies `project.json` → `pipeline.workspace`
-   - Falls nicht vorhanden: Lies `~/.just-ship/config.json` → `default_workspace`
+   - Lies `project.json` → `pipeline.workspace_id`
+   - Falls nicht vorhanden: Lies `~/.just-ship/config.json` → `default_workspace` (UUID)
    - Falls beides fehlt: Fehler: "Kein Workspace konfiguriert. Führe zuerst 'just-ship connect' im Terminal aus."
 
 2. Schreibe Projekt-Referenz:
    ```bash
    ".claude/scripts/write-config.sh" set-project \
-     --workspace <workspace> --project-id <project> [--project-name <name>]
+     --workspace-id <workspace_id> --project-id <project>
    ```
 
 3. Bestätigung:
    ```
-   ✓ Projekt '<project-id>' verknüpft mit Workspace '<workspace>'
+   ✓ Projekt '<project-id>' verknüpft mit Workspace '<workspace_id>'
    ✓ project.json aktualisiert
    ```

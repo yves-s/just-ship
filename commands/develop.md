@@ -19,15 +19,13 @@ Lies `project.json` für Konventionen.
 
 **Pipeline (optional):** Lies `project.json` und bestimme den Pipeline-Modus:
 
-1. **Board API** (bevorzugt): Credentials auflösen:
-   - **Neues Format:** Falls `pipeline.workspace` gesetzt → Workspace-Config aus globaler Config lesen:
-     ```bash
-     bash .claude/scripts/write-config.sh read-workspace --slug <workspace>
-     ```
-     Aus dem JSON-Output `board_url` als API URL und `api_key` verwenden. `pipeline.project_id` aus `project.json`.
-   - **Altes Format (Fallback):** Falls `pipeline.api_url` UND `pipeline.api_key` direkt in `project.json` → diese verwenden.
-2. **Legacy Supabase MCP**: Falls nur `pipeline.project_id` gesetzt (ohne `workspace` und ohne `api_url`/`api_key`) → `execute_sql` verwenden, Warnung ausgeben: "Kein Board API konfiguriert. Nutze Legacy Supabase MCP. Fuehre /setup-just-ship aus um zu upgraden."
-3. **Standalone**: Falls weder Board API noch `pipeline.project_id` konfiguriert → Alle Pipeline-Schritte überspringen. Ticket-Infos werden per `$ARGUMENTS` übergeben.
+1. **Board API** (bevorzugt): Falls `pipeline.workspace_id` gesetzt → Credentials auflösen:
+   ```bash
+   WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --id <workspace_id>)
+   ```
+   Aus dem JSON-Output `board_url` und `api_key` verwenden. `pipeline.project_id` aus `project.json`.
+2. **Legacy Supabase MCP**: Falls nur `project_id` gesetzt (ohne `workspace_id`), und `project_id` hat keine Bindestriche → `execute_sql` verwenden, Warnung ausgeben: "Kein Board API konfiguriert. Nutze Legacy Supabase MCP. Fuehre /setup-just-ship aus um zu upgraden."
+3. **Standalone**: Falls weder `workspace_id` noch `project_id` konfiguriert → Alle Pipeline-Schritte überspringen. Ticket-Infos werden per `$ARGUMENTS` übergeben.
 
 **project_id Format-Check:** Falls `pipeline.project_id` gesetzt ist und KEINE Bindestriche enthält (kurzer alphanumerischer String wie `wsmnutkobalfrceavpxs`), ist es eine alte Supabase-Projekt-ID. Warnung ausgeben: "pipeline.project_id sieht nach einer alten Supabase-ID aus. Fuehre /setup-just-ship aus um auf Board-UUID zu migrieren."
 
@@ -50,20 +48,20 @@ Falls kein Argument: Suche nach dem nächsten Ticket mit Status "ready_to_develo
 1. Nummer extrahieren: `T-162` → `162`
 2. Via Bash curl:
    ```bash
-   curl -s -H "X-Pipeline-Key: {pipeline.api_key}" \
-     "{pipeline.api_url}/api/tickets/162"
+   curl -s -H "X-Pipeline-Key: {api_key}" \
+     "{board_url}/api/tickets/162"
    ```
 
 **Bei fehlendem Argument (Suche nach "ready_to_develop"):**
 ```bash
-curl -s -H "X-Pipeline-Key: {pipeline.api_key}" \
-  "{pipeline.api_url}/api/tickets?status=ready_to_develop&project={pipeline.project_id}"
+curl -s -H "X-Pipeline-Key: {api_key}" \
+  "{board_url}/api/tickets?status=ready_to_develop&project={pipeline.project_id}"
 ```
 Nimm das erste Ticket aus der Response (`data[0]` oder `data.tickets[0]`).
 
 #### Legacy Supabase MCP (Fallback)
 
-Falls nur `pipeline.project_id` gesetzt (ohne `api_url`/`api_key`), nutze `mcp__claude_ai_Supabase__execute_sql`:
+Falls nur `pipeline.project_id` gesetzt (ohne `workspace_id`), nutze `mcp__claude_ai_Supabase__execute_sql`:
 
 **Bei übergebener Ticket-ID:**
 ```sql
@@ -102,10 +100,10 @@ Zeige kurz an: `▶ Ticket T-{N}: {title}` — dann direkt weiter, NICHT auf Bes
 
 **Board API (bevorzugt):** Via Bash curl:
 ```bash
-curl -s -X PATCH -H "X-Pipeline-Key: {pipeline.api_key}" \
+curl -s -X PATCH -H "X-Pipeline-Key: {api_key}" \
   -H "Content-Type: application/json" \
   -d '{"status": "in_progress", "branch": "{branch}", "project_id": "{pipeline.project_id}"}' \
-  "{pipeline.api_url}/api/tickets/{N}"
+  "{board_url}/api/tickets/{N}"
 ```
 Hinweis: `branch` wird mitgesendet damit das Board anzeigt welcher Branch aktiv ist. `project_id` ordnet das Ticket dem Projekt zu falls noch nicht geschehen.
 
@@ -317,10 +315,10 @@ EOF
 
 **Board API (bevorzugt):**
 ```bash
-curl -s -X PATCH -H "X-Pipeline-Key: {pipeline.api_key}" \
+curl -s -X PATCH -H "X-Pipeline-Key: {api_key}" \
   -H "Content-Type: application/json" \
   -d '{"status": "in_review"}' \
-  "{pipeline.api_url}/api/tickets/{N}"
+  "{board_url}/api/tickets/{N}"
 ```
 
 **Legacy Supabase MCP (Fallback):**
@@ -343,10 +341,10 @@ Falls eine URL gefunden wurde (`$PREVIEW_URL` nicht leer), ins Ticket schreiben:
 **Board API:**
 ```bash
 if [ -n "$PREVIEW_URL" ]; then
-  curl -s -X PATCH -H "X-Pipeline-Key: {pipeline.api_key}" \
+  curl -s -X PATCH -H "X-Pipeline-Key: {api_key}" \
     -H "Content-Type: application/json" \
     -d '{"preview_url": "'"$PREVIEW_URL"'"}' \
-    "{pipeline.api_url}/api/tickets/{N}"
+    "{board_url}/api/tickets/{N}"
 fi
 ```
 

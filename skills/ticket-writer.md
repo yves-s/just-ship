@@ -247,23 +247,23 @@ When in doubt: if the ticket has no clear urgency signal, default to `medium`.
 
 Read `project.json` and determine the pipeline mode:
 
-1. **Board API** (bevorzugt): Credentials auflösen:
-   - **Neues Format:** Falls `pipeline.workspace` gesetzt → Workspace-Config aus globaler Config lesen:
-     ```bash
-     bash .claude/scripts/write-config.sh read-workspace --slug <workspace>
-     ```
-     Aus dem JSON-Output `board_url` als API URL und `api_key` verwenden. `pipeline.project_id` aus `project.json`.
-   - **Altes Format (Fallback):** Falls `pipeline.api_url` UND `pipeline.api_key` direkt in `project.json` → diese verwenden.
-2. **Legacy Supabase MCP**: Falls nur `pipeline.project_id` gesetzt (ohne `workspace` und ohne `api_url`/`api_key`) → `execute_sql` verwenden, Warnung ausgeben: "Kein Board API konfiguriert. Nutze Legacy Supabase MCP. Fuehre /setup-just-ship aus um zu upgraden."
-3. **Kein Pipeline**: Falls weder Board API noch `pipeline.project_id` konfiguriert → User fragen wo das Ticket hin soll
+1. **Board API** (bevorzugt): Falls `pipeline.workspace_id` gesetzt → Credentials auflösen:
+   ```bash
+   WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --id <workspace_id>)
+   ```
+   Aus dem JSON-Output `board_url` und `api_key` verwenden. `pipeline.project_id` aus `project.json`.
+2. **Legacy Supabase MCP**: Falls nur `project_id` gesetzt (ohne `workspace_id`), und `project_id` hat keine Bindestriche → `execute_sql` verwenden, Warnung ausgeben: "Kein Board API konfiguriert. Nutze Legacy Supabase MCP. Fuehre /setup-just-ship aus um zu upgraden."
+3. **Kein Pipeline**: Falls weder `workspace_id` noch `project_id` konfiguriert → User fragen wo das Ticket hin soll
+
+**project_id Format-Check:** Falls `pipeline.project_id` gesetzt ist und KEINE Bindestriche enthält (kurzer alphanumerischer String wie `wsmnutkobalfrceavpxs`), ist es eine alte Supabase-Projekt-ID. Warnung ausgeben: "pipeline.project_id sieht nach einer alten Supabase-ID aus. Fuehre /setup-just-ship aus um auf Board-UUID zu migrieren."
 
 ### Board API (bevorzugt) — Primary & Automatic
 
-**CRITICAL:** When `project.json` has `pipeline.api_url` and `pipeline.api_key` set, insert the ticket via Board API IMMEDIATELY after writing. Do NOT ask the user for confirmation or where to deliver. Just do it.
+**CRITICAL:** When Board API credentials are resolved, insert the ticket via Board API IMMEDIATELY after writing. Do NOT ask the user for confirmation or where to deliver. Just do it.
 
 Via Bash curl:
 ```bash
-curl -s -X POST -H "X-Pipeline-Key: {pipeline.api_key}" \
+curl -s -X POST -H "X-Pipeline-Key: {api_key}" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "{title}",
@@ -273,14 +273,14 @@ curl -s -X POST -H "X-Pipeline-Key: {pipeline.api_key}" \
     "status": "backlog",
     "project_id": "{pipeline.project_id}"
   }' \
-  "{pipeline.api_url}/api/tickets"
+  "{board_url}/api/tickets"
 ```
 
 Use `backlog` as default status. Use `ready_to_develop` only if ACs are complete and unambiguous.
 
 ### Legacy Supabase MCP (Fallback)
 
-Falls nur `pipeline.project_id` gesetzt (ohne `api_url`/`api_key`), nutze `mcp__claude_ai_Supabase__execute_sql`:
+Falls nur `pipeline.project_id` gesetzt (ohne `workspace_id`), nutze `mcp__claude_ai_Supabase__execute_sql`:
 
 ```sql
 INSERT INTO public.tickets (title, body, priority, tags, status, workspace_id, project_id)

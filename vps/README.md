@@ -194,21 +194,21 @@ Create this file for the service user:
 sudo -u claude-dev mkdir -p /home/claude-dev/.just-ship
 sudo -u claude-dev tee /home/claude-dev/.just-ship/config.json > /dev/null <<'EOF'
 {
+  "board_url": "https://board.just-ship.io",
+  "default_workspace": "<workspace-uuid>",
   "workspaces": {
-    "my-workspace": {
-      "board_url": "https://board.just-ship.io",
-      "workspace_id": "<workspace-uuid>",
+    "<workspace-uuid>": {
+      "slug": "my-workspace",
       "api_key": "<api-key>"
     }
-  },
-  "default_workspace": "my-workspace"
+  }
 }
 EOF
 chmod 600 /home/claude-dev/.just-ship/config.json
 ```
 
-**Backwards compatibility:** Existing VPS setups with `api_key` in `project.json`
-continue to work. Migration is optional but recommended.
+Workspaces are keyed by UUID. The `board_url` is a top-level field shared across all workspaces.
+Credentials are resolved via `write-config.sh read-workspace --id <uuid>`.
 
 ---
 

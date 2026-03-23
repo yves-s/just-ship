@@ -13,28 +13,26 @@ Installiert Just Ship im aktuellen Projekt (falls noch nicht geschehen), erkennt
 | Flag | Beschreibung |
 |---|---|
 | `--board` | Board URL (z.B. `https://board.just-ship.io`) |
-| `--workspace` | Workspace Slug |
-| `--workspace-id` | Workspace UUID (für Erstverbindung — kein Secret) |
+| `--workspace-id` | Workspace UUID |
 | `--project` | Projekt UUID |
 
 Falls diese Flags übergeben wurden: Schritte 1–4 normal ausführen, dann **Schritt 5 überspringen** und stattdessen direkt verbinden:
 
-**a) Workspace bereits verbunden?** Prüfe ob der Workspace-Slug in `~/.just-ship/config.json` existiert:
+**a) Workspace bereits verbunden?** Prüfe ob die Workspace-UUID in `~/.just-ship/config.json` existiert:
 
 ```bash
-"$HOME/.just-ship/scripts/write-config.sh" read-workspace --slug <workspace> 2>/dev/null && echo "EXISTS" || echo "NOT_FOUND"
+"$HOME/.just-ship/scripts/write-config.sh" read-workspace --id <workspace-id> 2>/dev/null && echo "EXISTS" || echo "NOT_FOUND"
 ```
 
 - **EXISTS** → direkt `set-project` aufrufen:
   ```bash
   ".claude/scripts/write-config.sh" set-project \
-    --workspace <workspace> --project-id <project>
+    --workspace-id <workspace-id> --project-id <project>
   ```
 
 - **NOT_FOUND** → Workspace muss zuerst verbunden werden:
-  - Falls `--workspace-id` bekannt (aus den Flags): nur noch `--key` abfragen (eine Nachricht)
-  - Falls `--workspace-id` fehlt: beide Werte (`--workspace-id` und `--key`) in einer Nachricht abfragen
-  - Dann `add-workspace` aufrufen, danach `set-project`
+  - `--key` abfragen (eine Nachricht)
+  - Dann `add-workspace --workspace-id <workspace-id> --key <key> --board <board>` aufrufen, danach `set-project`
 
 ## Ausführung
 
@@ -77,7 +75,7 @@ Falls `NOT_INSTALLED`:
 Falls `.claude/agents/` bereits existiert UND `project.json` bereits existiert mit gesetzten Stack-Feldern (mindestens `stack.framework` oder `stack.language` sind non-empty):
 
 Prüfe den Status:
-- `project.json` → `pipeline.workspace` gesetzt? → Board verbunden
+- `project.json` → `pipeline.workspace_id` gesetzt? → Board verbunden
 - `~/.just-ship/config.json` → Workspace-Einträge vorhanden?
 
 Falls Stack erkannt aber Board NICHT verbunden:
@@ -103,7 +101,7 @@ Falls Stack erkannt UND Board verbunden: Zeige Status und frage ob Re-Setup gew�
 
 ```
 ✓ Projekt vollständig eingerichtet
-  Stack: {framework}, Board: {workspace}
+  Stack: {framework}, Board: verbunden
 
 Setup erneut ausführen? (Überschreibt Stack-Erkennung)
   1. Ja, neu erkennen
@@ -246,7 +244,7 @@ Geänderte Dateien:
 
 ### 5. Board verbinden?
 
-Falls `pipeline.workspace` in `project.json` noch nicht gesetzt ist, frage:
+Falls `pipeline.workspace_id` in `project.json` noch nicht gesetzt ist, frage:
 
 ```
 Möchtest du das Just Ship Board verbinden? (j/n)
@@ -272,32 +270,31 @@ cat "$HOME/.just-ship/config.json" 2>/dev/null | node -e "
 "
 ```
 
-Falls CONNECTED: Bestätige mit `✓ Board verbunden (Workspace: {workspace})`
+Falls CONNECTED: Bestätige mit `✓ Board verbunden`
 Falls NOT_CONNECTED: Frage ob etwas nicht geklappt hat.
 
-Falls Board-Flags übergeben wurden (`--board`, `--workspace`, `--project`):
+Falls Board-Flags übergeben wurden (`--board`, `--workspace-id`, `--project`):
 - Verhalten bleibt wie bisher (direkt `add-workspace` + `set-project`)
 - Das ist der Flow wenn der User vom Board-ProjectSetupDialog kommt
 
 ### 6. Sidekick einrichten
 
-**Nur ausführen wenn Board verbunden** (`pipeline.workspace` und `pipeline.project_id` in `project.json` gesetzt). Falls kein Board verbunden: Schritt überspringen.
+**Nur ausführen wenn Board verbunden** (`pipeline.workspace_id` und `pipeline.project_id` in `project.json` gesetzt). Falls kein Board verbunden: Schritt überspringen.
 
 Ausgabe: `Sidekick wird eingerichtet...`
 
 **6a) Projekt-Slug ermitteln:**
 
-Workspace-Credentials auflösen (nutze workspace aus `project.json` `pipeline.workspace`):
+Workspace-Credentials auflösen (nutze workspace_id aus `project.json` `pipeline.workspace_id`):
 ```bash
-WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --slug <workspace>)
+WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --id <workspace_id>)
 board_url=$(echo "$WS_JSON" | node -e "console.log(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).board_url || '')")
 api_key=$(echo "$WS_JSON" | node -e "console.log(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).api_key || '')")
 ```
 
-Projekt-ID und Projekt-Name aus `project.json` auslesen:
+Projekt-ID aus `project.json` auslesen:
 ```bash
 project_id=$(node -e "console.log(require('./project.json').pipeline?.project_id || '')")
-project_name=$(node -e "console.log(require('./project.json').pipeline?.project_name || '')")
 ```
 
 Projekt-Slug vom Board holen:
@@ -315,8 +312,9 @@ if [ -n "$board_url" ] && [ -n "$api_key" ] && [ -n "$project_id" ]; then
 fi
 ```
 
-Falls leer oder API-Aufruf fehlgeschlagen, Slug aus dem Projektnamen ableiten (kebab-case):
+Falls leer oder API-Aufruf fehlgeschlagen, Slug aus dem Projektnamen in `project.json` `name` ableiten (kebab-case):
 ```bash
+project_name=$(node -e "console.log(require('./project.json').name || '')")
 if [ -z "$SLUG" ] && [ -n "$project_name" ]; then
   SLUG=$(echo "$project_name" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-\|-$//g')
 fi
