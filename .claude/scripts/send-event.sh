@@ -36,4 +36,4 @@ curl -s --max-time 3 -X POST "${API_URL}/api/events" \
   -H "Content-Type: application/json" \
   -H "X-Pipeline-Key: ${API_KEY}" \
   -d "{\"ticket_number\": ${TICKET_NUMBER}, \"agent_type\": \"${AGENT_TYPE}\", \"event_type\": \"${EVENT_TYPE}\", \"metadata\": ${METADATA}}" \
-  >/dev/null 2>&1 &
+  >/dev/null 2>&1

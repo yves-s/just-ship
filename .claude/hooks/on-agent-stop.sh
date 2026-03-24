@@ -19,9 +19,9 @@ ACTIVE_TICKET_FILE="$CWD/.claude/.active-ticket"
 TICKET_NUMBER=$(cat "$ACTIVE_TICKET_FILE" 2>/dev/null | tr -d '[:space:]')
 [ -z "$TICKET_NUMBER" ] && exit 0
 
-# Send event (async, silent fail)
+# Send event (sync — must complete before hook exits, otherwise event is lost)
 if [ -f "$CWD/.claude/scripts/send-event.sh" ]; then
-  bash "$CWD/.claude/scripts/send-event.sh" "$TICKET_NUMBER" "$AGENT_TYPE" completed &
+  bash "$CWD/.claude/scripts/send-event.sh" "$TICKET_NUMBER" "$AGENT_TYPE" completed
 fi
 
 exit 0
