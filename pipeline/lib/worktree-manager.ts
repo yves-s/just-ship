@@ -188,6 +188,20 @@ export class WorktreeManager {
     const slotId = this._nextId();
     const workDir = join(this.worktreeBase, `worker-${slotId}`);
 
+    // Clean up stale worktree directory if it exists (e.g. from a crashed worker)
+    if (existsSync(workDir)) {
+      this._removeWorktree(workDir);
+    }
+
+    // Delete stale local branch if it exists (e.g. from a previous failed run)
+    try {
+      this._git(`rev-parse --verify refs/heads/${branchName}`);
+      // Branch exists -- delete it so we can recreate from origin/main
+      this._git(`branch -D "${branchName}"`);
+    } catch {
+      // Branch doesn't exist -- good
+    }
+
     // Fetch latest main
     this._git("fetch origin main");
 
