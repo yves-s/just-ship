@@ -275,6 +275,13 @@ if [ "$MODE" = "update" ]; then
     diff_file "$f" "$PROJECT_DIR/.claude/skills/$fname" ".claude/skills/$fname"
   done
 
+  # Rules
+  for f in "$FRAMEWORK_DIR/.claude/rules/"*.md; do
+    [ -f "$f" ] || continue
+    fname=$(basename "$f")
+    diff_file "$f" "$PROJECT_DIR/.claude/rules/$fname" ".claude/rules/$fname"
+  done
+
   # Scripts
   for f in "$FRAMEWORK_DIR/.claude/scripts/"*; do
     [ -f "$f" ] || continue
@@ -345,6 +352,21 @@ if [ "$MODE" = "update" ]; then
   mkdir -p "$PROJECT_DIR/.claude/skills"
   cp "$FRAMEWORK_DIR/skills/"*.md "$PROJECT_DIR/.claude/skills/"
   echo "  ✓ $(ls "$FRAMEWORK_DIR/skills/"*.md | wc -l | tr -d ' ') framework skills (project-specific skills untouched)"
+
+  echo "Updating rules..."
+  mkdir -p "$PROJECT_DIR/.claude/rules"
+  if [ -d "$PROJECT_DIR/.claude/rules" ]; then
+    for f in "$PROJECT_DIR/.claude/rules/"*.md; do
+      [ -f "$f" ] || continue
+      fname=$(basename "$f")
+      if [ ! -f "$FRAMEWORK_DIR/.claude/rules/$fname" ]; then
+        rm "$f"
+        echo "  - $fname removed"
+      fi
+    done
+  fi
+  cp "$FRAMEWORK_DIR/.claude/rules/"*.md "$PROJECT_DIR/.claude/rules/" 2>/dev/null || true
+  echo "  ✓ rules"
 
   echo "Updating scripts..."
   mkdir -p "$PROJECT_DIR/.claude/scripts"
