@@ -8,33 +8,77 @@ disable-model-invocation: true
 
 Installiert Just Ship im aktuellen Projekt (falls noch nicht geschehen), erkennt den Tech-Stack automatisch, befüllt `project.json` und `CLAUDE.md`, und verbindet optional das Just Ship Board.
 
-## Argumente (optional — vom Board vorausgefüllt)
+## Argumente
 
 | Flag | Beschreibung |
 |---|---|
 | `--board` | Board URL (z.B. `https://board.just-ship.io`) |
-| `--workspace-id` | Workspace UUID |
+| `--key` | Workspace API Key (z.B. `adp_...`) — vom Board generiert |
 | `--project` | Projekt UUID |
+| `--workspace-id` | Workspace UUID (alternativ zu `--key`) |
 
-Falls diese Flags übergeben wurden: Schritte 1–4 normal ausführen, dann **Schritt 5 überspringen** und stattdessen direkt verbinden:
+---
 
-**a) Workspace bereits verbunden?** Prüfe ob die Workspace-UUID in `~/.just-ship/config.json` existiert:
+## SCHNELLVERBINDUNG (Board-Flags übergeben)
+
+**Prüfe als allererstes:** Sind `--board` UND (`--key` ODER `--workspace-id`) UND `--project` übergeben worden?
+
+**Falls JA → führe NUR die folgenden Schritte aus und beende danach. Kein Stack-Analyse, kein Menü, keine Rückfragen.**
+
+### S1. Workspace-ID ermitteln
+
+Falls `--key` übergeben (kein `--workspace-id`):
 
 ```bash
-"$HOME/.just-ship/scripts/write-config.sh" read-workspace --id <workspace-id> 2>/dev/null && echo "EXISTS" || echo "NOT_FOUND"
+RESPONSE=$(curl -s -H "X-Pipeline-Key: <--key Wert>" "<--board Wert>/api/projects")
+WORKSPACE_ID=$(echo "$RESPONSE" | node -e "
+  const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));
+  process.stdout.write(d.workspace_id || d.data?.workspace_id || '');
+")
 ```
 
-- **EXISTS** → direkt `set-project` aufrufen:
-  ```bash
-  ".claude/scripts/write-config.sh" set-project \
-    --workspace-id <workspace-id> --project-id <project>
-  ```
+Falls `WORKSPACE_ID` leer: Ausgabe `⚠ Konnte Workspace-ID nicht ermitteln. Prüfe deinen API-Key.` und abbrechen.
 
-- **NOT_FOUND** → Workspace muss zuerst verbunden werden:
-  - `--key` abfragen (eine Nachricht)
-  - Dann `add-workspace --workspace-id <workspace-id> --key <key> --board <board>` aufrufen, danach `set-project`
+Falls `--workspace-id` direkt übergeben: diesen Wert als `WORKSPACE_ID` verwenden.
 
-## Ausführung
+### S2. Workspace + Projekt speichern
+
+Führe beide Befehle der Reihe nach aus — ohne Rückfragen:
+
+```bash
+"$HOME/.just-ship/scripts/write-config.sh" add-workspace \
+  --workspace-id "$WORKSPACE_ID" \
+  --key "<--key Wert>" \
+  --board "<--board Wert>"
+```
+
+```bash
+bash .claude/scripts/write-config.sh set-project \
+  --workspace-id "$WORKSPACE_ID" \
+  --project-id "<--project Wert>"
+```
+
+### S3. Sidekick einrichten (optional)
+
+Führe Schritt 6 (Sidekick) aus — nutze dabei `WORKSPACE_ID`, `--key` als `api_key` und `--board` als `board_url`.
+
+### S4. Fertig
+
+Ausgabe:
+
+```
+✓ Board verbunden
+✓ Projekt verknüpft
+✓ project.json aktualisiert
+
+Erstelle dein erstes Ticket mit /ticket.
+```
+
+**STOP. Nicht weiter unten lesen.**
+
+---
+
+## NORMALES SETUP (keine Board-Flags)
 
 ### 0. Just Ship installiert?
 
@@ -273,10 +317,6 @@ cat "$HOME/.just-ship/config.json" 2>/dev/null | node -e "
 Falls CONNECTED: Bestätige mit `✓ Board verbunden`
 Falls NOT_CONNECTED: Frage ob etwas nicht geklappt hat.
 
-Falls Board-Flags übergeben wurden (`--board`, `--workspace-id`, `--project`):
-- Verhalten bleibt wie bisher (direkt `add-workspace` + `set-project`)
-- Das ist der Flow wenn der User vom Board-ProjectSetupDialog kommt
-
 ### 6. Sidekick einrichten
 
 **Nur ausführen wenn Board verbunden** (`pipeline.workspace_id` und `pipeline.project_id` in `project.json` gesetzt). Falls kein Board verbunden: Schritt überspringen.
@@ -337,7 +377,7 @@ Dann zum nächsten Schritt (6b) gehen.
 
 **6b) Layout-Datei erkennen:**
 
-Basierend auf dem in Schritt 1 erkannten Stack, suche die Haupt-Layout-Datei. Prüfe die Dateien der Reihe nach — die erste existierende wird verwendet:
+Basierend auf dem erkannten Stack, suche die Haupt-Layout-Datei. Prüfe die Dateien der Reihe nach — die erste existierende wird verwendet:
 
 | Stack | Layout-Dateien (Priorität) |
 |---|---|
