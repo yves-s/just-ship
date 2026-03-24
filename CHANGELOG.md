@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- Token cost estimation per ticket — Board aggregates `estimated_cost` alongside `total_tokens` using configurable per-model rates (Opus/Sonnet/Haiku)
+- Centralized token rate config (`token-rates.ts`) with blended pricing for agent workloads
+- Cost display in ticket detail view (e.g. "12.4k tokens · $0.07 est.")
+- DB migration `014_add_estimated_cost.sql` with atomic cost accumulation via updated `increment_ticket_tokens` RPC
+
 ### Changed
 - Extend `/develop` docs-check (step 8) to cover CHANGELOG.md, docs/ARCHITECTURE.md, templates/CLAUDE.md, vps/README.md, and CONTRIBUTING.md in addition to README.md and CLAUDE.md
 
