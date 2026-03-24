@@ -17,16 +17,13 @@
 # Framework files (overwritten on update):
 #   .claude/agents/*          Agent definitions
 #   .claude/commands/*        Slash commands
-#   .claude/skills/<name>.md  Pipeline-specific skills (8 skills)
+#   .claude/skills/<name>.md  All framework skills (pipeline + superpowers)
 #   .claude/scripts/*         Utility scripts (for skills)
 #   .claude/hooks/*           Event streaming hooks (SessionStart, SubagentStart/Stop, SessionEnd)
 #   .claude/settings.json     Permissions + hook configuration
 #   .pipeline/*               Pipeline runner (TypeScript SDK)
 #   .claude/.pipeline-version Version tracking
 #   .claude/.template-hash    Template change detection
-#
-# External plugins (installed, not copied):
-#   superpowers               TDD, debugging, code review, planning (via plugin)
 #
 # Project files (NEVER overwritten):
 #   CLAUDE.md                 Project-specific instructions
@@ -278,20 +275,6 @@ if [ "$MODE" = "update" ]; then
     diff_file "$f" "$PROJECT_DIR/.claude/skills/$fname" ".claude/skills/$fname"
   done
 
-  # Check for removed skills (only framework-owned skills, not project-specific ones)
-  REMOVED_SKILLS=(
-    brainstorming.md dispatching-parallel-agents.md executing-plans.md
-    finishing-a-development-branch.md receiving-code-review.md requesting-code-review.md
-    subagent-driven-development.md systematic-debugging.md test-driven-development.md
-    using-git-worktrees.md verification-before-completion.md writing-plans.md
-  )
-  for fname in "${REMOVED_SKILLS[@]}"; do
-    if [ -f "$PROJECT_DIR/.claude/skills/$fname" ]; then
-      echo "  - .claude/skills/$fname (replaced by superpowers plugin)"
-      CHANGES=$((CHANGES + 1))
-    fi
-  done
-
   # Scripts
   for f in "$FRAMEWORK_DIR/.claude/scripts/"*; do
     [ -f "$f" ] || continue
@@ -360,31 +343,8 @@ if [ "$MODE" = "update" ]; then
 
   echo "Updating skills..."
   mkdir -p "$PROJECT_DIR/.claude/skills"
-  # Remove skills now provided by superpowers plugin
-  for fname in "${REMOVED_SKILLS[@]}"; do
-    if [ -f "$PROJECT_DIR/.claude/skills/$fname" ]; then
-      rm "$PROJECT_DIR/.claude/skills/$fname"
-      echo "  - $fname (replaced by superpowers plugin)"
-    fi
-  done
   cp "$FRAMEWORK_DIR/skills/"*.md "$PROJECT_DIR/.claude/skills/"
   echo "  ✓ $(ls "$FRAMEWORK_DIR/skills/"*.md | wc -l | tr -d ' ') framework skills (project-specific skills untouched)"
-
-  # Install superpowers plugin if not already installed
-  echo "Checking superpowers plugin..."
-  if claude plugin list 2>/dev/null | grep -q "superpowers"; then
-    echo "  ✓ superpowers plugin already installed"
-  else
-    echo "  Installing superpowers plugin..."
-    claude plugin marketplace add obra/superpowers-marketplace 2>/dev/null || true
-    if claude plugin install superpowers@superpowers-marketplace --scope user 2>/dev/null; then
-      echo "  ✓ superpowers plugin installed (user scope)"
-    else
-      echo "  ⚠ superpowers plugin install failed — install manually:"
-      echo "    claude plugin marketplace add obra/superpowers-marketplace"
-      echo "    claude plugin install superpowers@superpowers-marketplace --scope user"
-    fi
-  fi
 
   echo "Updating scripts..."
   mkdir -p "$PROJECT_DIR/.claude/scripts"
@@ -551,16 +511,6 @@ mkdir -p "$PROJECT_DIR/.claude/skills"
 cp "$FRAMEWORK_DIR/skills/"*.md "$PROJECT_DIR/.claude/skills/"
 echo "  ✓ $(ls "$FRAMEWORK_DIR/skills/"*.md | wc -l | tr -d ' ') pipeline skills"
 
-# --- Install superpowers plugin ---
-echo "Installing superpowers plugin..."
-claude plugin marketplace add obra/superpowers-marketplace 2>/dev/null || true
-if claude plugin install superpowers@superpowers-marketplace --scope user 2>/dev/null; then
-  echo "  ✓ superpowers plugin (TDD, debugging, code review, planning)"
-else
-  echo "  ⚠ superpowers plugin install failed — install manually:"
-  echo "    claude plugin marketplace add obra/superpowers-marketplace"
-  echo "    claude plugin install superpowers@superpowers-marketplace --scope user"
-fi
 
 # --- Copy scripts ---
 echo "Installing scripts..."
