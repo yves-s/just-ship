@@ -345,19 +345,24 @@ EOF
 )"
 ```
 
-**9d. Status auf "in_review":**
+**9d. Status auf "in_review" + Review-URL:**
+
+PR-URL extrahieren:
+```bash
+REVIEW_URL=$(gh pr view --json url -q .url 2>/dev/null || echo "")
+```
 
 **Board API (bevorzugt):**
 ```bash
 curl -s -X PATCH -H "X-Pipeline-Key: {api_key}" \
   -H "Content-Type: application/json" \
-  -d '{"status": "in_review"}' \
+  -d '{"status": "in_review", "review_url": "'"$REVIEW_URL"'"}' \
   "{board_url}/api/tickets/{N}"
 ```
 
 **Legacy Supabase MCP (Fallback):**
 ```sql
-UPDATE public.tickets SET status = 'in_review' WHERE number = {N} AND workspace_id = '{pipeline.workspace_id}' RETURNING number, title, status;
+UPDATE public.tickets SET status = 'in_review', review_url = '$REVIEW_URL' WHERE number = {N} AND workspace_id = '{pipeline.workspace_id}' RETURNING number, title, status;
 ```
 
 Der PR bleibt offen bis der User ihn freigibt (via `/ship` oder "passt").

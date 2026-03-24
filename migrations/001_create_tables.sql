@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS public.tickets (
   summary TEXT,
   test_results TEXT,
   preview_url TEXT,
+  review_url TEXT,
   due_date DATE,
   notion_page_id TEXT,
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
