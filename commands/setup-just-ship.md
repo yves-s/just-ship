@@ -23,14 +23,19 @@ Installiert Just Ship im aktuellen Projekt (falls noch nicht geschehen), erkennt
 
 **Prüfe als allererstes:** Sind `--board` UND (`--key` ODER `--workspace-id`) UND `--project` übergeben worden?
 
-**Falls JA → führe NUR die folgenden Schritte aus und beende danach. Kein Stack-Analyse, kein Menü, keine Rückfragen.**
+**Falls JA → führe NUR die folgenden Schritte aus und beende danach. Kein Stack-Analyse, kein Menü, keine Rückfragen. NICHT nach dem API-Key fragen — er wurde bereits als `--key` übergeben.**
+
+Merke dir die übergebenen Werte:
+- `KEY` = der Wert hinter `--key` (z.B. `adp_abc123...`)
+- `BOARD` = der Wert hinter `--board` (z.B. `https://board.just-ship.io`)
+- `PROJECT` = der Wert hinter `--project` (z.B. `ddab92d9-...`)
 
 ### S1. Workspace-ID ermitteln
 
-Falls `--key` übergeben (kein `--workspace-id`):
+Falls `--key` übergeben (kein `--workspace-id`): Rufe die Board-API mit dem bereits bekannten `KEY` auf:
 
 ```bash
-RESPONSE=$(curl -s -H "X-Pipeline-Key: <--key Wert>" "<--board Wert>/api/projects")
+RESPONSE=$(curl -s -H "X-Pipeline-Key: $KEY" "$BOARD/api/projects")
 WORKSPACE_ID=$(echo "$RESPONSE" | node -e "
   const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));
   process.stdout.write(d.workspace_id || d.data?.workspace_id || '');
@@ -43,19 +48,19 @@ Falls `--workspace-id` direkt übergeben: diesen Wert als `WORKSPACE_ID` verwend
 
 ### S2. Workspace + Projekt speichern
 
-Führe beide Befehle der Reihe nach aus — ohne Rückfragen:
+Führe beide Befehle mit den bereits bekannten Werten aus — ohne Rückfragen, ohne nach dem Key zu fragen:
 
 ```bash
 "$HOME/.just-ship/scripts/write-config.sh" add-workspace \
   --workspace-id "$WORKSPACE_ID" \
-  --key "<--key Wert>" \
-  --board "<--board Wert>"
+  --key "$KEY" \
+  --board "$BOARD"
 ```
 
 ```bash
 bash .claude/scripts/write-config.sh set-project \
   --workspace-id "$WORKSPACE_ID" \
-  --project-id "<--project Wert>"
+  --project-id "$PROJECT"
 ```
 
 ### S3. Sidekick einrichten (optional)
