@@ -82,7 +82,33 @@ EOF
 
 SOFORT WEITER ZU SCHRITT 3a.
 
-### 3a. Vercel Preview URL (nur wenn `pipeline.hosting` === "vercel")
+### 3a. Review-URL ins Ticket schreiben (nur wenn Pipeline konfiguriert)
+
+PR-URL extrahieren und ins Ticket patchen:
+```bash
+REVIEW_URL=$(gh pr view --json url -q .url 2>/dev/null || echo "")
+```
+
+**Board API (bevorzugt):**
+```bash
+if [ -n "$REVIEW_URL" ]; then
+  curl -s -X PATCH -H "X-Pipeline-Key: {api_key}" \
+    -H "Content-Type: application/json" \
+    -d '{"review_url": "'"$REVIEW_URL"'"}' \
+    "{board_url}/api/tickets/{N}"
+fi
+```
+
+**Legacy Supabase MCP (Fallback):**
+```bash
+if [ -n "$REVIEW_URL" ]; then
+  mcp__claude_ai_Supabase__execute_sql "UPDATE public.tickets SET review_url = '$REVIEW_URL' WHERE number = {N} AND workspace_id = '{pipeline.workspace_id}' RETURNING number, review_url;"
+fi
+```
+
+SOFORT WEITER ZU SCHRITT 3b.
+
+### 3b. Vercel Preview URL (nur wenn `pipeline.hosting` === "vercel")
 
 **Nur ausführen wenn `pipeline.hosting` in `project.json` den Wert `"vercel"` hat.** Ohne dieses Feld: Schritt komplett überspringen.
 
