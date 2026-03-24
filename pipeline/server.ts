@@ -3,30 +3,44 @@ import { execSync } from "node:child_process";
 import { loadProjectConfig, type ProjectConfig } from "./lib/config.ts";
 import { executePipeline, resumePipeline } from "./run.ts";
 import { WorktreeManager } from "./lib/worktree-manager.ts";
+import {
+  loadServerConfig,
+  findProjectByProjectId,
+  loadProjectEnv,
+  type ServerConfig,
+} from "./lib/server-config.ts";
 
-// --- Environment validation ---
-const required = [
-  "ANTHROPIC_API_KEY",
-  "GH_TOKEN",
-  "PROJECT_DIR",
-  "PIPELINE_SERVER_KEY",
-] as const;
+// --- Mode detection ---
+const SERVER_CONFIG_PATH = process.env.SERVER_CONFIG_PATH;
+const isMultiProjectMode = !!SERVER_CONFIG_PATH;
 
-for (const key of required) {
-  if (!process.env[key]) {
-    console.error(`ERROR: ${key} must be set`);
-    process.exit(1);
+let serverConfig: ServerConfig | null = null;
+let PROJECT_DIR: string;
+let PIPELINE_SERVER_KEY: string;
+let config: ProjectConfig;
+let worktreeManager: WorktreeManager | null = null;
+
+if (isMultiProjectMode) {
+  serverConfig = loadServerConfig(SERVER_CONFIG_PATH);
+  PIPELINE_SERVER_KEY = serverConfig.server.pipeline_key;
+  const firstSlug = Object.keys(serverConfig.projects)[0];
+  PROJECT_DIR = serverConfig.projects[firstSlug].project_dir;
+  config = loadProjectConfig(PROJECT_DIR);
+} else {
+  const required = ["ANTHROPIC_API_KEY", "GH_TOKEN", "PROJECT_DIR", "PIPELINE_SERVER_KEY"] as const;
+  for (const key of required) {
+    if (!process.env[key]) {
+      console.error(`ERROR: ${key} must be set`);
+      process.exit(1);
+    }
   }
+  PROJECT_DIR = process.env.PROJECT_DIR!;
+  PIPELINE_SERVER_KEY = process.env.PIPELINE_SERVER_KEY!;
+  config = loadProjectConfig(PROJECT_DIR);
+  worktreeManager = new WorktreeManager(PROJECT_DIR, config.maxWorkers);
 }
 
-const PROJECT_DIR = process.env.PROJECT_DIR!;
-const PIPELINE_SERVER_KEY = process.env.PIPELINE_SERVER_KEY!;
-const PORT = Number(process.env.PORT ?? "3001");
-
-// --- Config ---
-const config: ProjectConfig = loadProjectConfig(PROJECT_DIR);
-const MAX_WORKERS = config.maxWorkers;
-const worktreeManager = new WorktreeManager(PROJECT_DIR, MAX_WORKERS);
+const PORT = Number(process.env.PORT ?? serverConfig?.server.port ?? "3001");
 
 // --- Logging (same style as worker.ts) ---
 function log(msg: string) {
@@ -37,12 +51,29 @@ function log(msg: string) {
 // --- In-memory running set (idempotency guard) ---
 const runningTickets = new Set<number>();
 
+interface PipelineState {
+  running: {
+    ticketNumber: number;
+    projectSlug: string;
+    startedAt: Date;
+  } | null;
+}
+const pipelineState: PipelineState = { running: null };
+
 // --- Board API helpers ---
+function getApiCredentials(): { apiUrl: string; apiKey: string } {
+  if (serverConfig) {
+    return { apiUrl: serverConfig.workspace.board_url, apiKey: serverConfig.workspace.api_key };
+  }
+  return { apiUrl: config.pipeline.apiUrl, apiKey: config.pipeline.apiKey };
+}
+
 async function fetchTicket(ticketNumber: number): Promise<Record<string, unknown> | null> {
+  const { apiUrl, apiKey } = getApiCredentials();
   try {
-    const res = await fetch(`${config.pipeline.apiUrl}/api/tickets/${ticketNumber}`, {
+    const res = await fetch(`${apiUrl}/api/tickets/${ticketNumber}`, {
       headers: {
-        "X-Pipeline-Key": config.pipeline.apiKey,
+        "X-Pipeline-Key": apiKey,
         Accept: "application/json",
       },
       signal: AbortSignal.timeout(10000),
@@ -56,11 +87,12 @@ async function fetchTicket(ticketNumber: number): Promise<Record<string, unknown
 }
 
 async function patchTicket(ticketNumber: number, body: Record<string, unknown>): Promise<boolean> {
+  const { apiUrl, apiKey } = getApiCredentials();
   try {
-    const res = await fetch(`${config.pipeline.apiUrl}/api/tickets/${ticketNumber}`, {
+    const res = await fetch(`${apiUrl}/api/tickets/${ticketNumber}`, {
       method: "PATCH",
       headers: {
-        "X-Pipeline-Key": config.pipeline.apiKey,
+        "X-Pipeline-Key": apiKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
@@ -88,7 +120,7 @@ function readBody(req: IncomingMessage): Promise<string> {
 }
 
 // --- Launch logic (shared between /api/launch and /api/events) ---
-async function handleLaunch(ticketNumber: number, res: ServerResponse): Promise<void> {
+async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId?: string): Promise<void> {
   // 1. In-memory guard
   if (runningTickets.has(ticketNumber)) {
     sendJson(res, 409, {
@@ -97,6 +129,53 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse): Promise<
       message: "Ticket is already being processed by this server",
     });
     return;
+  }
+
+  // 1b. Multi-project busy guard (one pipeline at a time)
+  if (isMultiProjectMode && pipelineState.running) {
+    sendJson(res, 429, {
+      status: "busy",
+      ticket_number: ticketNumber,
+      message: "Server is busy processing another ticket",
+      current: {
+        ticket_number: pipelineState.running.ticketNumber,
+        project: pipelineState.running.projectSlug,
+        started_at: pipelineState.running.startedAt.toISOString(),
+      },
+    });
+    return;
+  }
+
+  // 1c. Resolve project in multi-project mode
+  let projectDir = PROJECT_DIR;
+  let projectConfig = config;
+  let projectEnv: Record<string, string> = {};
+  let projectSlug = "";
+
+  if (isMultiProjectMode) {
+    if (!projectId) {
+      sendJson(res, 400, {
+        status: "bad_request",
+        ticket_number: ticketNumber,
+        message: "Missing required field: project_id (required in multi-project mode)",
+      });
+      return;
+    }
+
+    const match = findProjectByProjectId(serverConfig!, projectId);
+    if (!match) {
+      sendJson(res, 404, {
+        status: "not_found",
+        ticket_number: ticketNumber,
+        message: `No project configured for project_id: ${projectId}`,
+      });
+      return;
+    }
+
+    projectSlug = match.slug;
+    projectDir = match.project.project_dir;
+    projectEnv = loadProjectEnv(match.project.env_file);
+    projectConfig = loadProjectConfig(projectDir);
   }
 
   // 2. Fetch ticket from Board API
@@ -130,7 +209,7 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse): Promise<
   const claimed = await patchTicket(ticketNumber, {
     status: "in_progress",
     pipeline_status: "running",
-    project_id: config.pipeline.projectId,
+    project_id: projectConfig.pipeline.projectId,
   });
 
   if (!claimed) {
@@ -158,19 +237,36 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse): Promise<
   log(`Pipeline started: T-${ticketNumber} -- ${title}`);
 
   const branchSlug = title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").slice(0, 40);
-  const branchName = `${config.conventions.branch_prefix}${ticketNumber}-${branchSlug}`;
+  const branchName = `${projectConfig.conventions.branch_prefix}${ticketNumber}-${branchSlug}`;
+
+  if (isMultiProjectMode) {
+    pipelineState.running = {
+      ticketNumber,
+      projectSlug,
+      startedAt: new Date(),
+    };
+  }
 
   (async () => {
     let slotId: number | undefined;
     try {
-      const slot = await worktreeManager.allocate(branchName);
-      slotId = slot.slotId;
+      let workDir: string | undefined;
+
+      if (isMultiProjectMode) {
+        // Multi-project mode: no worktree, work directly in project dir (CLI-mode git checkout)
+        workDir = undefined;
+      } else {
+        const slot = await worktreeManager!.allocate(branchName);
+        slotId = slot.slotId;
+        workDir = slot.workDir;
+      }
 
       const result = await executePipeline({
-        projectDir: PROJECT_DIR,
-        workDir: slot.workDir,
+        projectDir: projectDir,
+        workDir,
         branchName,
         ticket: { ticketId: String(ticketNumber), title, description: body, labels: tags },
+        env: Object.keys(projectEnv).length > 0 ? projectEnv : undefined,
       });
 
       if (result.status === "completed") {
@@ -179,8 +275,10 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse): Promise<
       } else if (result.status === "paused") {
         log(`Pipeline paused: T-${ticketNumber}`);
         await patchTicket(ticketNumber, { pipeline_status: "paused", session_id: result.sessionId });
-        await worktreeManager.park(slotId);
-        slotId = undefined;
+        if (!isMultiProjectMode && slotId !== undefined) {
+          await worktreeManager!.park(slotId);
+          slotId = undefined;
+        }
       } else {
         const reason = result.failureReason ?? `exited with code ${result.exitCode}`;
         log(`Pipeline failed: T-${ticketNumber} (${reason})`);
@@ -191,14 +289,24 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse): Promise<
       log(`Pipeline crashed: T-${ticketNumber} -- ${reason}`);
       await patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Server error: ${reason}` });
     } finally {
-      if (slotId !== undefined) await worktreeManager.release(slotId);
+      if (!isMultiProjectMode && slotId !== undefined) await worktreeManager!.release(slotId);
+      if (isMultiProjectMode) pipelineState.running = null;
       runningTickets.delete(ticketNumber);
     }
   })();
 }
 
 // --- Ship logic ---
-async function handleShip(ticketNumber: number, res: ServerResponse): Promise<void> {
+async function handleShip(ticketNumber: number, res: ServerResponse, projectId?: string): Promise<void> {
+  // Resolve project dir for execSync calls
+  let shipProjectDir = PROJECT_DIR;
+  if (isMultiProjectMode && projectId) {
+    const match = findProjectByProjectId(serverConfig!, projectId);
+    if (match) {
+      shipProjectDir = match.project.project_dir;
+    }
+  }
+
   // 1. Fetch ticket
   const ticket = await fetchTicket(ticketNumber);
   if (!ticket) {
@@ -243,7 +351,7 @@ async function handleShip(ticketNumber: number, res: ServerResponse): Promise<vo
       // Find PR number for branch
       const prListOutput = execSync(
         `gh pr list --head "${branch}" --json number --jq '.[0].number'`,
-        { cwd: PROJECT_DIR, encoding: "utf-8", timeout: 30000 }
+        { cwd: shipProjectDir, encoding: "utf-8", timeout: 30000 }
       ).trim();
 
       if (!prListOutput) {
@@ -259,7 +367,7 @@ async function handleShip(ticketNumber: number, res: ServerResponse): Promise<vo
       // Merge PR
       execSync(
         `gh pr merge ${prNumber} --squash --delete-branch`,
-        { cwd: PROJECT_DIR, encoding: "utf-8", timeout: 60000 }
+        { cwd: shipProjectDir, encoding: "utf-8", timeout: 60000 }
       );
 
       log(`Ship completed: T-${ticketNumber} -- PR #${prNumber} merged`);
@@ -284,12 +392,44 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 
   // GET /health — no auth
   if (method === "GET" && url === "/health") {
-    sendJson(res, 200, {
-      status: "ok",
-      running_count: runningTickets.size,
-      active_slots: worktreeManager.getActiveSlots(),
-      max_workers: MAX_WORKERS,
-    });
+    if (isMultiProjectMode) {
+      sendJson(res, 200, {
+        status: "ok",
+        mode: "multi-project",
+        running: pipelineState.running ? {
+          ticket_number: pipelineState.running.ticketNumber,
+          project: pipelineState.running.projectSlug,
+          started_at: pipelineState.running.startedAt.toISOString(),
+        } : null,
+      });
+    } else {
+      sendJson(res, 200, {
+        status: "ok",
+        mode: "single-project",
+        running_count: runningTickets.size,
+        active_slots: worktreeManager?.getActiveSlots() ?? [],
+        max_workers: config.maxWorkers,
+      });
+    }
+    return;
+  }
+
+  // GET /api/status/:ticket
+  const statusMatch = method === "GET" && url.match(/^\/api\/status\/(\d+)$/);
+  if (statusMatch) {
+    const ticketNum = Number(statusMatch[1]);
+    if (isMultiProjectMode && pipelineState.running?.ticketNumber === ticketNum) {
+      sendJson(res, 200, {
+        ticket_number: ticketNum,
+        status: "running",
+        project: pipelineState.running.projectSlug,
+        started_at: pipelineState.running.startedAt.toISOString(),
+      });
+    } else if (runningTickets.has(ticketNum)) {
+      sendJson(res, 200, { ticket_number: ticketNum, status: "running" });
+    } else {
+      sendJson(res, 200, { ticket_number: ticketNum, status: "idle" });
+    }
     return;
   }
 
@@ -321,7 +461,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       return;
     }
 
-    await handleLaunch(ticketNumber, res);
+    const projectId = body.project_id as string | undefined;
+    await handleLaunch(ticketNumber, res, projectId);
     return;
   }
 
@@ -361,7 +502,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       return;
     }
 
-    await handleLaunch(ticketNumber, res);
+    const projectId = body.project_id as string | undefined;
+    await handleLaunch(ticketNumber, res, projectId);
     return;
   }
 
@@ -417,6 +559,21 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       return;
     }
 
+    // Resolve project in multi-project mode
+    const answerProjectId = body.project_id as string | undefined;
+    let answerProjectDir = PROJECT_DIR;
+    let answerProjectConfig = config;
+    let answerProjectEnv: Record<string, string> = {};
+
+    if (isMultiProjectMode && answerProjectId) {
+      const match = findProjectByProjectId(serverConfig!, answerProjectId);
+      if (match) {
+        answerProjectDir = match.project.project_dir;
+        answerProjectEnv = loadProjectEnv(match.project.env_file);
+        answerProjectConfig = loadProjectConfig(answerProjectDir);
+      }
+    }
+
     // Reserve and respond
     runningTickets.add(ticketNumber);
 
@@ -438,27 +595,38 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     log(`Pipeline resuming: T-${ticketNumber} -- answer received`);
 
     const branchSlug = title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").slice(0, 40);
-    const branchName = `${config.conventions.branch_prefix}${ticketNumber}-${branchSlug}`;
+    const branchName = `${answerProjectConfig.conventions.branch_prefix}${ticketNumber}-${branchSlug}`;
 
     (async () => {
       let slotId: number | undefined;
       try {
-        const slot = await worktreeManager.reattach(branchName);
-        slotId = slot.slotId;
+        let workDir: string | undefined;
+
+        if (isMultiProjectMode) {
+          // Multi-project mode: no worktree, work directly in project dir
+          workDir = undefined;
+        } else {
+          const slot = await worktreeManager!.reattach(branchName);
+          slotId = slot.slotId;
+          workDir = slot.workDir;
+        }
 
         const result = await resumePipeline({
-          projectDir: PROJECT_DIR,
-          workDir: slot.workDir,
+          projectDir: answerProjectDir,
+          workDir,
           branchName,
           ticket: { ticketId: String(ticketNumber), title, description: ticketBody, labels: tags },
           sessionId,
           answer: answer.trim(),
+          env: Object.keys(answerProjectEnv).length > 0 ? answerProjectEnv : undefined,
         });
 
         if (result.status === "paused") {
           await patchTicket(ticketNumber, { pipeline_status: "paused", session_id: result.sessionId });
-          await worktreeManager.park(slotId);
-          slotId = undefined;
+          if (!isMultiProjectMode && slotId !== undefined) {
+            await worktreeManager!.park(slotId);
+            slotId = undefined;
+          }
         } else if (result.status === "completed") {
           await patchTicket(ticketNumber, { pipeline_status: "done", status: "in_review", branch: result.branch, session_id: null });
         } else {
@@ -470,7 +638,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
         log(`Pipeline resume crashed: T-${ticketNumber} -- ${reason}`);
         await patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Resume error: ${reason}`, session_id: null });
       } finally {
-        if (slotId !== undefined) await worktreeManager.release(slotId);
+        if (!isMultiProjectMode && slotId !== undefined) await worktreeManager!.release(slotId);
         runningTickets.delete(ticketNumber);
       }
     })();
@@ -501,7 +669,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       return;
     }
 
-    await handleShip(ticketNumber, res);
+    const projectId = body.project_id as string | undefined;
+    await handleShip(ticketNumber, res, projectId);
     return;
   }
 
@@ -535,6 +704,12 @@ server.listen(PORT, () => {
   log("==========================================");
   log("  Just Ship Pipeline Server");
   log(`  Port: ${PORT}`);
-  log(`  Project: ${PROJECT_DIR.split("/").pop()}`);
+  if (isMultiProjectMode && serverConfig) {
+    log(`  Mode: multi-project`);
+    log(`  Projects: ${Object.keys(serverConfig.projects).join(", ")}`);
+  } else {
+    log(`  Mode: single-project`);
+    log(`  Project: ${PROJECT_DIR.split("/").pop()}`);
+  }
   log("==========================================");
 });
