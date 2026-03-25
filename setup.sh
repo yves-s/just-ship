@@ -77,6 +77,38 @@ get_framework_version() {
 
 FRAMEWORK_VERSION=$(get_framework_version)
 
+# --- Helper: background spinner for long-running commands ---
+spin() {
+  local msg="$1"
+  shift
+  local chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+  local i=0
+
+  # Print initial message
+  printf "  %s %s" "${chars:0:1}" "$msg"
+
+  # Start spinner in background
+  (
+    while true; do
+      printf "\r  %s %s" "${chars:$i:1}" "$msg"
+      i=$(( (i + 1) % ${#chars} ))
+      sleep 0.1
+    done
+  ) &
+  local spinner_pid=$!
+
+  # Run the actual command, capture exit code
+  "$@" > /dev/null 2>&1
+  local exit_code=$?
+
+  # Stop spinner and clear line
+  kill "$spinner_pid" 2>/dev/null
+  wait "$spinner_pid" 2>/dev/null
+  printf "\r\033[K"
+
+  return $exit_code
+}
+
 # --- Helper: ensure a pattern is in .gitignore ---
 ensure_gitignore() {
   local pattern="$1"
@@ -469,9 +501,11 @@ if [ "$MODE" = "update" ]; then
 
   echo ""
   if [ "$TEMPLATES_CHANGED" = true ]; then
-    echo "  Templates geändert — gleiche CLAUDE.md/project.json ab..."
-    echo ""
-    claude -p "/just-ship-update"
+    if spin "Templates geändert — gleiche CLAUDE.md/project.json ab..." claude -p "/just-ship-update"; then
+      echo "  ✓ CLAUDE.md/project.json abgeglichen"
+    else
+      echo "  ⚠ Template-Abgleich fehlgeschlagen"
+    fi
   else
     echo "  Alles aktuell."
   fi
