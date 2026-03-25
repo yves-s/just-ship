@@ -431,22 +431,12 @@ bash .claude/scripts/send-event.sh {N} qa-auto completed '{"tier": "{qa_tier}", 
 ```
 Ausgabe: `✓ qa-auto — {qa_tier} tier {passed|needs-review|skipped}`
 
-### 11. Worktree Cleanup (falls Worktree erstellt wurde)
-
-Falls in Schritt 3b ein Worktree erstellt wurde:
-```bash
-cd {original-project-dir}
-git worktree remove .worktrees/T-{N} --force 2>/dev/null || true
-```
-Ausgabe: `✓ worktree — .worktrees/T-{N} aufgeräumt`
-
-Falls kein Worktree erstellt wurde: überspringen.
-
 ### Checkliste vor Abschluss
 
 Bevor du den Workflow als fertig meldest, prüfe:
 - [ ] **Falls Pipeline konfiguriert:** Status wurde auf "in_progress" gesetzt (Schritt 3)
 - [ ] **Falls Pipeline konfiguriert:** Status wurde auf "in_review" gesetzt (Schritt 9d)
-- [ ] **Falls Worktree erstellt:** Worktree wurde aufgeräumt (Schritt 11)
 - [ ] **QA-Report:** PR hat ein `qa:*` Label (Schritt 10)
 Falls ein Status-Update fehlt und Pipeline konfiguriert ist: **JETZT nachholen**, nicht überspringen.
+
+**Hinweis:** Worktree wird NICHT hier aufgeräumt — das passiert in `/ship` nach dem Merge, damit Nachbesserungen nach Code Review im Worktree möglich bleiben.

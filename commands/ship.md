@@ -9,7 +9,7 @@ Vom uncommitted Code bis zum gemergten PR auf main. **Ein Befehl, keine Unterbre
 
 ## WICHTIGSTE REGEL
 
-**DU DARFST NICHT STOPPEN ODER FRAGEN.** Führe ALLE Schritte 1-7 hintereinander aus. Kein "Soll ich...?", kein "Möchtest du...?", kein "Ich habe committed, soll ich jetzt pushen?". EINFACH ALLES DURCHLAUFEN.
+**DU DARFST NICHT STOPPEN ODER FRAGEN.** Führe ALLE Schritte 1-8 hintereinander aus. Kein "Soll ich...?", kein "Möchtest du...?", kein "Ich habe committed, soll ich jetzt pushen?". EINFACH ALLES DURCHLAUFEN.
 
 Falls du den Drang hast eine Frage zu stellen: **UNTERDRÜCKE IHN** und mach einfach den nächsten Schritt.
 
@@ -153,6 +153,20 @@ SOFORT WEITER ZU SCHRITT 5.
 git checkout main && git pull origin main
 ```
 
+SOFORT WEITER ZU SCHRITT 5a.
+
+### 5a. Worktree Cleanup (falls Worktree existiert)
+
+Prüfe ob ein Worktree für dieses Ticket existiert:
+```bash
+if [ -d ".worktrees/T-{N}" ]; then
+  git worktree remove .worktrees/T-{N} --force 2>/dev/null || true
+fi
+```
+Ausgabe: `✓ worktree — .worktrees/T-{N} aufgeräumt` (falls vorhanden)
+
+Falls kein Worktree existiert: still überspringen.
+
 SOFORT WEITER ZU SCHRITT 6.
 
 ### 6. Pipeline-Status auf "done" (nur wenn konfiguriert)
@@ -179,6 +193,7 @@ SOFORT WEITER ZU SCHRITT 7.
 ✓ Shipped: feat(T-{ticket}): {Beschreibung}
   PR: {url}
   Branch: {branch} → deleted
+  Worktree: .worktrees/T-{N} → aufgeräumt (falls vorhanden)
   Board: done (falls konfiguriert)
 ```
 
