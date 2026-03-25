@@ -123,6 +123,37 @@ async function failTicket(number: number, reason: string): Promise<void> {
   );
 }
 
+// Board API: known agent types that may have open events
+const KNOWN_AGENT_TYPES = [
+  "orchestrator", "triage", "qa", "qa-auto",
+  "frontend", "backend", "data-engineer", "devops",
+] as const;
+
+async function clearBoardAgentEvents(ticketNumber: number): Promise<void> {
+  if (!config.pipeline.apiUrl || !config.pipeline.apiKey) return;
+  // Send 'completed' for all known agent types so the Board clears stale running indicators
+  for (const agentType of KNOWN_AGENT_TYPES) {
+    try {
+      await fetch(`${config.pipeline.apiUrl}/api/events`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Pipeline-Key": config.pipeline.apiKey,
+        },
+        body: JSON.stringify({
+          ticket_number: ticketNumber,
+          agent_type: agentType,
+          event_type: "completed",
+          metadata: { cleanup: true, reason: "worker_restart_cleanup" },
+        }),
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch {
+      // Silent fail — cleanup events are best-effort
+    }
+  }
+}
+
 // --- Pipeline execution (uses run.ts directly, no shell-out) ---
 // AbortController for graceful cancellation on shutdown
 const abortController = new AbortController();
@@ -166,11 +197,26 @@ await worktreeManager.pruneStale(async (branchName) => {
   return tickets?.[0]?.pipeline_status === "paused";
 });
 
-// Reset stuck running tickets back to ready_to_develop
-await supabasePatch(
-  `/rest/v1/tickets?pipeline_status=eq.running&project_id=eq.${SUPABASE_PROJECT_ID}`,
-  { pipeline_status: null, status: "ready_to_develop" }
+// Reset stuck running tickets back to ready_to_develop + clear Board agent indicators
+const stuckTickets = await supabaseGet<Array<{ number: number }>>(
+  `/rest/v1/tickets?pipeline_status=eq.running&project_id=eq.${SUPABASE_PROJECT_ID}&select=number`
 );
+if (stuckTickets && stuckTickets.length > 0) {
+  log(`Found ${stuckTickets.length} stuck ticket(s), resetting and clearing Board events...`);
+  await supabasePatch(
+    `/rest/v1/tickets?pipeline_status=eq.running&project_id=eq.${SUPABASE_PROJECT_ID}`,
+    { pipeline_status: null, status: "ready_to_develop" }
+  );
+  for (const ticket of stuckTickets) {
+    await clearBoardAgentEvents(ticket.number);
+    log(`Board cleanup events sent for T-${ticket.number}`);
+  }
+} else {
+  await supabasePatch(
+    `/rest/v1/tickets?pipeline_status=eq.running&project_id=eq.${SUPABASE_PROJECT_ID}`,
+    { pipeline_status: null, status: "ready_to_develop" }
+  );
+}
 log("Cleanup done.");
 
 // --- Per-slot failure tracking ---
