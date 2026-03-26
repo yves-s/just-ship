@@ -5,6 +5,7 @@ set -e
 git config --global user.name "Claude Dev"
 git config --global user.email "claude-dev@pipeline"
 git config --global init.defaultBranch main
+git config --global --add safe.directory '*'
 
 # Authenticate GitHub CLI with GH_TOKEN (from env)
 if [ -n "$GH_TOKEN" ]; then
