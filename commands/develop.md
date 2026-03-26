@@ -150,7 +150,12 @@ git checkout main && git pull origin main
 git checkout -b {abgeleiteter-prefix}/{ticket-nummer}-{kurzbeschreibung}
 ```
 
-**3c) Pipeline-Event senden** (Board zeigt aktiven Orchestrator):
+**3c) Active-Ticket für Shell-Hooks setzen** (damit SubagentStop-Events den Board erreichen):
+```bash
+echo "{N}" > .claude/.active-ticket
+```
+
+**3d) Pipeline-Event senden** (Board zeigt aktiven Orchestrator):
 ```bash
 bash .claude/scripts/send-event.sh {N} orchestrator agent_started
 ```
