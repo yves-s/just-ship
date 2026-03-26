@@ -4,6 +4,7 @@ import { execSync } from "node:child_process";
 import { executePipeline } from "./run.ts";
 import { WorktreeManager } from "./lib/worktree-manager.ts";
 import { loadProjectConfig } from "./lib/config.ts";
+import { generateChangeSummary } from "./lib/change-summary.ts";
 
 // --- Environment validation ---
 const required = [
@@ -109,10 +110,10 @@ async function claimTicket(number: number): Promise<boolean> {
   return (result?.length ?? 0) > 0;
 }
 
-async function completeTicket(number: number, branch: string): Promise<void> {
+async function completeTicket(number: number, branch: string, summary?: string): Promise<void> {
   await supabasePatch(
     `/rest/v1/tickets?number=eq.${number}`,
-    { pipeline_status: "done", status: "in_review", branch }
+    { pipeline_status: "done", status: "in_review", branch, ...(summary ? { summary } : {}) }
   );
 }
 
@@ -276,7 +277,20 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
       throw new Error(result.failureReason ?? `Pipeline failed (exit code: ${result.exitCode})`);
     }
 
-    await completeTicket(ticket.number, result.branch);
+    // Generate change summary before completing
+    let summary: string | undefined;
+    try {
+      let prUrl: string | undefined;
+      try {
+        prUrl = execSync(`gh pr view --json url -q .url`, { cwd: slot.workDir, encoding: "utf-8", timeout: 10000 }).trim();
+      } catch { /* no PR yet */ }
+
+      summary = generateChangeSummary({ workDir: slot.workDir, baseBranch: "main", prUrl });
+    } catch {
+      // Summary generation is best-effort
+    }
+
+    await completeTicket(ticket.number, result.branch, summary);
     log(`Pipeline completed: T-${ticket.number} → ${result.branch} (slot ${slotId})`);
 
     if (slotId !== undefined) slotFailures.delete(slotId);
