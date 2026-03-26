@@ -165,8 +165,9 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
 
   if (!opts.workDir) {
     // CLI mode — no worktree manager, do git checkout as before
+    // Force-checkout to discard any leftover uncommitted changes from a previous run
     try {
-      execSync("git checkout main", { cwd: projectDir, stdio: "pipe" });
+      execSync("git checkout -f main", { cwd: projectDir, stdio: "pipe" });
       execSync("git pull origin main", { cwd: projectDir, stdio: "pipe" });
     } catch { /* continue */ }
 
@@ -358,6 +359,7 @@ Branch ist bereits erstellt: ${branchName}`;
       packageManager: config.stack.packageManager,
       buildCommand: config.stack.buildCommand,
       testCommand: config.stack.testCommand,
+      env: opts.env,
     };
 
     const { finalReport, iterations } = await runQaWithFixLoop(qaContext);

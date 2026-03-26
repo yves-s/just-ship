@@ -29,6 +29,7 @@ export interface QaContext {
   packageManager: string;
   buildCommand?: string;
   testCommand?: string;
+  env?: Record<string, string>;
 }
 
 export interface QaCheckResult {

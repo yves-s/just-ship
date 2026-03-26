@@ -6,8 +6,21 @@
  */
 
 import { query } from "@anthropic-ai/claude-agent-sdk";
-import { execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import { runQa, postQaReport, type QaContext, type QaReport } from "./qa-runner.js";
+
+function makeSpawn(logPrefix: string) {
+  return (spawnOptions: { command: string; args: string[]; cwd?: string; env?: NodeJS.ProcessEnv; signal?: AbortSignal }) => {
+    const { command, args, cwd, env, signal } = spawnOptions;
+    const child = spawn(command, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"], signal } as Parameters<typeof spawn>[2]);
+    child.stderr?.on("data", (chunk: Buffer) => {
+      for (const line of chunk.toString().split("\n")) {
+        if (line.trim()) console.error(`${logPrefix} [stderr] ${line}`);
+      }
+    });
+    return child;
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -76,6 +89,8 @@ Do NOT modify test expectations to make them pass — fix the actual code.`;
 async function runClaudeFix(
   workDir: string,
   prompt: string,
+  env?: Record<string, string>,
+  ticketId?: string,
 ): Promise<void> {
   for await (const _message of query({
     prompt,
@@ -86,6 +101,8 @@ async function runClaudeFix(
       allowDangerouslySkipPermissions: true,
       allowedTools: ["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
       maxTurns: 30,
+      env: { ...process.env, ...(env ?? {}) },
+      spawnClaudeCodeProcess: makeSpawn(`[QA-Fix${ticketId ? ` T-${ticketId}` : ""}]`),
     },
   })) {
     // Consume the stream — we only care that it completes
@@ -117,7 +134,7 @@ export async function runQaWithFixLoop(ctx: QaContext): Promise<FixLoopResult> {
 
     // b+c. Run Claude Sonnet to fix the issues
     try {
-      await runClaudeFix(ctx.workDir, fixPrompt);
+      await runClaudeFix(ctx.workDir, fixPrompt, ctx.env, ctx.ticketId);
 
       // d. Record what was committed
       const commitMsg = getLastCommitMessage(ctx.workDir);

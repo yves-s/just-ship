@@ -93,7 +93,7 @@ ssh root@<IP> "docker --version && docker compose version && gh --version"
 ### 1.4 User erstellen + authentifizieren
 
 ```bash
-ssh root@<IP> "id claude-dev 2>/dev/null || (useradd -m -s /bin/bash claude-dev && usermod -aG docker claude-dev)"
+ssh root@<IP> "id claude-dev 2>/dev/null || (useradd -m -u 1001 -s /bin/bash claude-dev && usermod -aG docker claude-dev)"
 ```
 
 Git-Identity und GitHub-Auth fuer claude-dev einrichten:
