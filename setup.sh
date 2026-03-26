@@ -510,6 +510,42 @@ if [ "$MODE" = "update" ]; then
     echo "  Alles aktuell."
   fi
 
+  # --- Auto-commit + push if git remote is configured ---
+  if git -C "$PROJECT_DIR" rev-parse --git-dir &>/dev/null 2>&1; then
+    REMOTE=$(git -C "$PROJECT_DIR" remote get-url origin 2>/dev/null || echo "")
+    if [ -n "$REMOTE" ]; then
+      echo ""
+      echo "Committing update..."
+
+      # Stage only framework-managed paths
+      git -C "$PROJECT_DIR" add \
+        ".claude/agents/" \
+        ".claude/commands/" \
+        ".claude/skills/" \
+        ".claude/rules/" \
+        ".claude/scripts/" \
+        ".claude/hooks/" \
+        ".claude/settings.json" \
+        ".claude/.pipeline-version" \
+        ".pipeline/" \
+        2>/dev/null || true
+
+      # Only commit if there's something staged
+      if git -C "$PROJECT_DIR" diff --cached --quiet 2>/dev/null; then
+        echo "  ~ Nothing to commit (already up to date)"
+      else
+        git -C "$PROJECT_DIR" commit -m "chore: update just-ship to $FRAMEWORK_VERSION" \
+          2>/dev/null && echo "  ✓ Committed"
+
+        echo "Pushing..."
+        BRANCH=$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+        git -C "$PROJECT_DIR" push origin "$BRANCH" 2>/dev/null \
+          && echo "  ✓ Pushed to origin/$BRANCH" \
+          || echo "  ⚠ Push failed — run 'git push' manually"
+      fi
+    fi
+  fi
+
   echo ""
   exit 0
 fi
