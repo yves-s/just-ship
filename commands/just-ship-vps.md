@@ -396,144 +396,62 @@ Sag mir einfach den Namen oder Pfad — z.B. "mein-projekt" oder "~/Developer/me
 
 ## Phase 2: Projekt verbinden
 
-Wird pro Projekt ausgefuehrt. Der User sagt welches Projekt.
+Wird pro Projekt ausgefuehrt. **Verwende IMMER das Script** `vps/connect-project.sh` — KEINE manuellen Schritte.
 
-### 2.1 Lokale Projekt-Config lesen
+### 2.1 Parameter sammeln
 
-Lies `project.json` im lokalen Projektverzeichnis:
-- `pipeline.workspace_id` → fuer Board-Verbindung
-- `pipeline.project_id` → Projekt-UUID im Board
+Bestimme die nötigen Parameter:
+- `VPS_HOST`: IP oder Domain aus `vps_url` (aus Phase 0.2)
+- `PROJECT_PATH`: Lokaler Pfad zum Projekt (User angeben lassen oder aus cwd)
+- `REPO`: GitHub owner/repo (aus `git remote -v` im lokalen Projekt)
+- `SLUG`: Projektname (aus `project.json` → `name`, oder Verzeichnisname)
 
-Lies auch die Board-Credentials:
+Optional (fuer Workspace-Config, falls noch nicht gesetzt):
+- `BOARD_URL` und `BOARD_API_KEY`: Aus `write-config.sh read-workspace`
+- `WORKSPACE_ID`: Aus `project.json` → `pipeline.workspace_id`
+
+### 2.2 Script ausfuehren
+
 ```bash
+VPS_HOST=$(echo "<vps_url>" | sed 's|https\?://||;s|/.*||')
+
+# Repo-URL aus git remote
+REPO=$(cd <project-path> && git remote get-url origin | sed 's|.*github.com[:/]||;s|\.git$||')
+
+# Slug aus project.json name
+SLUG=$(node -e "process.stdout.write(require('<project-path>/project.json').name || '')")
+
+# Board-Credentials (optional, fuer Workspace-Config)
 WS_ID=$(node -e "process.stdout.write(require('<project-path>/project.json').pipeline?.workspace_id || '')")
-WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --id "$WS_ID")
-BOARD_URL=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).board_url)")
-API_KEY=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).api_key)")
+WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --id "$WS_ID" 2>/dev/null || echo '{}')
+BOARD_URL=$(echo "$WS_JSON" | node -e "try{process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).board_url)}catch{}" 2>/dev/null)
+BOARD_API_KEY=$(echo "$WS_JSON" | node -e "try{process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).api_key)}catch{}" 2>/dev/null)
+
+bash vps/connect-project.sh \
+  --host "$VPS_HOST" \
+  --project-path "<project-path>" \
+  --repo "$REPO" \
+  --slug "$SLUG" \
+  --workspace-id "$WS_ID" \
+  --board-url "$BOARD_URL" \
+  --board-api-key "$BOARD_API_KEY"
 ```
 
-### 2.2 Env-Vars sammeln
+Das Script macht deterministisch:
+1. **Pre-Flight Checks** — SSH, project.json, project_id, ANTHROPIC_API_KEY, GH_TOKEN, server-config
+2. **Clone** — Repo klonen via `gh repo clone` (oder updaten falls vorhanden)
+3. **project.json kopieren** — aus dem lokalen Projekt (ist in .gitignore, wird nicht mitgeklont)
+4. **setup.sh** — Just Ship Framework installieren
+5. **Env-Datei** — ANTHROPIC_API_KEY + GH_TOKEN vom VPS + lokale .env/.env.local mergen
+6. **server-config.json** — Projekt registrieren
+7. **Container restart** — Pipeline-Server neu starten
+8. **Verifizierung** — Health, Logs, project_id, API Key im Container
 
-Der ANTHROPIC_API_KEY wurde in den Voraussetzungen schon gesammelt. Falls nicht vorhanden, den User fragen.
+**Jeder Schritt wird verifiziert. Bei Fehler: Abbruch mit klarer Meldung.** Das Script gibt entweder "Projekt ist verbunden!" oder einen konkreten Fehler aus. Kein falscher Erfolg.
 
-Zusaetzlich aus dem lokalen Projekt pruefen:
-- `.env` oder `.env.local` — suche nach SUPABASE_URL, SUPABASE_SERVICE_KEY, etc.
-- Falls weitere projektspezifische Env-Vars gefunden werden, dem User maskiert zeigen
+### 2.3 Pipeline im Board registrieren (falls noetig)
 
-### 2.3 Projekt auf VPS klonen
-
-```bash
-ssh root@<IP> "su - claude-dev -c 'GH_TOKEN=\$(grep GH_TOKEN /home/claude-dev/.env | cut -d= -f2) gh repo clone <owner>/<repo> /home/claude-dev/projects/<slug>'"
-```
-
-Falls `gh` nicht verfuegbar, alternativ via HTTPS mit Token:
-```bash
-ssh root@<IP> "su - claude-dev -c 'git clone https://<github-token>@github.com/<owner>/<repo>.git /home/claude-dev/projects/<slug>'"
-```
-
-### 2.3a project.json auf den VPS kopieren
-
-**WICHTIG:** `project.json` ist in `.gitignore` und wird NICHT mitgeklont. Es muss vom lokalen Rechner auf den VPS kopiert werden, sonst kann der Pipeline-Agent nicht arbeiten.
-
-Lies die lokale `project.json` und schreibe sie auf den VPS:
-
-```bash
-# Lokale project.json lesen und per SSH auf den VPS schreiben
-cat <local-project-path>/project.json | ssh root@<IP> "cat > /home/claude-dev/projects/<slug>/project.json && chown claude-dev:claude-dev /home/claude-dev/projects/<slug>/project.json"
-```
-
-Verifiziere:
-```bash
-ssh root@<IP> "cat /home/claude-dev/projects/<slug>/project.json | node -e \"const p=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); console.log('OK:', p.name, '— project_id:', p.pipeline?.project_id || 'MISSING')\""
-```
-
-Falls `project_id` MISSING ist, war die lokale `project.json` unvollstaendig. Sage dem User: "project.json hat keine pipeline.project_id — fuehre /add-project im lokalen Projekt aus."
-
-### 2.4 setup.sh im Projekt ausfuehren
-
-`GH_TOKEN` muss als Env-Var gesetzt sein, damit `gh` im setup.sh authentifiziert ist:
-
-```bash
-ssh root@<IP> "su - claude-dev -c 'export GH_TOKEN=<github-token> && cd /home/claude-dev/projects/<slug> && bash /home/claude-dev/just-ship/setup.sh'"
-```
-
-### 2.5 Projekt-Env-Datei erstellen
-
-```bash
-ssh root@<IP> "cat > /home/claude-dev/.just-ship/env.<slug> << 'ENVEOF'
-ANTHROPIC_API_KEY=<anthropic-key>
-GH_TOKEN=<github-token>
-# ... weitere projekt-spezifische vars
-ENVEOF
-chmod 600 /home/claude-dev/.just-ship/env.<slug> && chown claude-dev:claude-dev /home/claude-dev/.just-ship/env.<slug>"
-```
-
-### 2.6 Server-Config aktualisieren
-
-Aktualisiere `/home/claude-dev/.just-ship/server-config.json`:
-- Setze `workspace.workspace_id`, `workspace.board_url`, `workspace.api_key` (falls noch leer)
-- Fuege das Projekt unter `projects` hinzu:
-
-```json
-{
-  "projects": {
-    "<slug>": {
-      "project_id": "<uuid-from-board>",
-      "repo_url": "<repo-url>",
-      "project_dir": "/home/claude-dev/projects/<slug>",
-      "env_file": "/home/claude-dev/.just-ship/env.<slug>"
-    }
-  }
-}
-```
-
-Verwende `node -e` um das JSON sauber zu mergen.
-
-### 2.7 Server neu starten
-
-```bash
-ssh root@<IP> "cd /home/claude-dev/just-ship && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d --force-recreate pipeline-server"
-```
-
-### 2.8 Verifizieren — PFLICHT vor Erfolgsmeldung
-
-**Diese Verifizierung MUSS bestanden werden.** Melde NIEMALS Erfolg ohne dass alle Checks gruen sind.
-
-**Check 1: Health-Check**
-```bash
-ssh root@<IP> "curl -s http://localhost:3001/health"
-```
-
-**Check 2: Projekt in Server-Logs**
-```bash
-ssh root@<IP> "docker logs \$(docker ps -q --filter name=pipeline) 2>&1 | grep 'Projects:'"
-```
-Der Slug des neuen Projekts MUSS in der `Projects:` Zeile erscheinen.
-
-**Check 3: project_id ist auf dem VPS aufloesbar**
-```bash
-ssh root@<IP> "node -e \"
-  const cfg = JSON.parse(require('fs').readFileSync('/home/claude-dev/.just-ship/server-config.json','utf-8'));
-  const match = Object.entries(cfg.projects).find(([,p]) => p.project_id === '<project_id>');
-  if (match) { console.log('OK: ' + match[0]); process.exit(0); }
-  else { console.log('FAIL: project_id not found'); process.exit(1); }
-\""
-```
-
-**Falls ein Check fehlschlaegt:** Fehler analysieren und beheben. NICHT zu 2.10 weitergehen. Moegliche Ursachen:
-- Server-Config wurde nicht korrekt geschrieben → 2.6 wiederholen
-- Container wurde nicht neu gestartet → 2.7 wiederholen
-- Projekt-Verzeichnis existiert nicht → 2.3 wiederholen
-
-### 2.9 Pipeline im Board registrieren
-
-Die Pipeline-Verbindung (URL + Key) wird automatisch im Board gesetzt via Supabase MCP.
-
-Bestimme die Pipeline-URL:
-- Mit HTTPS: `https://<domain>`
-- Ohne HTTPS: `http://<IP>:3001`
-
-Via Supabase MCP (Pipeline-DB `wsmnutkobalfrceavpxs`):
+Falls `vps_url` und `vps_api_key` noch nicht in der DB stehen (neuer VPS), via Supabase MCP setzen:
 
 ```sql
 UPDATE public.workspaces
@@ -542,38 +460,7 @@ WHERE id = '<workspace_id>'
 RETURNING id, name, vps_url;
 ```
 
-Falls der Supabase MCP nicht verfuegbar ist, dem User sagen:
-```
-Pipeline-Settings muessen manuell im Board konfiguriert werden:
-Board → Settings → Workspace → Pipeline
-- Pipeline URL: <pipeline-url>
-- Pipeline Key: <PIPELINE_KEY>
-```
-
-### 2.10 Ergebnis melden
-
-**NUR ausgeben wenn ALLE Checks aus 2.8 bestanden sind.**
-
-```
-Projekt <name> ist verbunden!
-
-- Server: <pipeline-url>
-- Projekt: <slug> (project_id: <uuid>)
-- Board: Pipeline-Verbindung konfiguriert
-- Verifiziert: Health OK, Projekt in Server-Logs, project_id aufloesbar
-- Status: Bereit — "Develop" Button im Board funktioniert
-
-Der VPS empfaengt jetzt Tickets vom Board und entwickelt sie autonom.
-```
-
-**Falls Checks fehlgeschlagen:** Statt der Erfolgsmeldung den Fehler melden:
-```
-Projekt <name> konnte NICHT vollstaendig verbunden werden.
-
-- Server: <pipeline-url>
-- Fehlgeschlagene Checks: <liste>
-- Naechster Schritt: <was zu tun ist>
-```
+Falls bereits gesetzt (bestehendes Setup): Diesen Schritt ueberspringen.
 
 ## Fehlerbehandlung
 
