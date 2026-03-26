@@ -43,6 +43,7 @@ async function runTriage(
   triagePrompt: string,
   eventConfig: EventConfig,
   hasPipeline: boolean,
+  env?: Record<string, string>,
 ): Promise<TriageResult> {
   if (hasPipeline) await postPipelineEvent(eventConfig, "agent_started", "triage");
 
@@ -77,6 +78,7 @@ Labels: ${ticket.labels}`;
         allowDangerouslySkipPermissions: true,
         allowedTools: [],
         maxTurns: 1,
+        env: { ...process.env, ...(env ?? {}) },
       },
     })) {
       if (message.type === "assistant") {
@@ -179,7 +181,7 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
   let triageResult: TriageResult | undefined;
   const triagePrompt = loadTriagePrompt(workDir);
   if (triagePrompt) {
-    triageResult = await runTriage(workDir, ticket, triagePrompt, eventConfig, hasPipeline);
+    triageResult = await runTriage(workDir, ticket, triagePrompt, eventConfig, hasPipeline, opts.env);
     ticketDescription = triageResult.description;
   }
 
