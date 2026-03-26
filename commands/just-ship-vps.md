@@ -29,7 +29,7 @@ Ich richte jetzt just-ship auf deinem VPS ein. Dafuer brauche ich von dir:
    → Generate new token → Scopes: repo + workflow → Generate → Token kopieren
 
 4. **Domain/Subdomain fuer HTTPS**
-   → Setze einen DNS A-Record: z.B. dev.deinedomain.de → VPS-IP
+   → Setze einen DNS A-Record: just-ship.deinedomain.de → VPS-IP
    → Beim Domain-Provider unter DNS-Einstellungen einen A-Record anlegen
    → Die Subdomain muss auf die VPS-IP zeigen
 
