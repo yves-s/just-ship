@@ -292,12 +292,12 @@ ssh root@<IP> "su - claude-dev -c 'export GH_TOKEN=<github-token> && cd /home/cl
 ### 2.5 Projekt-Env-Datei erstellen
 
 ```bash
-ssh root@<IP> "cat > /home/claude-dev/.env.<slug> << 'ENVEOF'
+ssh root@<IP> "cat > /home/claude-dev/.just-ship/env.<slug> << 'ENVEOF'
 ANTHROPIC_API_KEY=<anthropic-key>
 GH_TOKEN=<github-token>
 # ... weitere projekt-spezifische vars
 ENVEOF
-chmod 600 /home/claude-dev/.env.<slug> && chown claude-dev:claude-dev /home/claude-dev/.env.<slug>"
+chmod 600 /home/claude-dev/.just-ship/env.<slug> && chown claude-dev:claude-dev /home/claude-dev/.just-ship/env.<slug>"
 ```
 
 ### 2.6 Server-Config aktualisieren
@@ -313,7 +313,7 @@ Aktualisiere `/home/claude-dev/.just-ship/server-config.json`:
       "project_id": "<uuid-from-board>",
       "repo_url": "<repo-url>",
       "project_dir": "/home/claude-dev/projects/<slug>",
-      "env_file": "/home/claude-dev/.env.<slug>"
+      "env_file": "/home/claude-dev/.just-ship/env.<slug>"
     }
   }
 }
