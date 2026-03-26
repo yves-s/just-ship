@@ -27,9 +27,17 @@ WORKDIR /app
 # Symlink node_modules so tsx/sdk are resolvable from /app
 RUN ln -s /app/pipeline/node_modules /app/node_modules
 
+# Non-root user matching host claude-dev UID/GID=1001
+# (Claude Code refuses --dangerously-skip-permissions as root)
+RUN groupadd -g 1001 claude-agent \
+    && useradd -m -u 1001 -g 1001 -s /bin/bash claude-agent \
+    && chown -R claude-agent:claude-agent /app
+
 # Entrypoint: configure git + gh auth, then start server
 COPY vps/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
+
+USER claude-agent
 
 ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["node", "--import", "tsx", "pipeline/server.ts"]
