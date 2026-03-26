@@ -197,14 +197,36 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
 
   // 3. Check pipeline_status
   const pipelineStatus = ticket.pipeline_status as string | null;
-  if (pipelineStatus === "running" || pipelineStatus === "done") {
+  if (pipelineStatus === "done") {
     sendJson(res, 409, {
       status: "conflict",
       ticket_number: ticketNumber,
       pipeline_status: pipelineStatus,
-      message: `Ticket already has pipeline_status: ${pipelineStatus}`,
+      message: "Ticket already has pipeline_status: done",
     });
     return;
+  }
+
+  if (pipelineStatus === "running") {
+    // If this server is actually running it → real conflict
+    if (runningTickets.has(ticketNumber)) {
+      sendJson(res, 409, {
+        status: "conflict",
+        ticket_number: ticketNumber,
+        pipeline_status: pipelineStatus,
+        message: "Ticket is already being processed by this server",
+      });
+      return;
+    }
+    // Zombie: DB says running but server has no record → reset and re-launch
+    log(`Zombie detected: T-${ticketNumber} has pipeline_status=running but is not in runningTickets — resetting`);
+  }
+
+  if (pipelineStatus === "paused") {
+    // Paused tickets can be retried (resume or restart)
+    // If server has the session in memory, it's truly paused
+    // If not in memory (server restart), allow re-launch to continue
+    log(`Retrying paused ticket: T-${ticketNumber}`);
   }
 
   // 4. Reserve ticket in-memory before async PATCH to close concurrent-request race window
