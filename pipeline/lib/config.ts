@@ -26,7 +26,7 @@ export interface ProjectConfig {
   pipeline: PipelineConfig;
   maxWorkers: number;
   qa: QaConfig;
-  stack: { packageManager: string };
+  stack: { packageManager: string; buildCommand?: string; testCommand?: string };
 }
 
 export interface TicketArgs {
@@ -178,7 +178,11 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
     pipeline,
     maxWorkers: Number(rawPipeline.max_workers ?? 1),
     qa,
-    stack: { packageManager: raw.stack?.package_manager ?? "npm" },
+    stack: {
+      packageManager: raw.stack?.package_manager ?? "npm",
+      buildCommand: raw.build?.web as string | undefined,
+      testCommand: raw.build?.test as string | undefined,
+    },
   };
 }
 

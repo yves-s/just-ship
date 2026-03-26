@@ -356,6 +356,8 @@ Branch ist bereits erstellt: ${branchName}`;
       qaFlows: triageResult?.qaFlows ?? [],
       qaConfig: config.qa,
       packageManager: config.stack.packageManager,
+      buildCommand: config.stack.buildCommand,
+      testCommand: config.stack.testCommand,
     };
 
     const { finalReport, iterations } = await runQaWithFixLoop(qaContext);

@@ -27,6 +27,8 @@ export interface QaContext {
   qaFlows: string[];
   qaConfig: QaConfig;
   packageManager: string;
+  buildCommand?: string;
+  testCommand?: string;
 }
 
 export interface QaCheckResult {
@@ -96,8 +98,8 @@ function exec(cmd: string, cwd: string, timeoutMs = 120_000): { stdout: string; 
 // Build Check
 // ---------------------------------------------------------------------------
 
-export function runBuildCheck(workDir: string, packageManager: string): QaCheckResult {
-  const cmd = buildCommand(packageManager);
+export function runBuildCheck(workDir: string, packageManager: string, overrideCmd?: string): QaCheckResult {
+  const cmd = overrideCmd ?? buildCommand(packageManager);
   console.error(`[qa-runner] Running build: ${cmd}`);
 
   const { stdout, ok } = exec(cmd, workDir);
@@ -115,7 +117,7 @@ export function runBuildCheck(workDir: string, packageManager: string): QaCheckR
 // Test Check
 // ---------------------------------------------------------------------------
 
-export function runTestCheck(workDir: string, packageManager: string): QaCheckResult | null {
+export function runTestCheck(workDir: string, packageManager: string, overrideCmd?: string): QaCheckResult | null {
   const pkgJsonPath = join(workDir, "package.json");
   if (!existsSync(pkgJsonPath)) {
     return null;
@@ -138,7 +140,7 @@ export function runTestCheck(workDir: string, packageManager: string): QaCheckRe
     return null;
   }
 
-  const cmd = testCommand(packageManager);
+  const cmd = overrideCmd ?? testCommand(packageManager);
   console.error(`[qa-runner] Running tests: ${cmd}`);
 
   const { stdout, ok } = exec(cmd, workDir, 180_000);
@@ -498,7 +500,7 @@ export async function runQa(ctx: QaContext): Promise<QaReport> {
   console.error(`[qa-runner] Starting QA (tier: ${ctx.qaTier}) for ${ctx.ticketId}`);
 
   // --- Build check (all tiers) ---
-  const buildResult = runBuildCheck(ctx.workDir, ctx.packageManager);
+  const buildResult = runBuildCheck(ctx.workDir, ctx.packageManager, ctx.buildCommand);
   report.checks.push(buildResult);
 
   if (!buildResult.passed) {
@@ -512,7 +514,7 @@ export async function runQa(ctx: QaContext): Promise<QaReport> {
   }
 
   // --- Test check (light + full) ---
-  const testResult = runTestCheck(ctx.workDir, ctx.packageManager);
+  const testResult = runTestCheck(ctx.workDir, ctx.packageManager, ctx.testCommand);
   if (testResult) {
     report.checks.push(testResult);
     if (!testResult.passed) {
