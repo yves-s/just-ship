@@ -42,9 +42,17 @@ FROM public.workspaces
 WHERE id = '<workspace_id>';
 ```
 
+Merke dir den `name` (Workspace-Name) fuer die Statusmeldung in 0.5a.
+
+**WICHTIG:** Falls die Supabase-MCP-Abfrage fehlschlaegt (Auth-Fehler, MCP nicht verfuegbar), melde den Fehler dem User. Springe NIEMALS zu "Neuer VPS" nur weil die Abfrage fehlgeschlagen ist — der VPS existiert hoechstwahrscheinlich bereits.
+
 ### 0.3 Entscheidungsbaum
 
 ```
+Abfrage fehlgeschlagen?
+  → Fehler melden: "Konnte Workspace-Daten nicht abfragen. Bitte Supabase MCP pruefen."
+  → NICHT zu "Neuer VPS" springen
+
 vps_url ist leer oder NULL?
   → JA: Neuer VPS → weiter mit "Voraussetzungen"
   → NEIN: VPS existiert bereits → 0.4 Health-Check
@@ -60,35 +68,67 @@ curl -sf "<vps_url>/health" --max-time 5
 
 ```
 Health-Check erfolgreich ({"status":"ok"})?
-  → JA: VPS laeuft → 0.5 Status melden
+  → JA: VPS laeuft → 0.5 Pruefen ob Projekt verbunden
   → NEIN: VPS nicht erreichbar → 0.6 Diagnose anbieten
 ```
 
-### 0.5 VPS laeuft — Status melden und Optionen anbieten
+### 0.5 Pruefen ob aktuelles Projekt bereits verbunden ist
+
+Lies die `server-config.json` vom VPS und pruefe ob die `project_id` des aktuellen Projekts bereits eingetragen ist:
+
+```bash
+# IP/Domain aus vps_url extrahieren (ohne https:// und trailing slash)
+VPS_HOST=$(echo "<vps_url>" | sed 's|https\?://||;s|/.*||')
+
+# project_id aus lokalem project.json
+LOCAL_PROJECT_ID=$(node -e "process.stdout.write(require('./project.json').pipeline?.project_id || '')")
+
+# server-config.json vom VPS lesen und project_id suchen
+PROJECT_MATCH=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new root@$VPS_HOST "node -e \"
+  const cfg = JSON.parse(require('fs').readFileSync('/home/claude-dev/.just-ship/server-config.json','utf-8'));
+  const match = Object.entries(cfg.projects).find(([,p]) => p.project_id === '$LOCAL_PROJECT_ID');
+  process.stdout.write(match ? match[0] : '');
+\"")
+```
+
+```
+Projekt bereits auf VPS registriert (PROJECT_MATCH nicht leer)?
+  → JA: Projekt ist verbunden → 0.5a Status melden mit Optionen
+  → NEIN: Projekt fehlt → automatisch Phase 2 ausfuehren (KEIN User-Prompt)
+```
+
+**WICHTIG:** Wenn das aktuelle Projekt nicht auf dem VPS registriert ist, fuehre Phase 2 sofort und autonom aus. Keine Optionen anzeigen, keine Rueckfragen.
+
+### 0.5a VPS laeuft, Projekt bereits verbunden — Optionen anbieten
+
+Nur wenn das aktuelle Projekt bereits auf dem VPS registriert ist.
+
+Verwende den Workspace-Namen aus der DB-Abfrage (0.2) und parse den Health-Response fuer den Status:
 
 ```
 VPS ist bereits eingerichtet und laeuft!
 
 - Server: <vps_url>
-- Status: <health-response>
+- Workspace: <workspace_name> (aus DB-Abfrage 0.2)
+- Projekt: <PROJECT_MATCH> (project_id: <LOCAL_PROJECT_ID>)
+- Status: OK (<mode aus health-response>, <running aus health-response>)
 
 Was moechtest du tun?
-1. **Weiteres Projekt verbinden** → Phase 2
-2. **VPS updaten** (just-ship + Docker Image neu bauen)
-3. **VPS-Status + Logs anzeigen**
+1. **Weiteres Projekt verbinden** — ein neues Repo auf dem VPS einrichten
+2. **VPS updaten** — just-ship + Docker Image neu bauen
+3. **VPS-Status + Logs anzeigen** — Container-Status und aktuelle Logs
 ```
 
 Warte auf die Antwort des Users und fuehre die gewaehlte Option aus:
-- **Option 1:** Springe zu Phase 2 (Projekt verbinden)
+- **Option 1:** Frage nach dem Projekt (Name/Pfad) und fuehre Phase 2 aus.
 - **Option 2:** Fuehre das Update aus:
   ```bash
-  # IP/Domain aus vps_url extrahieren
-  ssh root@<IP> "cd /home/claude-dev/just-ship && git pull && docker compose -f vps/docker-compose.yml build --no-cache pipeline-server && docker compose -f vps/docker-compose.yml up -d pipeline-server"
+  ssh root@<VPS_HOST> "cd /home/claude-dev/just-ship && git pull && docker compose -f vps/docker-compose.yml build --no-cache pipeline-server && docker compose -f vps/docker-compose.yml up -d pipeline-server"
   ```
   Dann Health-Check und Ergebnis melden.
 - **Option 3:** Zeige Logs und Container-Status:
   ```bash
-  ssh root@<IP> "docker ps --filter name=pipeline && docker logs --tail 30 \$(docker ps -q --filter name=pipeline) 2>&1"
+  ssh root@<VPS_HOST> "docker ps --filter name=pipeline && docker logs --tail 30 \$(docker ps -q --filter name=pipeline) 2>&1"
   ```
 
 ### 0.6 VPS nicht erreichbar — Diagnose
