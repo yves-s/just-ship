@@ -1,4 +1,9 @@
 #!/bin/bash
+# ============================================================
+# DEPRECATED: This script has been replaced by Docker-based VPS setup.
+# Use the /just-ship-vps command in Claude Code instead.
+# See vps/docker-compose.yml and vps/Dockerfile for the new approach.
+# ============================================================
 # =============================================================================
 # setup-vps.sh — Hostinger VPS Initial Setup
 #

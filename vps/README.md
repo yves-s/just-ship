@@ -1,330 +1,101 @@
-# VPS Setup — Just Ship 24/7
+# VPS Infrastructure
 
-Autonome Dev-Pipeline auf Hostinger VPS (Ubuntu 22.04). Powered by Just Ship.
+Autonomous development environment on a VPS. The Board triggers pipelines via HTTP, the VPS runs Claude Code pipelines and creates PRs.
 
-## Architektur
+## Architecture
 
 ```
-Supabase (tickets)
+Board: "Develop" button click
     │
-    │  status = 'ready_to_develop'
-    │
-    ▼
-worker.ts (pollt alle 60s via npx tsx)
-    │
-    │  claim: pipeline_status → 'running'
+    │  POST https://pipeline.domain.com/api/launch
+    │  X-Pipeline-Key: <secret>
+    │  { ticket_number: 267, project_id: "uuid" }
     │
     ▼
-.pipeline/run.ts → SDK query() mit Orchestrator-Prompt
-    │
-    │  Agents spawnen, Build-Check, Commit
+Caddy (HTTPS, Let's Encrypt)
     │
     ▼
-GitHub PR + Supabase status → 'in_review'
+Docker: pipeline-server (Node.js)
+    │
+    │  Auth → project lookup → git pull → pipeline
+    │
+    ▼
+GitHub PR → ticket status "in_review"
 ```
 
-Der Worker läuft als `claude-dev` User via systemd. Pro Projekt ein Service.
+## Setup
 
----
+Use the `/just-ship-vps` command in Claude Code. It handles everything:
 
-## Schritt 1: VPS vorbereiten
+1. Installs Docker on the VPS
+2. Creates the `claude-dev` user
+3. Clones just-ship and builds the Docker image
+4. Configures Caddy for HTTPS
+5. Starts the pipeline server
 
-Auf Hostinger: VPS erstellen, Ubuntu 22.04, root-Zugang per SSH.
+### Prerequisites
 
-```bash
-# Lokaler Rechner
-ssh root@<VPS-IP>
-```
+| # | What | How |
+|---|------|-----|
+| 1 | VPS IP | Hostinger Dashboard → VPS → copy IP |
+| 2 | SSH key auth | `ssh-copy-id root@<IP>` |
+| 3 | GitHub Token | github.com → Settings → Developer Settings → PAT (classic) → scopes: `repo` + `workflow` |
+| 4 | Subdomain + A-Record | DNS A-Record pointing to VPS IP |
 
----
+### Connecting Projects
 
-## Schritt 2: Setup ausführen
+After VPS setup, connect individual projects. The command copies local env vars, clones the repo, and registers the project in the server config.
 
-```bash
-# Auf dem VPS als root
-curl -fsSL https://raw.githubusercontent.com/yves-s/just-ship/main/vps/setup-vps.sh -o /tmp/setup-vps.sh
-chmod +x /tmp/setup-vps.sh
-bash /tmp/setup-vps.sh
-```
+## Files
 
-Das Script fragt interaktiv nach:
-- `ANTHROPIC_API_KEY` — Claude API Key
-- `GH_TOKEN` — GitHub Personal Access Token (Scopes: `repo`, `workflow`)
+| File | Purpose |
+|------|---------|
+| `Dockerfile` | Docker image: Node.js 20, git, gh, Claude Code, pipeline SDK |
+| `entrypoint.sh` | Container startup: configures git identity and gh auth |
+| `docker-compose.yml` | Caddy (HTTPS) + pipeline-server containers |
+| `setup-vps.sh` | **DEPRECATED** — legacy bare-metal setup script |
+| `just-ship-pipeline@.service` | **DEPRECATED** — legacy systemd unit for polling worker |
+| `just-ship-server@.service` | **DEPRECATED** — legacy systemd unit for HTTP server |
+| `just-ship-bot.service` | Telegram bot systemd unit (separate service) |
 
-Alternativ als Umgebungsvariablen übergeben:
-```bash
-ANTHROPIC_API_KEY=sk-ant-... GH_TOKEN=ghp_... bash /tmp/setup-vps.sh
-```
+## Server Endpoints
 
-Das Script installiert:
-- Node.js 20, git, gh, python3, jq
-- Claude Code CLI (`claude`)
-- `claude-dev` User
-- systemd Service Template
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/api/launch` | Yes | Trigger pipeline for a ticket |
+| `POST` | `/api/events` | Yes | Board event handler (filters to "launch") |
+| `POST` | `/api/answer` | Yes | Resume paused pipeline with human answer |
+| `POST` | `/api/ship` | Yes | Merge PR for a ticket |
+| `GET` | `/health` | No | Server status |
+| `GET` | `/api/status/:ticket` | No | Pipeline status for a ticket |
 
----
+Auth = `X-Pipeline-Key` header matching `server.pipeline_key` in server-config.json.
 
-## Schritt 3: Projekt klonen + Pipeline installieren
+## Server Config
 
-```bash
-su - claude-dev
+Located at `/home/claude-dev/.just-ship/server-config.json`:
 
-# Projekt klonen
-git clone https://$GH_TOKEN@github.com/org/repo.git ~/mein-projekt
-
-# Pipeline-Framework installieren
-cd ~/mein-projekt
-~/just-ship/setup.sh
-
-# project.json anpassen (Supabase-IDs, Build-Commands)
-nano project.json
-```
-
----
-
-## Schritt 4: Projekt-Config erstellen
-
-Für jeden Worker eine `.env.{projekt-slug}` Datei:
-
-```bash
-cat > /home/claude-dev/.env.mein-projekt <<'EOF'
-# Supabase
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_SERVICE_KEY=eyJ...
-SUPABASE_PROJECT_ID=<uuid-aus-projects-tabelle>
-
-# Projekt
-PROJECT_DIR=/home/claude-dev/mein-projekt
-
-# Worker
-POLL_INTERVAL=60
-EOF
-
-chmod 600 /home/claude-dev/.env.mein-projekt
-chown claude-dev:claude-dev /home/claude-dev/.env.mein-projekt
-```
-
-> **Supabase Service Key** → Supabase Dashboard → Project Settings → API → `service_role` Key
-
-> **SUPABASE_PROJECT_ID** → UUID aus der `project_id` Spalte in der `tickets` Tabelle (nicht die Supabase-Projekt-ID)
-
----
-
-## Schritt 5: Worker starten
-
-```bash
-# Als root
-sudo systemctl enable --now just-ship-pipeline@mein-projekt
-
-# Logs live
-journalctl -fu just-ship-pipeline@mein-projekt
-
-# Status
-systemctl status just-ship-pipeline@mein-projekt
-```
-
----
-
-## Schritt 6: Start-Trigger Server (optional)
-
-Neben dem Polling-Worker gibt es optional einen HTTP-Server fuer Push-Trigger. Das Board kann direkt `POST /api/launch` aufrufen, um einen Ticket-Workflow sofort zu starten -- ohne auf den naechsten Poll-Zyklus zu warten.
-
-### `.env.{slug}` ergaenzen
-
-Zusaetzlich zu den bestehenden Variablen:
-
-```bash
-# Server (optional)
-PIPELINE_SERVER_KEY=adp_dein-secret-key-hier
-PORT=3001
-```
-
-### Server starten
-
-```bash
-# systemd Unit kopieren (einmalig)
-sudo cp just-ship-server@.service /etc/systemd/system/
-sudo systemctl daemon-reload
-
-# Server aktivieren
-sudo systemctl enable --now just-ship-server@mein-projekt
-
-# Logs live
-journalctl -fu just-ship-server@mein-projekt
-
-# Status
-systemctl status just-ship-server@mein-projekt
-```
-
-### Pipeline per HTTP triggern
-
-```bash
-curl -X POST http://localhost:3001/api/launch \
-  -H "Content-Type: application/json" \
-  -H "X-Pipeline-Key: adp_dein-secret-key-hier" \
-  -d '{"ticket_number": 267}'
-```
-
-Response (202):
 ```json
-{"status":"queued","ticket_number":267,"message":"Pipeline started"}
-```
-
-### Health-Check
-
-```bash
-curl http://localhost:3001/health
-```
-
-Response (200):
-```json
-{"status":"ok","running_count":0}
-```
-
-> **Tipp:** Worker und Server koennen parallel laufen. Der Server startet Pipelines sofort bei eingehenden Requests, der Worker pollt weiterhin als Fallback.
-
----
-
-## Global Config for Pipeline Worker
-
-The pipeline worker resolves API keys from `~/.just-ship/config.json`.
-Create this file for the service user:
-
-```bash
-sudo -u claude-dev mkdir -p /home/claude-dev/.just-ship
-sudo -u claude-dev tee /home/claude-dev/.just-ship/config.json > /dev/null <<'EOF'
 {
-  "board_url": "https://board.just-ship.io",
-  "default_workspace": "<workspace-uuid>",
-  "workspaces": {
-    "<workspace-uuid>": {
-      "slug": "my-workspace",
-      "api_key": "<api-key>"
+  "server": { "port": 3001, "pipeline_key": "<secret>" },
+  "workspace": {
+    "workspace_id": "<uuid>",
+    "board_url": "https://board.just-ship.io",
+    "api_key": "<workspace-api-key>"
+  },
+  "projects": {
+    "my-project": {
+      "project_id": "<uuid>",
+      "repo_url": "https://github.com/org/repo.git",
+      "project_dir": "/home/claude-dev/projects/my-project",
+      "env_file": "/home/claude-dev/.env.my-project"
     }
   }
 }
-EOF
-chmod 600 /home/claude-dev/.just-ship/config.json
 ```
 
-Workspaces are keyed by UUID. The `board_url` is a top-level field shared across all workspaces.
-Credentials are resolved via `write-config.sh read-workspace --id <uuid>`.
-
----
-
-## Mehrere Projekte
-
-Für jedes Projekt eine separate `.env.{slug}` und einen separaten Service:
+## Update
 
 ```bash
-# Projekt 2
-cat > /home/claude-dev/.env.anderes-projekt <<'EOF'
-SUPABASE_PROJECT_ID=andere-uuid-...
-PROJECT_DIR=/home/claude-dev/anderes-projekt
-POLL_INTERVAL=60
-EOF
-
-sudo systemctl enable --now just-ship-pipeline@anderes-projekt
+ssh root@<IP> "cd /home/claude-dev/just-ship && git pull && docker compose -f vps/docker-compose.yml build --no-cache && docker compose -f vps/docker-compose.yml up -d"
 ```
-
-Beide Worker laufen unabhängig. Da jeder nur Tickets seines eigenen `project_id` pollt, gibt es keine Konflikte.
-
----
-
-## Logs
-
-```bash
-# Live-Log des Workers
-journalctl -fu just-ship-pipeline@mein-projekt
-
-# Pipeline-Logs (pro Ticket)
-ls ~/pipeline-logs/
-tail -100 ~/pipeline-logs/T--267-*.log
-
-# Alle aktuellen Worker
-systemctl list-units "just-ship-pipeline@*"
-```
-
----
-
-## Tickets in die Queue stellen
-
-Tickets landen automatisch im Worker, sobald `status = 'ready_to_develop'` UND `pipeline_status IS NULL`.
-
-```sql
--- Ticket für Pipeline freigeben
-UPDATE public.tickets
-SET status = 'ready_to_develop', pipeline_status = NULL
-WHERE number = 267;
-```
-
-Oder via `/ticket` Slash-Command in Claude Code (schreibt direkt nach Supabase).
-
----
-
-## Troubleshooting
-
-### Worker startet nicht
-```bash
-systemctl status just-ship-pipeline@mein-projekt
-journalctl -u just-ship-pipeline@mein-projekt -n 50
-```
-
-### Häufige Fehler
-
-| Fehler | Ursache | Fix |
-|--------|---------|-----|
-| `ANTHROPIC_API_KEY muss gesetzt sein` | .env nicht geladen | `EnvironmentFile` in Service prüfen |
-| `Pipeline runner nicht gefunden` | setup.sh nicht ausgeführt | `cd ~/projekt && ~/just-ship/setup.sh` |
-| `Supabase nicht erreichbar` | Netzwerk/Key | SUPABASE_URL + SERVICE_KEY prüfen |
-| `gh: authentication required` | GH_TOKEN abgelaufen | Neuen Token generieren, in .env eintragen |
-| `claude: command not found` | npm global path fehlt | `export PATH="$(npm root -g)/.bin:$PATH"` |
-
-### Pipeline manuell testen
-```bash
-su - claude-dev
-source ~/.env
-source ~/.env.mein-projekt
-
-cd ~/mein-projekt
-.pipeline/run.sh 267 "Test-Ticket" "Manueller Test" ""
-```
-
-### Ticket manuell zurücksetzen
-Wenn ein Ticket in `pipeline_status = 'running'` feststeckt:
-```sql
-UPDATE public.tickets
-SET pipeline_status = NULL, status = 'ready_to_develop'
-WHERE number = 267;
-```
-
----
-
-## Framework updaten
-
-```bash
-su - claude-dev
-cd ~/just-ship && git pull
-
-# In jedem Projekt
-cd ~/mein-projekt
-~/just-ship/setup.sh --update
-
-# Worker neu starten (damit worker.ts aktuell ist)
-sudo systemctl restart just-ship-pipeline@mein-projekt
-```
-
----
-
-## Kosten-Schätzung (Anthropic API)
-
-| Ticket-Typ | Agents | Kosten |
-|-----------|--------|--------|
-| Einfacher Bug | Orchestrator + 1 Agent | ~€1–2 |
-| Feature mit DB + UI | Orchestrator + 3 Agents | ~€3–5 |
-| Komplexes Feature | Orchestrator + 5 Agents | ~€5–10 |
-
-Orchestrator läuft auf Opus (teuerster), Sub-Agents auf Sonnet/Haiku.
-Bei 5 Tickets/Tag: ~€15–25/Tag Anthropic-Kosten.
-
-VPS-Kosten Hostinger: ~€4–8/Monat (VPS 1 oder VPS 2).
