@@ -125,7 +125,7 @@ ssh root@<IP> "su - claude-dev -c 'echo \"export GH_TOKEN=<github-token>\" >> ~/
 ssh root@<IP> "su - claude-dev -c 'GH_TOKEN=<github-token> gh auth setup-git'"
 ```
 
-### 1.8 Server-Config erstellen
+### 1.9 Server-Config erstellen
 
 Generiere einen zufaelligen Pipeline Key:
 
@@ -156,7 +156,7 @@ chmod 600 /home/claude-dev/.just-ship/server-config.json"
 
 Die Workspace-Felder werden in Phase 2 befuellt.
 
-### 1.9 Docker Image bauen und starten
+### 1.10 Docker Image bauen und starten
 
 Ohne HTTPS (Default):
 
@@ -177,7 +177,7 @@ chown claude-dev:claude-dev /home/claude-dev/just-ship/vps/Caddyfile"
 ssh root@<IP> "cd /home/claude-dev/just-ship && docker compose -f vps/docker-compose.yml up -d"
 ```
 
-### 1.10 Verifizieren
+### 1.11 Verifizieren
 
 ```bash
 ssh root@<IP> "curl -s http://localhost:3001/health"
@@ -195,7 +195,7 @@ Falls fehlschlaegt: Container-Logs pruefen:
 ssh root@<IP> "cd /home/claude-dev/just-ship && docker compose -f vps/docker-compose.yml logs --tail=50"
 ```
 
-### 1.11 Ergebnis melden
+### 1.12 Ergebnis melden
 
 Ohne HTTPS:
 ```
@@ -272,6 +272,10 @@ ssh root@<IP> "su - claude-dev -c 'git clone <repo-url> /home/claude-dev/project
 
 ### 2.4 setup.sh im Projekt ausfuehren
 
+**WICHTIG:** Falls das Projekt das just-ship Framework selbst ist (gleiche Repo-URL),
+setup.sh NICHT ausfuehren — es wuerde Symlinks auf sich selbst erstellen.
+Stattdessen diesen Schritt ueberspringen.
+
 ```bash
 ssh root@<IP> "su - claude-dev -c 'cd /home/claude-dev/projects/<slug> && bash /home/claude-dev/just-ship/setup.sh'"
 ```
@@ -323,20 +327,31 @@ ssh root@<IP> "curl -s http://localhost:3001/health"
 
 Sollte jetzt das Projekt listen.
 
-### 2.9 Board konfigurieren
+### 2.9 Pipeline-Settings im Board setzen
 
-Sage dem User:
+Pipeline URL und Key automatisch via Board API konfigurieren, damit der "Develop" Button funktioniert.
+Das muss nur beim ersten Projekt gemacht werden — alle weiteren Projekte im selben Workspace nutzen dieselben Settings.
+
+```bash
+PIPELINE_URL="http://<IP>:3001"  # oder https://<domain> falls HTTPS aktiv
+curl -s -X PATCH -H "X-Pipeline-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"pipeline_url\": \"$PIPELINE_URL\", \"pipeline_key\": \"$PIPELINE_KEY\"}" \
+  "$BOARD_URL/api/workspaces/$WS_ID"
+```
+
+Falls die API keinen Workspace-PATCH-Endpoint hat, sage dem User:
+```
+Trage diese Werte im Board unter Settings → Workspace → Pipeline ein:
+- Pipeline URL: <url>
+- Pipeline Key: <key> (maskiert anzeigen!)
+```
+
+### 2.10 Ergebnis melden
 
 ```
-Projekt <name> ist verbunden!
-
-Damit der "Develop" Button im Board funktioniert, muessen noch die Pipeline-Settings
-im Workspace konfiguriert werden:
-
-- Pipeline URL: http://<IP>:3001 (oder https://<domain> falls HTTPS aktiv)
-- Pipeline Key: <PIPELINE_KEY>
-
-Das kann im Board unter Settings → Workspace → Pipeline konfiguriert werden.
+Fertig! Projekt <name> ist mit dem VPS verbunden.
+Du kannst ab sofort im Board auf "Develop" klicken fuer Tickets in diesem Projekt.
 ```
 
 ## Fehlerbehandlung
