@@ -39,8 +39,7 @@ Use the `/just-ship-vps` command in Claude Code. It handles everything:
 |---|------|-----|
 | 1 | VPS IP | Hostinger Dashboard → VPS → copy IP |
 | 2 | SSH key auth | `ssh-copy-id root@<IP>` |
-| 3 | GitHub Token | github.com → Settings → Developer Settings → PAT (classic) → scopes: `repo` + `workflow` |
-| 4 | Subdomain + A-Record | DNS A-Record pointing to VPS IP |
+| 3 | GitHub Token | https://github.com/settings/tokens/new → scopes: `repo` + `workflow` |
 
 ### Connecting Projects
 
@@ -93,6 +92,30 @@ Located at `/home/claude-dev/.just-ship/server-config.json`:
   }
 }
 ```
+
+## HTTPS einrichten (optional)
+
+Der VPS laeuft standardmaessig ohne HTTPS auf `http://IP:3001`. Das funktioniert, weil die Kommunikation Server-to-Server ist (Board-Backend → VPS) — kein Browser involviert.
+
+**Wann HTTPS sinnvoll ist:**
+
+- Wenn der API Key (`X-Pipeline-Key`) nicht im Klartext ueber das Internet gesendet werden soll
+- Wenn der VPS auch von Browsern direkt erreichbar sein soll
+- In Umgebungen mit hoeheren Sicherheitsanforderungen
+
+**Wie:**
+
+1. Subdomain anlegen: `just-ship.deinedomain.de` → DNS A-Record auf VPS-IP
+2. Caddyfile erstellen:
+   ```
+   just-ship.deinedomain.de {
+       reverse_proxy pipeline-server:3001
+   }
+   ```
+3. `docker-compose.yml` nutzt bereits einen Caddy-Service — nur den Caddy-Container aktivieren und das Caddyfile ablegen
+4. Caddy holt sich automatisch ein Let's Encrypt Zertifikat
+
+**Ohne HTTPS** ist das Risiko gering: Jemand muesste gezielt den Netzwerkpfad zwischen dem Board-Server und dem VPS abhoeren, um den 64-Zeichen API Key abzufangen. Fuer ein persoenliches Dev-Setup ist das vertretbar.
 
 ## Update
 

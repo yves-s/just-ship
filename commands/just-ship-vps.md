@@ -1,6 +1,6 @@
 ---
 name: just-ship-vps
-description: Autonomes Dev-Environment auf einem VPS einrichten — Docker, HTTPS, Pipeline-Server
+description: Autonomes Dev-Environment auf einem VPS einrichten — Docker, Pipeline-Server
 ---
 
 # /just-ship-vps — VPS Setup
@@ -25,15 +25,14 @@ Ich richte jetzt just-ship auf deinem VPS ein. Dafuer brauche ich von dir:
    Danach sollte `ssh root@DEINE-IP` ohne Passwort funktionieren.
 
 3. **GitHub Personal Access Token**
-   → github.com → Settings → Developer Settings → Personal Access Tokens → Tokens (classic)
-   → Generate new token → Scopes: repo + workflow → Generate → Token kopieren
+   → https://github.com/settings/tokens/new
+   → Scopes: repo + workflow → Generate → Token kopieren
 
-4. **Domain/Subdomain fuer HTTPS**
-   → Setze einen DNS A-Record: just-ship.deinedomain.de → VPS-IP
-   → Beim Domain-Provider unter DNS-Einstellungen einen A-Record anlegen
-   → Die Subdomain muss auf die VPS-IP zeigen
+Gib mir diese 3 Dinge, dann mache ich den Rest.
 
-Gib mir diese 4 Dinge, dann mache ich den Rest.
+Optional: Wenn du HTTPS willst, brauchst du zusaetzlich eine Subdomain
+(z.B. just-ship.deinedomain.de) mit einem DNS A-Record auf die VPS-IP.
+Siehe vps/README.md → "HTTPS einrichten" fuer Details.
 ```
 
 Warte auf die Antwort des Users. Wenn alles da ist, weiter.
@@ -127,7 +126,15 @@ chmod 600 /home/claude-dev/.just-ship/server-config.json"
 
 Die Workspace-Felder werden in Phase 2 befuellt.
 
-### 1.9 Caddyfile erstellen
+### 1.9 Docker Image bauen und starten
+
+Ohne HTTPS (Default):
+
+```bash
+ssh root@<IP> "cd /home/claude-dev/just-ship && docker compose -f vps/docker-compose.yml up -d pipeline-server"
+```
+
+Mit HTTPS (falls User eine Domain angegeben hat): Zuerst Caddyfile erstellen, dann alle Services starten:
 
 ```bash
 ssh root@<IP> "cat > /home/claude-dev/just-ship/vps/Caddyfile << 'CADDYEOF'
@@ -136,33 +143,44 @@ ssh root@<IP> "cat > /home/claude-dev/just-ship/vps/Caddyfile << 'CADDYEOF'
 }
 CADDYEOF
 chown claude-dev:claude-dev /home/claude-dev/just-ship/vps/Caddyfile"
+
+ssh root@<IP> "cd /home/claude-dev/just-ship && docker compose -f vps/docker-compose.yml up -d"
 ```
 
-Ersetze `<domain>` mit der Subdomain des Users.
-
-### 1.10 Docker Image bauen und starten
+### 1.10 Verifizieren
 
 ```bash
-ssh root@<IP> "cd /home/claude-dev/just-ship && docker compose -f vps/docker-compose.yml build && docker compose -f vps/docker-compose.yml up -d"
-```
-
-### 1.11 Verifizieren
-
-Warte 10 Sekunden (Caddy braucht Zeit fuer das Zertifikat), dann:
-
-```bash
-curl -s "https://<domain>/health"
+ssh root@<IP> "curl -s http://localhost:3001/health"
 ```
 
 Erwartete Antwort: `{"status":"ok","mode":"multi-project","running":null}`
+
+Falls HTTPS aktiv, auch extern pruefen:
+```bash
+curl -s "https://<domain>/health"
+```
 
 Falls fehlschlaegt: Container-Logs pruefen:
 ```bash
 ssh root@<IP> "cd /home/claude-dev/just-ship && docker compose -f vps/docker-compose.yml logs --tail=50"
 ```
 
-### 1.12 Ergebnis melden
+### 1.11 Ergebnis melden
 
+Ohne HTTPS:
+```
+VPS ist eingerichtet!
+
+- Server: http://<IP>:3001
+- Pipeline Key: <PIPELINE_KEY>
+- Status: Bereit fuer Projekte
+
+HTTPS ist nicht aktiv. Fuer HTTPS siehe vps/README.md → "HTTPS einrichten".
+
+Naechster Schritt: Projekt verbinden. Sag mir welches Projekt du anbinden willst.
+```
+
+Mit HTTPS:
 ```
 VPS ist eingerichtet!
 
@@ -251,7 +269,7 @@ ssh root@<IP> "cd /home/claude-dev/just-ship && docker compose -f vps/docker-com
 ### 2.8 Verifizieren
 
 ```bash
-curl -s "https://<domain>/health"
+ssh root@<IP> "curl -s http://localhost:3001/health"
 ```
 
 Sollte jetzt das Projekt listen.
@@ -266,7 +284,7 @@ Projekt <name> ist verbunden!
 Damit der "Develop" Button im Board funktioniert, muessen noch die Pipeline-Settings
 im Workspace konfiguriert werden:
 
-- Pipeline URL: https://<domain>
+- Pipeline URL: http://<IP>:3001 (oder https://<domain> falls HTTPS aktiv)
 - Pipeline Key: <PIPELINE_KEY>
 
 Das kann im Board unter Settings → Workspace → Pipeline konfiguriert werden.
@@ -276,5 +294,6 @@ Das kann im Board unter Settings → Workspace → Pipeline konfiguriert werden.
 
 - **SSH schlaegt fehl:** User anweisen ssh-copy-id nochmal zu machen, Firewall/Port 22 pruefen
 - **Docker Build fehlschlaegt:** Logs zeigen, meist fehlende Dependencies oder Netzwerk
+- **Port 3001 nicht erreichbar:** Firewall pruefen, `ufw allow 3001/tcp` oder Hostinger Firewall-Settings
 - **HTTPS-Zertifikat fehlschlaegt:** DNS A-Record pruefen (kann bis zu 24h dauern), Port 80+443 muessen offen sein
 - **Health-Check fehlschlaegt:** Container-Logs pruefen, Port-Mapping verifizieren
