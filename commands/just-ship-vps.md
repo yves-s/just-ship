@@ -1,6 +1,6 @@
 ---
 name: just-ship-vps
-description: Autonomes Dev-Environment auf einem VPS einrichten — Docker, Pipeline-Server
+description: VPS verwalten — Status pruefen, Projekte verbinden, neuen VPS einrichten
 ---
 
 # /just-ship-vps — VPS Setup
@@ -18,7 +18,102 @@ Wenn du Werte gesammelt hast, zeige sie maskiert:
 
 Die echten Werte werden direkt per SSH auf den VPS geschrieben — sie muessen nie im Chat sichtbar sein.
 
-## Voraussetzungen
+## Phase 0: VPS-Status pruefen
+
+**IMMER zuerst ausfuehren** bevor du den User nach Daten fragst.
+
+### 0.1 Workspace-ID ermitteln
+
+Lies die `pipeline.workspace_id` aus `project.json` des aktuellen Projekts:
+
+```bash
+WS_ID=$(node -e "process.stdout.write(require('./project.json').pipeline?.workspace_id || '')")
+```
+
+Falls keine `workspace_id` vorhanden → direkt zu "Voraussetzungen" (Neuer VPS).
+
+### 0.2 VPS-URL aus der Pipeline-DB pruefen
+
+Via Supabase MCP (Pipeline-DB `wsmnutkobalfrceavpxs`):
+
+```sql
+SELECT id, name, vps_url, vps_api_key
+FROM public.workspaces
+WHERE id = '<workspace_id>';
+```
+
+### 0.3 Entscheidungsbaum
+
+```
+vps_url ist leer oder NULL?
+  → JA: Neuer VPS → weiter mit "Voraussetzungen"
+  → NEIN: VPS existiert bereits → 0.4 Health-Check
+```
+
+### 0.4 Health-Check auf bestehenden VPS
+
+Extrahiere die IP/Domain aus `vps_url` und pruefe:
+
+```bash
+curl -sf "<vps_url>/health" --max-time 5
+```
+
+```
+Health-Check erfolgreich ({"status":"ok"})?
+  → JA: VPS laeuft → 0.5 Status melden
+  → NEIN: VPS nicht erreichbar → 0.6 Diagnose anbieten
+```
+
+### 0.5 VPS laeuft — Status melden und Optionen anbieten
+
+```
+VPS ist bereits eingerichtet und laeuft!
+
+- Server: <vps_url>
+- Status: <health-response>
+
+Was moechtest du tun?
+1. **Weiteres Projekt verbinden** → Phase 2
+2. **VPS updaten** (just-ship + Docker Image neu bauen)
+3. **VPS-Status + Logs anzeigen**
+```
+
+Warte auf die Antwort des Users und fuehre die gewaehlte Option aus:
+- **Option 1:** Springe zu Phase 2 (Projekt verbinden)
+- **Option 2:** Fuehre das Update aus:
+  ```bash
+  # IP/Domain aus vps_url extrahieren
+  ssh root@<IP> "cd /home/claude-dev/just-ship && git pull && docker compose -f vps/docker-compose.yml build --no-cache pipeline-server && docker compose -f vps/docker-compose.yml up -d pipeline-server"
+  ```
+  Dann Health-Check und Ergebnis melden.
+- **Option 3:** Zeige Logs und Container-Status:
+  ```bash
+  ssh root@<IP> "docker ps --filter name=pipeline && docker logs --tail 30 \$(docker ps -q --filter name=pipeline) 2>&1"
+  ```
+
+### 0.6 VPS nicht erreichbar — Diagnose
+
+```
+VPS ist konfiguriert (<vps_url>), aber der Health-Check schlaegt fehl.
+
+Moegliche Ursachen:
+- Server ist gestoppt → Container neu starten
+- Netzwerk/Firewall blockiert den Port
+- Domain/DNS stimmt nicht mehr
+
+Soll ich per SSH debuggen? Dafuer brauche ich die VPS IP-Adresse.
+```
+
+Falls der User die IP gibt, SSH-Verbindung testen und Container-Status pruefen:
+```bash
+ssh -o ConnectTimeout=5 root@<IP> "docker ps --filter name=pipeline && docker logs --tail 20 \$(docker ps -q --filter name=pipeline) 2>&1"
+```
+
+---
+
+## Voraussetzungen (Neuer VPS)
+
+Nur wenn Phase 0 ergeben hat, dass kein VPS konfiguriert ist.
 
 Teile dem User mit, was du brauchst. Gib klare Anweisungen, keine Fragen:
 
