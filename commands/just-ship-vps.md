@@ -128,11 +128,13 @@ ssh root@<IP> "su - claude-dev -c 'git clone https://github.com/yves-s/just-ship
 
 ### 1.7 Globale Env-Datei erstellen
 
-Erstelle `/home/claude-dev/.env` mit dem GitHub Token:
+Erstelle `/home/claude-dev/.env` mit GitHub Token und Anthropic API Key.
+Diese gelten global fuer alle Projekte auf dem VPS:
 
 ```bash
 ssh root@<IP> "cat > /home/claude-dev/.env << 'ENVEOF'
 GH_TOKEN=<github-token>
+ANTHROPIC_API_KEY=<anthropic-key>
 ENVEOF
 chmod 600 /home/claude-dev/.env && chown claude-dev:claude-dev /home/claude-dev/.env"
 ```
