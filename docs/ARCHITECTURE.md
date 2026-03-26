@@ -231,26 +231,42 @@ The `load-agents.ts` module parses these definitions at runtime, extracting tool
 
 ### Orchestrator Workflow
 
-The orchestrator follows a strict 5-phase pipeline:
+Every `/develop` run executes a strict 10-step pipeline. No step is optional, no step requires human intervention:
 
 ```
-Phase 1: Planning (Orchestrator itself)
-  +-- Read 5-10 affected files, formulate agent instructions
-
-Phase 2: Implementation (Sub-agents, parallelized)
-  +-- data-engineer (if schema changes needed) --> runs FIRST
-  +-- backend + frontend (in parallel after schema is done)
-  +-- Other agents as needed
-
-Phase 3: Build Check (Bash command)
-  +-- DevOps agent only spawned on failure
-
-Phase 4: Review (Single QA agent)
-  +-- AC verification + security quick-check combined
-
-Phase 5: Ship (/ship command)
-  +-- Commit --> Push --> PR --> Board status "in_review"
+ 1  Ticket finden        Pick next ready_to_develop ticket from Board API
+ 2  Ticket übernehmen    Display ticket, continue immediately (no confirmation)
+ 3  Branch + Status      Status → in_progress, create feature branch in worktree, send event
+ 3½ Triage               Haiku analyzes ticket quality, enriches description, sets QA tier
+ 4  Planning             Orchestrator reads 5-10 affected files, formulates agent instructions
+ 5  Implementation       Sub-agents in parallel (data-engineer first if schema changes)
+ 6  Build Check          Run build commands -- DevOps agent only on failure
+ 7  Review               QA agent checks acceptance criteria + security
+ 8  Docs Check           Auto-update CHANGELOG, README, ARCHITECTURE, VPS docs, CONTRIBUTING
+ 9  Ship (no merge)      Commit → Push → PR → status "in_review" → Vercel preview URL
+10  Automated QA         Build + tests + optional Playwright screenshots, QA report on PR
 ```
+
+The human only reviews the PR and says "merge".
+
+#### Step 8: Docs Check
+
+Documentation is not a separate task -- it is an automated step in every development run. The agent analyzes `git diff` to determine which docs are affected:
+
+| Changed files | Updated docs |
+|---|---|
+| Any change (always) | `CHANGELOG.md` -- entry under `[Unreleased]` (Keep-a-Changelog) |
+| `commands/*.md` | `README.md` -- commands table + architecture |
+| `agents/*.md` | `README.md` -- agents table |
+| `skills/*.md` | `README.md` -- skills table |
+| Pipeline, agents, commands | `README.md` -- workflow diagram |
+| Pipeline, agents, config | `docs/ARCHITECTURE.md` -- affected sections |
+| Architecture structures | `CLAUDE.md` -- architecture section |
+| Commands, agents, skills | `templates/CLAUDE.md` -- template for new projects |
+| VPS, worker, server | `vps/README.md` -- VPS-specific docs |
+| Workflow, conventions | `CONTRIBUTING.md` -- contributing guidelines |
+
+Only existing files are updated -- no new docs are created. Docs changes are part of the same commit as the code.
 
 ### Parallelization Strategy
 

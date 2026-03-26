@@ -118,17 +118,44 @@ Ticket lifecycle (Board):
   ready_to_develop --> in_progress --> in_review --> done
 ```
 
-### Orchestrator Phases
+### The /develop Pipeline (10 Steps)
+
+Every `/develop` run executes a strict 10-step pipeline. No step is optional, no step requires human intervention.
 
 ```
-Phase 0: Triage          Haiku analyzes ticket quality, enriches unclear descriptions
-Phase 1: Planning        Orchestrator reads 5-10 affected files, formulates agent instructions
-Phase 2: Implementation  Sub-agents execute in parallel (data-engineer first if schema changes)
-         ask-human       If uncertain: pause pipeline, ask via Board + Telegram, resume on answer
-Phase 3: Build Check     Bash command -- DevOps agent only on failure
-Phase 4: Review          Single QA agent -- acceptance criteria + security quick-check
-Phase 5: Ship            Commit --> Push --> PR --> Board status "in_review" --> STOP
+ 1  Ticket finden        Pick next ready_to_develop ticket from Board API
+ 2  Ticket übernehmen    Display ticket, continue immediately (no confirmation)
+ 3  Branch + Status      Status → in_progress, create feature branch in worktree, send pipeline event
+ 3½ Triage               Haiku analyzes ticket quality, enriches description if unclear, sets QA tier
+ 4  Planning             Orchestrator reads 5-10 affected files, formulates agent instructions
+ 5  Implementation       Sub-agents in parallel (data-engineer first if schema changes)
+ 6  Build Check          Run build commands -- DevOps agent only on failure
+ 7  Review               QA agent checks acceptance criteria + security
+ 8  Docs Check           Auto-update CHANGELOG, README, ARCHITECTURE, VPS docs (see below)
+ 9  Ship (no merge)      Commit → Push → PR → status "in_review" → Vercel preview URL
+10  Automated QA         Build + tests + optional Playwright screenshots, QA report as PR comment
 ```
+
+The human only reviews the PR and says "merge".
+
+### Step 8: Docs Check
+
+Documentation is not a separate task -- it is an automated step in every development run. The agent analyzes `git diff` to determine which docs are affected:
+
+| Changed files | Updated docs |
+|---|---|
+| Any change (always) | `CHANGELOG.md` -- entry under `[Unreleased]` (Keep-a-Changelog) |
+| `commands/*.md` | `README.md` -- commands table + architecture |
+| `agents/*.md` | `README.md` -- agents table |
+| `skills/*.md` | `README.md` -- skills table |
+| Pipeline, agents, commands | `README.md` -- workflow diagram |
+| Pipeline, agents, config | `docs/ARCHITECTURE.md` -- affected sections |
+| Architecture structures | `CLAUDE.md` -- architecture section |
+| Commands, agents, skills | `templates/CLAUDE.md` -- template for new projects |
+| VPS, worker, server | `vps/README.md` -- VPS-specific docs |
+| Workflow, conventions | `CONTRIBUTING.md` -- contributing guidelines |
+
+Docs changes are part of the same commit as the code. No separate PR, no "we'll do it later".
 
 ---
 
