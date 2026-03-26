@@ -257,6 +257,8 @@ Branch ist bereits erstellt: ${branchName}`;
         persistSession: true,
         abortController: queryAbortController,
         env: {
+          ...process.env,
+          ...(opts.env ?? {}),
           TICKET_NUMBER: ticket.ticketId,
           BOARD_API_URL: config.pipeline.apiUrl,
           PIPELINE_KEY: config.pipeline.apiKey,
@@ -462,6 +464,8 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
         resume: resumeSessionId,
         abortController: queryAbortController,
         env: {
+          ...process.env,
+          ...(opts.env ?? {}),
           TICKET_NUMBER: ticket.ticketId,
           BOARD_API_URL: config.pipeline.apiUrl,
           PIPELINE_KEY: config.pipeline.apiKey,
