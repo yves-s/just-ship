@@ -38,14 +38,19 @@ Ich richte jetzt just-ship auf deinem VPS ein. Dafuer brauche ich von dir:
 3. **GitHub Personal Access Token**
    → https://github.com/settings/tokens/new
    → Scopes: repo, workflow, read:org → Generate → Token kopieren
+   → WICHTIG: read:org wird benoetigt, damit gh auth funktioniert
 
-4. **Subdomain fuer HTTPS** (empfohlen)
+4. **Anthropic API Key**
+   → https://console.anthropic.com/settings/keys → Key kopieren
+   → Wird fuer den Pipeline-Agent benoetigt (Claude Code CLI auf dem VPS)
+
+5. **Subdomain fuer HTTPS** (empfohlen)
    → Setze einen DNS A-Record: just-ship.deinedomain.de → VPS-IP
    → Beim Domain-Provider unter DNS-Einstellungen einen A-Record anlegen
    → Paste die URL hier in den Chat, dann richte ich HTTPS gleich mit ein
-   → Ohne HTTPS wird der API Key unverschluesselt uebertragen (siehe vps/README.md → "HTTPS einrichten")
+   → Ohne HTTPS wird der API Key unverschluesselt uebertragen
 
-Gib mir diese 4 Dinge, dann mache ich den Rest.
+Gib mir diese 5 Dinge, dann mache ich den Rest.
 ```
 
 Warte auf die Antwort des Users. Wenn alles da ist, weiter.
@@ -57,7 +62,7 @@ Alle Schritte laufen per SSH. Verwende `ssh root@<IP> "<command>"` fuer jeden Be
 ### 1.1 SSH-Verbindung pruefen
 
 ```bash
-ssh -o ConnectTimeout=5 root@<IP> "echo 'SSH OK'"
+ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new root@<IP> "echo 'SSH OK'"
 ```
 
 Falls fehlschlaegt: Sage dem User was zu tun ist (ssh-copy-id nochmal, Firewall pruefen).
@@ -68,21 +73,45 @@ Falls fehlschlaegt: Sage dem User was zu tun ist (ssh-copy-id nochmal, Firewall 
 ssh root@<IP> "apt-get update && apt-get upgrade -y"
 ```
 
-### 1.3 Docker installieren
+### 1.3 Docker + gh CLI installieren
 
+Docker:
 ```bash
 ssh root@<IP> "curl -fsSL https://get.docker.com | sh"
 ```
 
-Pruefen:
+gh CLI auf dem Host installieren (wird fuer setup.sh und claude-dev User gebraucht):
 ```bash
-ssh root@<IP> "docker --version && docker compose version"
+ssh root@<IP> "curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null && ARCH=\$(dpkg --print-architecture) && echo \"deb [arch=\${ARCH} signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main\" > /etc/apt/sources.list.d/github-cli.list && apt-get update -qq && apt-get install -y gh -qq"
 ```
 
-### 1.4 User erstellen
+Pruefen:
+```bash
+ssh root@<IP> "docker --version && docker compose version && gh --version"
+```
+
+### 1.4 User erstellen + authentifizieren
 
 ```bash
 ssh root@<IP> "id claude-dev 2>/dev/null || (useradd -m -s /bin/bash claude-dev && usermod -aG docker claude-dev)"
+```
+
+Git-Identity und GitHub-Auth fuer claude-dev einrichten:
+```bash
+ssh root@<IP> "su - claude-dev -c 'git config --global user.name \"Claude Dev\" && git config --global user.email \"claude-dev@pipeline\" && git config --global init.defaultBranch main'"
+ssh root@<IP> "su - claude-dev -c 'echo <github-token> | gh auth login --with-token && gh auth setup-git'"
+```
+
+Falls `gh auth login` mit `missing required scope 'read:org'` fehlschlaegt:
+Der User muss einen neuen Token mit `read:org` Scope erstellen. Sage dem User:
+```
+Der GitHub Token braucht den Scope `read:org`. Bitte erstelle einen neuen Token mit:
+repo + workflow + read:org → https://github.com/settings/tokens/new
+```
+
+Alternativ als Fallback: `GH_TOKEN` als Env-Var setzen (umgeht die Scope-Validierung):
+```bash
+ssh root@<IP> "su - claude-dev -c 'echo \"export GH_TOKEN=<github-token>\" >> ~/.bashrc && GH_TOKEN=<github-token> gh auth setup-git 2>/dev/null || true'"
 ```
 
 ### 1.5 Verzeichnisse anlegen
@@ -91,23 +120,15 @@ ssh root@<IP> "id claude-dev 2>/dev/null || (useradd -m -s /bin/bash claude-dev 
 ssh root@<IP> "mkdir -p /home/claude-dev/projects /home/claude-dev/.just-ship && chown -R claude-dev:claude-dev /home/claude-dev"
 ```
 
-### 1.6 gh CLI auf dem Host installieren
-
-gh wird auf dem Host benoetigt (nicht nur im Docker-Container), weil setup.sh es fuer git-Auth verwendet:
-
-```bash
-ssh root@<IP> "curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && echo 'deb [arch=\$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main' | tee /etc/apt/sources.list.d/github-cli.list && apt-get update && apt-get install -y gh"
-```
-
-### 1.7 Just-Ship Framework klonen
+### 1.6 Just-Ship Framework klonen
 
 ```bash
 ssh root@<IP> "su - claude-dev -c 'git clone https://github.com/yves-s/just-ship.git /home/claude-dev/just-ship 2>/dev/null || (cd /home/claude-dev/just-ship && git pull)'"
 ```
 
-### 1.8 Globale Env-Datei erstellen und Git/GitHub Auth konfigurieren
+### 1.7 Globale Env-Datei erstellen
 
-Erstelle `/home/claude-dev/.env` mit dem GitHub Token und konfiguriere git + gh Auth auf dem Host:
+Erstelle `/home/claude-dev/.env` mit dem GitHub Token:
 
 ```bash
 ssh root@<IP> "cat > /home/claude-dev/.env << 'ENVEOF'
@@ -116,16 +137,7 @@ ENVEOF
 chmod 600 /home/claude-dev/.env && chown claude-dev:claude-dev /home/claude-dev/.env"
 ```
 
-Git-Identity und GitHub-Auth fuer den claude-dev User einrichten.
-WICHTIG: Verwende `GH_TOKEN` Env-Var statt `gh auth login --with-token` (vermeidet Scope-Validierungsprobleme):
-
-```bash
-ssh root@<IP> "su - claude-dev -c 'git config --global user.name \"Claude Dev\" && git config --global user.email \"claude-dev@pipeline\" && git config --global init.defaultBranch main'"
-ssh root@<IP> "su - claude-dev -c 'echo \"export GH_TOKEN=<github-token>\" >> ~/.bashrc'"
-ssh root@<IP> "su - claude-dev -c 'GH_TOKEN=<github-token> gh auth setup-git'"
-```
-
-### 1.9 Server-Config erstellen
+### 1.8 Server-Config erstellen
 
 Generiere einen zufaelligen Pipeline Key:
 
@@ -156,12 +168,12 @@ chmod 600 /home/claude-dev/.just-ship/server-config.json"
 
 Die Workspace-Felder werden in Phase 2 befuellt.
 
-### 1.10 Docker Image bauen und starten
+### 1.9 Docker Image bauen und starten
 
 Ohne HTTPS (Default):
 
 ```bash
-ssh root@<IP> "cd /home/claude-dev/just-ship && docker compose -f vps/docker-compose.yml up -d pipeline-server"
+ssh root@<IP> "cd /home/claude-dev/just-ship && docker compose -f vps/docker-compose.yml build pipeline-server && docker compose -f vps/docker-compose.yml up -d pipeline-server"
 ```
 
 Mit HTTPS (falls User eine Domain angegeben hat): Zuerst Caddyfile erstellen, dann alle Services starten:
@@ -174,10 +186,12 @@ ssh root@<IP> "cat > /home/claude-dev/just-ship/vps/Caddyfile << 'CADDYEOF'
 CADDYEOF
 chown claude-dev:claude-dev /home/claude-dev/just-ship/vps/Caddyfile"
 
-ssh root@<IP> "cd /home/claude-dev/just-ship && docker compose -f vps/docker-compose.yml up -d"
+ssh root@<IP> "cd /home/claude-dev/just-ship && docker compose -f vps/docker-compose.yml build pipeline-server && docker compose -f vps/docker-compose.yml up -d"
 ```
 
-### 1.11 Verifizieren
+### 1.10 Verifizieren
+
+Warte 10 Sekunden (Caddy braucht Zeit fuer HTTPS-Zertifikat), dann:
 
 ```bash
 ssh root@<IP> "curl -s http://localhost:3001/health"
@@ -190,19 +204,25 @@ Falls HTTPS aktiv, auch extern pruefen:
 curl -s "https://<domain>/health"
 ```
 
-Falls fehlschlaegt: Container-Logs pruefen:
+Falls Server restartet oder keine Antwort kommt, debuggen:
 ```bash
-ssh root@<IP> "cd /home/claude-dev/just-ship && docker compose -f vps/docker-compose.yml logs --tail=50"
+ssh root@<IP> "docker logs <container-name> 2>&1"
+ssh root@<IP> "docker inspect <container-name> --format '{{.State.Status}} exit={{.State.ExitCode}}'"
 ```
 
-### 1.12 Ergebnis melden
+Falls Container restartet ohne Logs — Entrypoint crasht. Mit ueberschriebenem Entrypoint testen:
+```bash
+ssh root@<IP> "docker run --rm --env-file /home/claude-dev/.env -e SERVER_CONFIG_PATH=/home/claude-dev/.just-ship/server-config.json -v /home/claude-dev/.just-ship:/home/claude-dev/.just-ship:ro --entrypoint sh <image-name> -c 'cd /app && node --import tsx pipeline/server.ts 2>&1'"
+```
+
+### 1.11 Ergebnis melden
 
 Ohne HTTPS:
 ```
 VPS ist eingerichtet!
 
 - Server: http://<IP>:3001
-- Pipeline Key: <PIPELINE_KEY>
+- Pipeline Key: <PIPELINE_KEY> (maskiert)
 - Status: Bereit fuer Projekte
 
 HTTPS ist nicht aktiv. Fuer HTTPS siehe vps/README.md → "HTTPS einrichten".
@@ -218,7 +238,7 @@ Mit HTTPS:
 VPS ist eingerichtet!
 
 - Server: https://<domain>
-- Pipeline Key: <PIPELINE_KEY>
+- Pipeline Key: <PIPELINE_KEY> (maskiert)
 - Status: Bereit fuer Projekte
 
 **Naechster Schritt: Projekt verbinden.**
@@ -245,24 +265,13 @@ BOARD_URL=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('
 API_KEY=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).api_key)")
 ```
 
-### 2.2 Lokale Env-Vars sammeln
+### 2.2 Env-Vars sammeln
 
-Lies aus dem lokalen Projekt:
-- `.env` oder `.env.local` — suche nach ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY, etc.
-- Frage den User ob noch weitere Env-Vars benoetigt werden
+Der ANTHROPIC_API_KEY wurde in den Voraussetzungen schon gesammelt. Falls nicht vorhanden, den User fragen.
 
-**Secrets maskieren!** Zeige dem User nur maskierte Werte zur Bestaetigung:
-```
-Ich habe folgende Env-Vars gefunden:
-
-- ANTHROPIC_API_KEY=sk-ant-...d4f8
-- SUPABASE_URL=https://xyz.supabase.co
-- SUPABASE_SERVICE_KEY=eyJh...Rk9Q
-
-Soll ich diese auf den VPS uebertragen?
-```
-
-URLs (SUPABASE_URL etc.) koennen im Klartext gezeigt werden — nur Keys/Tokens maskieren.
+Zusaetzlich aus dem lokalen Projekt pruefen:
+- `.env` oder `.env.local` — suche nach SUPABASE_URL, SUPABASE_SERVICE_KEY, etc.
+- Falls weitere projektspezifische Env-Vars gefunden werden, dem User maskiert zeigen
 
 ### 2.3 Projekt auf VPS klonen
 
@@ -272,21 +281,18 @@ ssh root@<IP> "su - claude-dev -c 'git clone <repo-url> /home/claude-dev/project
 
 ### 2.4 setup.sh im Projekt ausfuehren
 
-**WICHTIG:** Falls das Projekt das just-ship Framework selbst ist (gleiche Repo-URL),
-setup.sh NICHT ausfuehren — es wuerde Symlinks auf sich selbst erstellen.
-Stattdessen diesen Schritt ueberspringen.
+`GH_TOKEN` muss als Env-Var gesetzt sein, damit `gh` im setup.sh authentifiziert ist:
 
 ```bash
-ssh root@<IP> "su - claude-dev -c 'cd /home/claude-dev/projects/<slug> && bash /home/claude-dev/just-ship/setup.sh'"
+ssh root@<IP> "su - claude-dev -c 'export GH_TOKEN=<github-token> && cd /home/claude-dev/projects/<slug> && bash /home/claude-dev/just-ship/setup.sh'"
 ```
 
 ### 2.5 Projekt-Env-Datei erstellen
 
 ```bash
 ssh root@<IP> "cat > /home/claude-dev/.env.<slug> << 'ENVEOF'
-ANTHROPIC_API_KEY=<key>
-SUPABASE_URL=<url>
-SUPABASE_SERVICE_KEY=<key>
+ANTHROPIC_API_KEY=<anthropic-key>
+GH_TOKEN=<github-token>
 # ... weitere projekt-spezifische vars
 ENVEOF
 chmod 600 /home/claude-dev/.env.<slug> && chown claude-dev:claude-dev /home/claude-dev/.env.<slug>"
@@ -311,7 +317,7 @@ Aktualisiere `/home/claude-dev/.just-ship/server-config.json`:
 }
 ```
 
-Verwende `node -e` oder `jq` um das JSON sauber zu mergen.
+Verwende `node -e` um das JSON sauber zu mergen.
 
 ### 2.7 Server neu starten
 
@@ -325,39 +331,59 @@ ssh root@<IP> "cd /home/claude-dev/just-ship && docker compose -f vps/docker-com
 ssh root@<IP> "curl -s http://localhost:3001/health"
 ```
 
-Sollte jetzt das Projekt listen.
-
-### 2.9 Pipeline-Settings im Board setzen
-
-Pipeline URL und Key automatisch via Board API konfigurieren, damit der "Develop" Button funktioniert.
-Das muss nur beim ersten Projekt gemacht werden — alle weiteren Projekte im selben Workspace nutzen dieselben Settings.
-
+Sollte jetzt das Projekt listen. Pruefe die Logs:
 ```bash
-PIPELINE_URL="http://<IP>:3001"  # oder https://<domain> falls HTTPS aktiv
-curl -s -X PATCH -H "X-Pipeline-Key: $API_KEY" \
-  -H "Content-Type: application/json" \
-  -d "{\"pipeline_url\": \"$PIPELINE_URL\", \"pipeline_key\": \"$PIPELINE_KEY\"}" \
-  "$BOARD_URL/api/workspaces/$WS_ID"
+ssh root@<IP> "docker logs <container-name> 2>&1 | tail -10"
 ```
 
-Falls die API keinen Workspace-PATCH-Endpoint hat, sage dem User:
+Erwartete Log-Zeile: `Projects: <slug>`
+
+### 2.9 Pipeline im Board registrieren
+
+Die Pipeline-Verbindung (URL + Key) wird automatisch im Board gesetzt via Supabase MCP.
+
+Bestimme die Pipeline-URL:
+- Mit HTTPS: `https://<domain>`
+- Ohne HTTPS: `http://<IP>:3001`
+
+Via Supabase MCP (Pipeline-DB `wsmnutkobalfrceavpxs`):
+
+```sql
+UPDATE public.workspaces
+SET vps_url = '<pipeline-url>', vps_api_key = '<PIPELINE_KEY>'
+WHERE id = '<workspace_id>'
+RETURNING id, name, vps_url;
 ```
-Trage diese Werte im Board unter Settings → Workspace → Pipeline ein:
-- Pipeline URL: <url>
-- Pipeline Key: <key> (maskiert anzeigen!)
+
+Falls der Supabase MCP nicht verfuegbar ist, dem User sagen:
+```
+Pipeline-Settings muessen manuell im Board konfiguriert werden:
+Board → Settings → Workspace → Pipeline
+- Pipeline URL: <pipeline-url>
+- Pipeline Key: <PIPELINE_KEY>
 ```
 
 ### 2.10 Ergebnis melden
 
 ```
-Fertig! Projekt <name> ist mit dem VPS verbunden.
-Du kannst ab sofort im Board auf "Develop" klicken fuer Tickets in diesem Projekt.
+Projekt <name> ist verbunden!
+
+- Server: <pipeline-url>
+- Projekt: <slug> (project_id: <uuid>)
+- Board: Pipeline-Verbindung konfiguriert
+- Status: Bereit — "Develop" Button im Board funktioniert
+
+Der VPS empfaengt jetzt Tickets vom Board und entwickelt sie autonom.
 ```
 
 ## Fehlerbehandlung
 
 - **SSH schlaegt fehl:** User anweisen ssh-copy-id nochmal zu machen, Firewall/Port 22 pruefen
+- **gh auth: missing scope 'read:org':** User muss neuen Token mit read:org erstellen, oder GH_TOKEN env var als Fallback nutzen
+- **setup.sh: gh NOT FOUND:** gh CLI nicht auf dem Host installiert (Phase 1.3 nochmal pruefen)
+- **setup.sh haengt oder bricht ab:** `GH_TOKEN` env var muss gesetzt sein (Phase 2.4)
 - **Docker Build fehlschlaegt:** Logs zeigen, meist fehlende Dependencies oder Netzwerk
+- **Container restartet ohne Logs:** Entrypoint crasht — mit `--entrypoint sh` debuggen (Phase 1.10)
 - **Port 3001 nicht erreichbar:** Firewall pruefen, `ufw allow 3001/tcp` oder Hostinger Firewall-Settings
 - **HTTPS-Zertifikat fehlschlaegt:** DNS A-Record pruefen (kann bis zu 24h dauern), Port 80+443 muessen offen sein
 - **Health-Check fehlschlaegt:** Container-Logs pruefen, Port-Mapping verifizieren
