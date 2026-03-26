@@ -80,6 +80,11 @@ Docker:
 ssh root@<IP> "curl -fsSL https://get.docker.com | sh"
 ```
 
+Node.js 20 installieren (wird von setup.sh benoetigt):
+```bash
+ssh root@<IP> "curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs"
+```
+
 gh CLI auf dem Host installieren (wird fuer setup.sh und claude-dev User gebraucht):
 ```bash
 ssh root@<IP> "curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null && ARCH=\$(dpkg --print-architecture) && echo \"deb [arch=\${ARCH} signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main\" > /etc/apt/sources.list.d/github-cli.list && apt-get update -qq && apt-get install -y gh -qq"
@@ -87,7 +92,7 @@ ssh root@<IP> "curl -fsSL https://cli.github.com/packages/githubcli-archive-keyr
 
 Pruefen:
 ```bash
-ssh root@<IP> "docker --version && docker compose version && gh --version"
+ssh root@<IP> "docker --version && docker compose version && node --version && gh --version"
 ```
 
 ### 1.4 User erstellen + authentifizieren
@@ -180,7 +185,7 @@ Die Workspace-Felder werden in Phase 2 befuellt.
 Ohne HTTPS (Default):
 
 ```bash
-ssh root@<IP> "cd /home/claude-dev/just-ship && docker compose -f vps/docker-compose.yml build pipeline-server && docker compose -f vps/docker-compose.yml up -d pipeline-server"
+ssh root@<IP> "cd /home/claude-dev/just-ship && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml build pipeline-server && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d pipeline-server"
 ```
 
 Mit HTTPS (falls User eine Domain angegeben hat): Zuerst Caddyfile erstellen, dann alle Services starten:
@@ -193,7 +198,7 @@ ssh root@<IP> "cat > /home/claude-dev/just-ship/vps/Caddyfile << 'CADDYEOF'
 CADDYEOF
 chown claude-dev:claude-dev /home/claude-dev/just-ship/vps/Caddyfile"
 
-ssh root@<IP> "cd /home/claude-dev/just-ship && docker compose -f vps/docker-compose.yml build pipeline-server && docker compose -f vps/docker-compose.yml up -d"
+ssh root@<IP> "cd /home/claude-dev/just-ship && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml build pipeline-server && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d"
 ```
 
 ### 1.10 Verifizieren
@@ -329,7 +334,7 @@ Verwende `node -e` um das JSON sauber zu mergen.
 ### 2.7 Server neu starten
 
 ```bash
-ssh root@<IP> "cd /home/claude-dev/just-ship && docker compose -f vps/docker-compose.yml restart pipeline-server"
+ssh root@<IP> "cd /home/claude-dev/just-ship && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d --force-recreate pipeline-server"
 ```
 
 ### 2.8 Verifizieren
