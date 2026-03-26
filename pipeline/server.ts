@@ -23,9 +23,15 @@ let worktreeManager: WorktreeManager | null = null;
 if (isMultiProjectMode) {
   serverConfig = loadServerConfig(SERVER_CONFIG_PATH);
   PIPELINE_SERVER_KEY = serverConfig.server.pipeline_key;
-  const firstSlug = Object.keys(serverConfig.projects)[0];
-  PROJECT_DIR = serverConfig.projects[firstSlug].project_dir;
-  config = loadProjectConfig(PROJECT_DIR);
+  const projectSlugs = Object.keys(serverConfig.projects);
+  if (projectSlugs.length > 0) {
+    const firstSlug = projectSlugs[0];
+    PROJECT_DIR = serverConfig.projects[firstSlug].project_dir;
+    config = loadProjectConfig(PROJECT_DIR);
+  } else {
+    PROJECT_DIR = "/tmp";
+    config = loadProjectConfig("/tmp");
+  }
 } else {
   const required = ["ANTHROPIC_API_KEY", "GH_TOKEN", "PROJECT_DIR", "PIPELINE_SERVER_KEY"] as const;
   for (const key of required) {

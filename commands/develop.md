@@ -349,9 +349,43 @@ EOF
 )"
 ```
 
-**9d. Status auf "in_review" + Review-URL:**
+**9d. Change Summary ins Ticket schreiben:**
 
-PR-URL extrahieren:
+Generiere eine Zusammenfassung der Änderungen auf diesem Branch und schreibe sie ins Ticket:
+
+```bash
+MERGE_BASE=$(git merge-base main HEAD)
+CHANGED_FILES=$(git diff --name-status $MERGE_BASE..HEAD)
+COMMIT_LOG=$(git log --oneline $MERGE_BASE..HEAD)
+DIFF_STAT=$(git diff --stat $MERGE_BASE..HEAD | tail -1)
+REVIEW_URL=$(gh pr view --json url -q .url 2>/dev/null || echo "")
+```
+
+Baue daraus einen Markdown-String für das `summary`-Feld:
+- `## Changes Summary` als Überschrift
+- Geänderte Dateien gruppiert nach Status (Added/Modified/Deleted)
+- Commit-Liste
+- Diff-Statistik (letzte Zeile von `git diff --stat`)
+- PR-Link (falls vorhanden)
+
+**Board API (bevorzugt):**
+```bash
+curl -s -X PATCH -H "X-Pipeline-Key: {api_key}" \
+  -H "Content-Type: application/json" \
+  -d '{"summary": "{summary_markdown}"}' \
+  "{board_url}/api/tickets/{N}"
+```
+
+**Legacy Supabase MCP (Fallback):**
+```sql
+UPDATE public.tickets SET summary = '{summary_markdown}' WHERE number = {N} AND workspace_id = '{pipeline.workspace_id}';
+```
+
+Ausgabe: `✓ summary — Änderungszusammenfassung ins Ticket geschrieben`
+
+**9e. Status auf "in_review" + Review-URL:**
+
+PR-URL extrahieren (falls nicht schon in 9d geschehen):
 ```bash
 REVIEW_URL=$(gh pr view --json url -q .url 2>/dev/null || echo "")
 ```
@@ -371,7 +405,7 @@ UPDATE public.tickets SET status = 'in_review', review_url = '$REVIEW_URL' WHERE
 
 Der PR bleibt offen bis der User ihn freigibt (via `/ship` oder "passt").
 
-### 9e. Vercel Preview URL
+### 9f. Vercel Preview URL
 
 **Immer ausführen** — das Script erkennt automatisch ob ein Vercel-Deployment existiert und returned leer wenn nicht. Kein Config-Gate nötig.
 

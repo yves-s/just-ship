@@ -152,6 +152,7 @@ just-ship/                         # Framework repository
 |       +-- config.ts              # Project config loader
 |       +-- load-agents.ts         # Agent definition parser
 |       +-- event-hooks.ts         # Just Ship Board event streaming
+|       +-- change-summary.ts      # Git-based change summary generator
 +-- templates/                     # Templates for project files
 |   +-- CLAUDE.md                  # Project instructions template
 |   +-- project.json               # Project config template

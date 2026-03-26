@@ -16,13 +16,20 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 # Claude Code CLI
 RUN npm install -g @anthropic-ai/claude-code
 
-# Pipeline SDK
+# Pipeline SDK — install deps first for Docker layer caching
+COPY pipeline/package.json /app/pipeline/package.json
+RUN cd /app/pipeline && npm install
+
 COPY pipeline/ /app/pipeline/
+
 WORKDIR /app
+
+# Symlink node_modules so tsx/sdk are resolvable from /app
+RUN ln -s /app/pipeline/node_modules /app/node_modules
 
 # Entrypoint: configure git + gh auth, then start server
 COPY vps/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["npx", "tsx", "pipeline/server.ts"]
+CMD ["node", "--import", "tsx", "pipeline/server.ts"]

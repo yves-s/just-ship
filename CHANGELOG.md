@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- Change summary generation after agent runs — pipeline writes a human-readable summary of file changes, commits, and PR link to the ticket's `summary` field via Board API
 - Token cost estimation per ticket — Board aggregates `estimated_cost` alongside `total_tokens` using configurable per-model rates (Opus/Sonnet/Haiku)
 - Centralized token rate config (`token-rates.ts`) with blended pricing for agent workloads
 - Cost display in ticket detail view (e.g. "12.4k tokens · $0.07 est.")

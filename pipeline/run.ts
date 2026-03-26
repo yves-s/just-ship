@@ -6,6 +6,7 @@ import { loadAgents, loadOrchestratorPrompt, loadTriagePrompt } from "./lib/load
 import { createEventHooks, postPipelineEvent, type EventConfig } from "./lib/event-hooks.ts";
 import { runQaWithFixLoop } from "./lib/qa-fix-loop.ts";
 import type { QaContext } from "./lib/qa-runner.ts";
+import { generateChangeSummary } from "./lib/change-summary.ts";
 
 // --- Exported pipeline function (used by worker.ts) ---
 export interface PipelineOptions {
@@ -287,6 +288,27 @@ Branch ist bereits erstellt: ${branchName}`;
     }
 
     if (hasPipeline) await postPipelineEvent(eventConfig, "completed", "orchestrator");
+
+    // --- Generate and send change summary to ticket ---
+    if (hasPipeline) {
+      try {
+        const summary = generateChangeSummary({ workDir, baseBranch: "main" });
+        if (summary) {
+          await fetch(`${config.pipeline.apiUrl}/api/tickets/${ticket.ticketId}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Pipeline-Key": config.pipeline.apiKey,
+            },
+            body: JSON.stringify({ summary }),
+            signal: AbortSignal.timeout(8000),
+          });
+        }
+      } catch {
+        // Summary is best-effort — don't fail the pipeline
+        console.error("[Summary] Failed to generate or send change summary");
+      }
+    }
   } catch (error) {
     exitCode = 1;
     if (timedOut) {
@@ -469,6 +491,27 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
     }
 
     if (hasPipeline) await postPipelineEvent(eventConfig, "completed", "orchestrator");
+
+    // --- Generate and send change summary to ticket ---
+    if (hasPipeline) {
+      try {
+        const summary = generateChangeSummary({ workDir, baseBranch: "main" });
+        if (summary) {
+          await fetch(`${config.pipeline.apiUrl}/api/tickets/${ticket.ticketId}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Pipeline-Key": config.pipeline.apiKey,
+            },
+            body: JSON.stringify({ summary }),
+            signal: AbortSignal.timeout(8000),
+          });
+        }
+      } catch {
+        // Summary is best-effort — don't fail the pipeline
+        console.error("[Summary] Failed to generate or send change summary");
+      }
+    }
   } catch (error) {
     exitCode = 1;
     if (timedOut) {
