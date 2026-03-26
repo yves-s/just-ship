@@ -415,14 +415,59 @@ Ausgabe: `▶ qa-auto — Automatisierte QA ({qa_tier} tier)`
 
 | Tier | Was passiert |
 |------|-------------|
-| **full** | Build + Tests + Vercel Preview warten + Playwright Screenshots + Smoke Tests + Fix-Loops |
+| **full** | Build + Tests + Playwright Smoke Tests gegen Vercel Preview (falls `pipeline.hosting === "vercel"` und `$PREVIEW_URL` aus Schritt 9a vorhanden) |
 | **light** | Build + Tests (falls konfiguriert) |
 | **skip** | Nur Build-Check |
+
+#### 10a. Build + Tests (alle Tiers)
+
+Lies Build- und Test-Commands aus `project.json` und führe sie aus (identisch zu Schritt 6, aber als erneute Verification nach PR-Push).
+
+#### 10b. Playwright Smoke Tests (nur `full` tier + Vercel Preview)
+
+**Voraussetzung:** `qa_tier === "full"` UND `pipeline.hosting === "vercel"` in `project.json` UND `$PREVIEW_URL` aus Schritt 9a ist nicht leer.
+
+Falls eine dieser Bedingungen nicht erfüllt: Playwright komplett überspringen.
+
+**Playwright installieren (falls nötig):**
+```bash
+npx playwright install chromium 2>/dev/null || true
+```
+
+**Für jede Seite aus `qa_pages`** (oder `["/"]` falls leer) ein Smoke-Test-Script ausführen.
+Generiere `safeName` als filename-sicherer String aus `qa_page` (z.B. "/" → "index", "/about" → "about", "/" und "." durch "-" ersetzen):
+
+```bash
+node -e "
+const { chromium } = require('playwright');
+(async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  const errors = [];
+  page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+  const resp = await page.goto('${PREVIEW_URL}{qa_page}', { waitUntil: 'networkidle', timeout: 60000 });
+  const status = resp?.status() ?? 0;
+  await page.screenshot({ path: '/tmp/qa-screenshot-{safeName}.png' });
+  await browser.close();
+  console.log(JSON.stringify({ status, errors, ok: status >= 200 && status < 400 }));
+})();
+"
+```
+
+Ergebnis auswerten:
+- HTTP Status 2xx/3xx → passed
+- HTTP Status 4xx/5xx oder Navigation-Error → failed
+- Console-Errors erfassen aber nicht als blocking werten
+
+Screenshots per `Read`-Tool inspizieren und im QA-Report referenzieren.
+
+#### 10c. Fix-Loop (bei Fehlern)
 
 **Bei Fehlern:** Automatisch fixen (max 3 Versuche). Jeder Fix als eigener Commit: `fix(qa): address QA failures (attempt {N})`.
 Nach 3 gescheiterten Versuchen: trotzdem weitermachen, Fehler im PR-Kommentar dokumentieren.
 
-**QA-Report als PR-Kommentar + Labels:**
+#### 10d. QA-Report als PR-Kommentar + Labels
+
 ```bash
 gh pr comment --body-file /tmp/qa-report-{N}.md
 gh pr edit --add-label "qa:passed"        # alles grün

@@ -155,10 +155,13 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
   }
 
   const rawQa = rawPipeline.qa ?? {};
+  // Infer preview provider from pipeline.hosting if not explicitly set in qa config
+  const hosting = rawPipeline.hosting as string | undefined;
+  const inferredProvider = hosting === "vercel" ? "vercel" : "none";
   const qa: QaConfig = {
     maxFixIterations: Number(rawQa.max_fix_iterations ?? 3),
     playwrightTimeoutMs: Number(rawQa.playwright_timeout_ms ?? 60000),
-    previewProvider: (rawQa.preview_provider as "vercel" | "none") ?? "none",
+    previewProvider: (rawQa.preview_provider as "vercel" | "none") ?? inferredProvider,
     vercelProjectId: (rawQa.vercel_project_id as string) ?? "",
     vercelTeamId: (rawQa.vercel_team_id as string) ?? "",
     vercelPreviewPollIntervalMs: Number(rawQa.vercel_preview_poll_interval_ms ?? 10000),
