@@ -1,0 +1,32 @@
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - pipeline-server
+
+  pipeline-server:
+    build:
+      context: ..
+      dockerfile: vps/Dockerfile
+    restart: unless-stopped
+    expose:
+      - "3001"
+    volumes:
+      - /home/claude-dev/projects:/home/claude-dev/projects
+      - /home/claude-dev/.just-ship:/home/claude-dev/.just-ship:ro
+    env_file:
+      - /home/claude-dev/.env
+    environment:
+      - SERVER_CONFIG_PATH=/home/claude-dev/.just-ship/server-config.json
+
+volumes:
+  caddy_data:
+  caddy_config:
