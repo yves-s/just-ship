@@ -28,11 +28,13 @@ Ich richte jetzt just-ship auf deinem VPS ein. Dafuer brauche ich von dir:
    → https://github.com/settings/tokens/new
    → Scopes: repo + workflow → Generate → Token kopieren
 
-Gib mir diese 3 Dinge, dann mache ich den Rest.
+4. **Subdomain fuer HTTPS** (empfohlen)
+   → Setze einen DNS A-Record: just-ship.deinedomain.de → VPS-IP
+   → Beim Domain-Provider unter DNS-Einstellungen einen A-Record anlegen
+   → Paste die URL hier in den Chat, dann richte ich HTTPS gleich mit ein
+   → Ohne HTTPS wird der API Key unverschluesselt uebertragen (siehe vps/README.md → "HTTPS einrichten")
 
-Optional: Wenn du HTTPS willst, brauchst du zusaetzlich eine Subdomain
-(z.B. just-ship.deinedomain.de) mit einem DNS A-Record auf die VPS-IP.
-Siehe vps/README.md → "HTTPS einrichten" fuer Details.
+Gib mir diese 4 Dinge, dann mache ich den Rest.
 ```
 
 Warte auf die Antwort des Users. Wenn alles da ist, weiter.
@@ -177,7 +179,10 @@ VPS ist eingerichtet!
 
 HTTPS ist nicht aktiv. Fuer HTTPS siehe vps/README.md → "HTTPS einrichten".
 
-Naechster Schritt: Projekt verbinden. Sag mir welches Projekt du anbinden willst.
+**Naechster Schritt: Projekt verbinden.**
+
+Jetzt muss ich noch wissen, an welchem Projekt der VPS arbeiten soll.
+Sag mir einfach den Namen oder Pfad — z.B. "mein-projekt" oder "~/Developer/mein-projekt".
 ```
 
 Mit HTTPS:
@@ -188,7 +193,10 @@ VPS ist eingerichtet!
 - Pipeline Key: <PIPELINE_KEY>
 - Status: Bereit fuer Projekte
 
-Naechster Schritt: Projekt verbinden. Sag mir welches Projekt du anbinden willst.
+**Naechster Schritt: Projekt verbinden.**
+
+Jetzt muss ich noch wissen, an welchem Projekt der VPS arbeiten soll.
+Sag mir einfach den Namen oder Pfad — z.B. "mein-projekt" oder "~/Developer/mein-projekt".
 ```
 
 ## Phase 2: Projekt verbinden
