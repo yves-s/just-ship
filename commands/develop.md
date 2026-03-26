@@ -275,11 +275,32 @@ git diff --name-only $(git merge-base main HEAD) HEAD
 git status --porcelain
 ```
 
-Bestimme anhand der geänderten Dateien, welche Docs geprüft werden müssen. **Nur bestehende Dateien aktualisieren** — keine neuen Docs anlegen. Falls eine Zieldatei nicht existiert, diesen Eintrag überspringen.
+Der Docs-Check hat zwei Teile: einen **universellen** Teil (läuft in jedem Projekt) und einen **projektspezifischen** Teil (nur wenn die jeweiligen Dateien existieren).
+
+#### Teil 1: CHANGELOG (universell — immer ausführen)
+
+**CHANGELOG.md wird bei JEDER Änderung aktualisiert** — egal welches Projekt, egal welche Dateien sich geändert haben.
+
+Falls `CHANGELOG.md` nicht existiert, erstelle sie mit diesem Header:
+```markdown
+# Changelog
+
+All notable changes to this project will be documented in this file.
+Format: [Keep a Changelog](https://keepachangelog.com/)
+
+## [Unreleased]
+```
+
+Falls `CHANGELOG.md` existiert aber keine `[Unreleased]`-Sektion hat, füge sie als erste Sektion nach dem Header ein.
+
+**Format:** Keep-a-Changelog mit Gruppen `### Added`, `### Changed`, `### Fixed`, `### Removed`. Beschreibung auf Englisch, 1 Zeile pro Änderung. Nur Gruppen verwenden, die auch Einträge haben.
+
+#### Teil 2: Projektspezifische Docs (nur wenn Datei existiert)
+
+Prüfe ob die jeweilige Zieldatei existiert. **Nur bestehende Dateien aktualisieren** — keine neuen Docs anlegen. Falls eine Zieldatei nicht existiert, diesen Eintrag überspringen.
 
 | Geänderte Dateien | Zu prüfende Docs | Aktion |
 |---|---|---|
-| Jede Änderung (immer) | `CHANGELOG.md` | Eintrag unter `[Unreleased]` mit Typ (Added/Changed/Fixed/Removed) nach Keep-a-Changelog Format |
 | `commands/*.md` | `README.md` | Commands-Tabelle + Architecture-Abschnitt |
 | `agents/*.md` | `README.md` | Agents-Tabelle |
 | `skills/*.md` | `README.md` | Skills-Tabelle |
@@ -289,10 +310,7 @@ Bestimme anhand der geänderten Dateien, welche Docs geprüft werden müssen. **
 | `commands/*.md`, `agents/*.md`, `skills/*.md` | `templates/CLAUDE.md` | Template aktualisieren falls Commands/Agents/Skills-Referenzen enthalten |
 | `vps/**`, `pipeline/worker.ts`, `pipeline/server.ts` | `vps/README.md` | VPS-spezifische Doku |
 | Workflow, Conventions, Dev-Setup | `CONTRIBUTING.md` | Contributing Guidelines |
-| Keine der obigen Trigger-Dateien | — | Gesamten Schritt überspringen (CHANGELOG ausgenommen — wird immer geprüft) |
-
-**CHANGELOG.md — Keep-a-Changelog Format:**
-Falls keine `[Unreleased]`-Sektion existiert, füge sie als erste Sektion nach dem `# Changelog` Header ein. Einträge gruppieren nach: `### Added`, `### Changed`, `### Fixed`, `### Removed`. Beschreibung auf Englisch, 1 Zeile pro Änderung.
+| Keine der obigen Trigger-Dateien | — | Teil 2 überspringen |
 
 Falls Anpassung nötig: direkt mit Edit-Tool ändern.
 
@@ -303,7 +321,7 @@ Ausgabe pro geprüfter Datei:
 - `✓ docs — templates/CLAUDE.md aktualisiert`
 - `✓ docs — vps/README.md aktualisiert`
 - `✓ docs — CONTRIBUTING.md aktualisiert`
-- `✓ docs — keine Änderungen nötig` (falls nichts zu tun war)
+- `✓ docs — keine Änderungen nötig` (falls nur CHANGELOG und sonst nichts zu tun war)
 
 **NICHT STOPPEN.** SOFORT weiter zu Schritt 9.
 
