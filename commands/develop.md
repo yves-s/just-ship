@@ -151,9 +151,8 @@ git checkout -b {abgeleiteter-prefix}/{ticket-nummer}-{kurzbeschreibung}
 ```
 
 **3c) Active-Ticket für Shell-Hooks setzen** (damit SubagentStop-Events den Board erreichen):
-```bash
-echo "{N}" > .claude/.active-ticket
-```
+
+Nutze das **Write-Tool** (nicht Bash `echo >`) um die Datei `.claude/.active-ticket` mit dem Inhalt `{N}` zu schreiben. Das Write-Tool ist per `Write(**)` erlaubt und löst keine Permission-Prompt aus.
 
 **3d) Pipeline-Event senden** (Board zeigt aktiven Orchestrator):
 ```bash
