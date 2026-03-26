@@ -132,9 +132,14 @@ Erstelle `/home/claude-dev/.env` mit GitHub Token und Anthropic API Key.
 Diese gelten global fuer alle Projekte auf dem VPS:
 
 ```bash
-ssh root@<IP> "cat > /home/claude-dev/.env << 'ENVEOF'
+ssh root@<IP> "
+CLAUDE_UID=\$(id -u claude-dev)
+CLAUDE_GID=\$(id -g claude-dev)
+cat > /home/claude-dev/.env << ENVEOF
 GH_TOKEN=<github-token>
 ANTHROPIC_API_KEY=<anthropic-key>
+CLAUDE_UID=\$CLAUDE_UID
+CLAUDE_GID=\$CLAUDE_GID
 ENVEOF
 chmod 600 /home/claude-dev/.env && chown claude-dev:claude-dev /home/claude-dev/.env"
 ```

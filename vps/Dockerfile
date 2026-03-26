@@ -27,7 +27,7 @@ WORKDIR /app
 # Symlink node_modules so tsx/sdk are resolvable from /app
 RUN ln -s /app/pipeline/node_modules /app/node_modules
 
-# Non-root user matching host claude-dev UID/GID=1001
+# Non-root user — UID/GID is set at runtime via docker-compose `user:` directive
 # (Claude Code refuses --dangerously-skip-permissions as root)
 RUN groupadd -g 1001 claude-agent \
     && useradd -m -u 1001 -g 1001 -s /bin/bash claude-agent \
@@ -37,6 +37,7 @@ RUN groupadd -g 1001 claude-agent \
 COPY vps/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
+# Default non-root — overridden at runtime by docker-compose user: directive
 USER claude-agent
 
 ENTRYPOINT ["/app/entrypoint.sh"]
