@@ -472,18 +472,35 @@ Verwende `node -e` um das JSON sauber zu mergen.
 ssh root@<IP> "cd /home/claude-dev/just-ship && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d --force-recreate pipeline-server"
 ```
 
-### 2.8 Verifizieren
+### 2.8 Verifizieren — PFLICHT vor Erfolgsmeldung
 
+**Diese Verifizierung MUSS bestanden werden.** Melde NIEMALS Erfolg ohne dass alle Checks gruen sind.
+
+**Check 1: Health-Check**
 ```bash
 ssh root@<IP> "curl -s http://localhost:3001/health"
 ```
 
-Sollte jetzt das Projekt listen. Pruefe die Logs:
+**Check 2: Projekt in Server-Logs**
 ```bash
-ssh root@<IP> "docker logs <container-name> 2>&1 | tail -10"
+ssh root@<IP> "docker logs \$(docker ps -q --filter name=pipeline) 2>&1 | grep 'Projects:'"
+```
+Der Slug des neuen Projekts MUSS in der `Projects:` Zeile erscheinen.
+
+**Check 3: project_id ist auf dem VPS aufloesbar**
+```bash
+ssh root@<IP> "node -e \"
+  const cfg = JSON.parse(require('fs').readFileSync('/home/claude-dev/.just-ship/server-config.json','utf-8'));
+  const match = Object.entries(cfg.projects).find(([,p]) => p.project_id === '<project_id>');
+  if (match) { console.log('OK: ' + match[0]); process.exit(0); }
+  else { console.log('FAIL: project_id not found'); process.exit(1); }
+\""
 ```
 
-Erwartete Log-Zeile: `Projects: <slug>`
+**Falls ein Check fehlschlaegt:** Fehler analysieren und beheben. NICHT zu 2.10 weitergehen. Moegliche Ursachen:
+- Server-Config wurde nicht korrekt geschrieben → 2.6 wiederholen
+- Container wurde nicht neu gestartet → 2.7 wiederholen
+- Projekt-Verzeichnis existiert nicht → 2.3 wiederholen
 
 ### 2.9 Pipeline im Board registrieren
 
@@ -512,15 +529,27 @@ Board → Settings → Workspace → Pipeline
 
 ### 2.10 Ergebnis melden
 
+**NUR ausgeben wenn ALLE Checks aus 2.8 bestanden sind.**
+
 ```
 Projekt <name> ist verbunden!
 
 - Server: <pipeline-url>
 - Projekt: <slug> (project_id: <uuid>)
 - Board: Pipeline-Verbindung konfiguriert
+- Verifiziert: Health OK, Projekt in Server-Logs, project_id aufloesbar
 - Status: Bereit — "Develop" Button im Board funktioniert
 
 Der VPS empfaengt jetzt Tickets vom Board und entwickelt sie autonom.
+```
+
+**Falls Checks fehlgeschlagen:** Statt der Erfolgsmeldung den Fehler melden:
+```
+Projekt <name> konnte NICHT vollstaendig verbunden werden.
+
+- Server: <pipeline-url>
+- Fehlgeschlagene Checks: <liste>
+- Naechster Schritt: <was zu tun ist>
 ```
 
 ## Fehlerbehandlung
