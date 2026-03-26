@@ -37,7 +37,7 @@ Ich richte jetzt just-ship auf deinem VPS ein. Dafuer brauche ich von dir:
 
 3. **GitHub Personal Access Token**
    → https://github.com/settings/tokens/new
-   → Scopes: repo + workflow → Generate → Token kopieren
+   → Scopes: repo, workflow, read:org → Generate → Token kopieren
 
 4. **Subdomain fuer HTTPS** (empfohlen)
    → Setze einen DNS A-Record: just-ship.deinedomain.de → VPS-IP
@@ -91,21 +91,38 @@ ssh root@<IP> "id claude-dev 2>/dev/null || (useradd -m -s /bin/bash claude-dev 
 ssh root@<IP> "mkdir -p /home/claude-dev/projects /home/claude-dev/.just-ship && chown -R claude-dev:claude-dev /home/claude-dev"
 ```
 
-### 1.6 Just-Ship Framework klonen
+### 1.6 gh CLI auf dem Host installieren
+
+gh wird auf dem Host benoetigt (nicht nur im Docker-Container), weil setup.sh es fuer git-Auth verwendet:
+
+```bash
+ssh root@<IP> "curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && echo 'deb [arch=\$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main' | tee /etc/apt/sources.list.d/github-cli.list && apt-get update && apt-get install -y gh"
+```
+
+### 1.7 Just-Ship Framework klonen
 
 ```bash
 ssh root@<IP> "su - claude-dev -c 'git clone https://github.com/yves-s/just-ship.git /home/claude-dev/just-ship 2>/dev/null || (cd /home/claude-dev/just-ship && git pull)'"
 ```
 
-### 1.7 Globale Env-Datei erstellen
+### 1.8 Globale Env-Datei erstellen und Git/GitHub Auth konfigurieren
 
-Erstelle `/home/claude-dev/.env` mit dem GitHub Token:
+Erstelle `/home/claude-dev/.env` mit dem GitHub Token und konfiguriere git + gh Auth auf dem Host:
 
 ```bash
 ssh root@<IP> "cat > /home/claude-dev/.env << 'ENVEOF'
 GH_TOKEN=<github-token>
 ENVEOF
 chmod 600 /home/claude-dev/.env && chown claude-dev:claude-dev /home/claude-dev/.env"
+```
+
+Git-Identity und GitHub-Auth fuer den claude-dev User einrichten.
+WICHTIG: Verwende `GH_TOKEN` Env-Var statt `gh auth login --with-token` (vermeidet Scope-Validierungsprobleme):
+
+```bash
+ssh root@<IP> "su - claude-dev -c 'git config --global user.name \"Claude Dev\" && git config --global user.email \"claude-dev@pipeline\" && git config --global init.defaultBranch main'"
+ssh root@<IP> "su - claude-dev -c 'echo \"export GH_TOKEN=<github-token>\" >> ~/.bashrc'"
+ssh root@<IP> "su - claude-dev -c 'GH_TOKEN=<github-token> gh auth setup-git'"
 ```
 
 ### 1.8 Server-Config erstellen
