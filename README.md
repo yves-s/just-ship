@@ -452,23 +452,16 @@ Ticket queue --> Worker claims ticket --> Orchestrator runs agents --> PR create
 | Step | What happens |
 |------|-------------|
 | **1. Provision VPS** | Create an Ubuntu 22.04 VPS with your provider, SSH in as root |
-| **2. Run setup script** | One-liner installs Node.js, Claude Code, GitHub CLI, and creates a `claude-dev` service user |
-| **3. Clone your project** | Clone your repo, run `setup.sh` to install the pipeline framework |
-| **4. Configure environment** | Set API keys and project config in `.env.{project-slug}` |
-| **5. Start the worker** | Enable the systemd service — it starts polling immediately |
+| **2. Run `/just-ship-vps`** | Claude installs Docker, Node.js, GitHub CLI, creates the `claude-dev` user, and starts the pipeline server as a Docker container |
+| **3. Connect a project** | Claude clones the repo, runs `setup.sh`, and registers the project in the server config |
+| **4. Configure environment** | API keys and project env vars go in `/home/claude-dev/.just-ship/env.{project-slug}` |
+| **5. Done** | Press "Develop" on the Board — the VPS picks up the ticket and starts working |
 
 See **[vps/README.md](vps/README.md)** for the complete step-by-step guide with all commands.
 
 ### Multi-Project Support
 
-One VPS can run multiple projects in parallel. Each project gets its own systemd service and environment file:
-
-```bash
-systemctl enable --now just-ship-pipeline@project-a
-systemctl enable --now just-ship-pipeline@project-b
-```
-
-Workers run independently — each polls only its own project's ticket queue, so there are no conflicts.
+One VPS handles multiple projects. Each project has its own env file and is registered in the server config. The Docker container runs a single HTTP server that routes tickets to the correct project based on `project_id`.
 
 ### Cost
 

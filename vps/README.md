@@ -87,7 +87,7 @@ Located at `/home/claude-dev/.just-ship/server-config.json`:
       "project_id": "<uuid>",
       "repo_url": "https://github.com/org/repo.git",
       "project_dir": "/home/claude-dev/projects/my-project",
-      "env_file": "/home/claude-dev/.env.my-project"
+      "env_file": "/home/claude-dev/.just-ship/env.my-project"
     }
   }
 }
@@ -120,5 +120,5 @@ Der VPS laeuft standardmaessig ohne HTTPS auf `http://IP:3001`. Das funktioniert
 ## Update
 
 ```bash
-ssh root@<IP> "cd /home/claude-dev/just-ship && git pull && docker compose -f vps/docker-compose.yml build --no-cache && docker compose -f vps/docker-compose.yml up -d"
+ssh root@<IP> "cd /home/claude-dev/just-ship && git pull && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml build --no-cache && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d"
 ```
