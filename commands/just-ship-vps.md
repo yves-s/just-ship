@@ -423,8 +423,31 @@ Zusaetzlich aus dem lokalen Projekt pruefen:
 ### 2.3 Projekt auf VPS klonen
 
 ```bash
-ssh root@<IP> "su - claude-dev -c 'git clone <repo-url> /home/claude-dev/projects/<slug>'"
+ssh root@<IP> "su - claude-dev -c 'GH_TOKEN=\$(grep GH_TOKEN /home/claude-dev/.env | cut -d= -f2) gh repo clone <owner>/<repo> /home/claude-dev/projects/<slug>'"
 ```
+
+Falls `gh` nicht verfuegbar, alternativ via HTTPS mit Token:
+```bash
+ssh root@<IP> "su - claude-dev -c 'git clone https://<github-token>@github.com/<owner>/<repo>.git /home/claude-dev/projects/<slug>'"
+```
+
+### 2.3a project.json auf den VPS kopieren
+
+**WICHTIG:** `project.json` ist in `.gitignore` und wird NICHT mitgeklont. Es muss vom lokalen Rechner auf den VPS kopiert werden, sonst kann der Pipeline-Agent nicht arbeiten.
+
+Lies die lokale `project.json` und schreibe sie auf den VPS:
+
+```bash
+# Lokale project.json lesen und per SSH auf den VPS schreiben
+cat <local-project-path>/project.json | ssh root@<IP> "cat > /home/claude-dev/projects/<slug>/project.json && chown claude-dev:claude-dev /home/claude-dev/projects/<slug>/project.json"
+```
+
+Verifiziere:
+```bash
+ssh root@<IP> "cat /home/claude-dev/projects/<slug>/project.json | node -e \"const p=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); console.log('OK:', p.name, '— project_id:', p.pipeline?.project_id || 'MISSING')\""
+```
+
+Falls `project_id` MISSING ist, war die lokale `project.json` unvollstaendig. Sage dem User: "project.json hat keine pipeline.project_id — fuehre /add-project im lokalen Projekt aus."
 
 ### 2.4 setup.sh im Projekt ausfuehren
 
