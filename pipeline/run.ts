@@ -1,6 +1,6 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
-import { execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import { loadProjectConfig, parseCliArgs, type TicketArgs } from "./lib/config.ts";
 import { loadAgents, loadOrchestratorPrompt, loadTriagePrompt } from "./lib/load-agents.ts";
 import { createEventHooks, postPipelineEvent, type EventConfig } from "./lib/event-hooks.ts";
@@ -8,12 +8,27 @@ import { runQaWithFixLoop } from "./lib/qa-fix-loop.ts";
 import type { QaContext } from "./lib/qa-runner.ts";
 import { generateChangeSummary } from "./lib/change-summary.ts";
 
+// --- Stderr-capturing spawn wrapper for Claude Code subprocesses ---
+function makeSpawn(logPrefix: string) {
+  return (spawnOptions: { command: string; args: string[]; cwd?: string; env?: NodeJS.ProcessEnv; signal?: AbortSignal }) => {
+    const { command, args, cwd, env, signal } = spawnOptions;
+    const child = spawn(command, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"], signal } as Parameters<typeof spawn>[2]);
+    child.stderr?.on("data", (chunk: Buffer) => {
+      for (const line of chunk.toString().split("\n")) {
+        if (line.trim()) console.error(`${logPrefix} [stderr] ${line}`);
+      }
+    });
+    return child;
+  };
+}
+
 // --- Exported pipeline function (used by worker.ts) ---
 export interface PipelineOptions {
   projectDir: string;
   workDir?: string;      // Worktree directory — if set, skip git checkout and use this as cwd
   branchName?: string;   // Pre-computed branch name — if set, skip slug generation
   ticket: TicketArgs;
+  env?: Record<string, string>;
   abortSignal?: AbortSignal;
   timeoutMs?: number;
 }
@@ -79,6 +94,7 @@ Labels: ${ticket.labels}`;
         allowedTools: [],
         maxTurns: 1,
         env: { ...process.env, ...(env ?? {}) },
+        spawnClaudeCodeProcess: makeSpawn("[Triage]"),
       },
     })) {
       if (message.type === "assistant") {
@@ -265,6 +281,7 @@ Branch ist bereits erstellt: ${branchName}`;
           BOARD_API_URL: config.pipeline.apiUrl,
           PIPELINE_KEY: config.pipeline.apiKey,
         },
+        spawnClaudeCodeProcess: makeSpawn(`[T-${ticket.ticketId}]`),
       },
     })) {
       if (message.type === "result") {
@@ -472,6 +489,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
           BOARD_API_URL: config.pipeline.apiUrl,
           PIPELINE_KEY: config.pipeline.apiKey,
         },
+        spawnClaudeCodeProcess: makeSpawn(`[T-${ticket.ticketId}]`),
       },
     })) {
       if (message.type === "result") {
