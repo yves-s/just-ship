@@ -7,6 +7,17 @@ description: Autonomes Dev-Environment auf einem VPS einrichten — Docker, Pipe
 
 Richte einen VPS als autonomes Entwicklungs-Environment ein. Der VPS empfaengt Tickets vom Board und entwickelt sie autonom.
 
+## WICHTIG: Secrets maskieren
+
+Gib NIEMALS API Keys, Tokens oder Passwoerter im Klartext im Chat aus.
+Wenn du Werte gesammelt hast, zeige sie maskiert:
+
+- `ANTHROPIC_API_KEY=sk-ant-...d4f8`  (erste 6 + letzte 4 Zeichen)
+- `GH_TOKEN=ghp_...x9mK`
+- `api_key=adp_...0d56`
+
+Die echten Werte werden direkt per SSH auf den VPS geschrieben — sie muessen nie im Chat sichtbar sein.
+
 ## Voraussetzungen
 
 Teile dem User mit, was du brauchst. Gib klare Anweisungen, keine Fragen:
@@ -222,6 +233,19 @@ API_KEY=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs
 Lies aus dem lokalen Projekt:
 - `.env` oder `.env.local` — suche nach ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY, etc.
 - Frage den User ob noch weitere Env-Vars benoetigt werden
+
+**Secrets maskieren!** Zeige dem User nur maskierte Werte zur Bestaetigung:
+```
+Ich habe folgende Env-Vars gefunden:
+
+- ANTHROPIC_API_KEY=sk-ant-...d4f8
+- SUPABASE_URL=https://xyz.supabase.co
+- SUPABASE_SERVICE_KEY=eyJh...Rk9Q
+
+Soll ich diese auf den VPS uebertragen?
+```
+
+URLs (SUPABASE_URL etc.) koennen im Klartext gezeigt werden — nur Keys/Tokens maskieren.
 
 ### 2.3 Projekt auf VPS klonen
 
