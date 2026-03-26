@@ -132,7 +132,29 @@ git diff --name-only $(git merge-base main HEAD) HEAD
 git status --porcelain
 ```
 
-Bestimme anhand der geänderten Dateien, welche Docs geprüft werden müssen:
+Der Docs-Check hat zwei Teile: einen **universellen** Teil (läuft in jedem Projekt) und einen **projektspezifischen** Teil (nur wenn die jeweiligen Dateien existieren).
+
+#### Teil 1: CHANGELOG (universell — immer ausführen)
+
+**CHANGELOG.md wird bei JEDER Änderung aktualisiert** — egal welches Projekt, egal welche Dateien sich geändert haben.
+
+Falls `CHANGELOG.md` nicht existiert, erstelle sie mit diesem Header:
+```markdown
+# Changelog
+
+All notable changes to this project will be documented in this file.
+Format: [Keep a Changelog](https://keepachangelog.com/)
+
+## [Unreleased]
+```
+
+Falls `CHANGELOG.md` existiert aber keine `[Unreleased]`-Sektion hat, füge sie als erste Sektion nach dem Header ein.
+
+**Format:** Keep-a-Changelog mit Gruppen `### Added`, `### Changed`, `### Fixed`, `### Removed`. Beschreibung auf Englisch, 1 Zeile pro Änderung. Nur Gruppen verwenden, die auch Einträge haben.
+
+#### Teil 2: Projektspezifische Docs (nur wenn Datei existiert)
+
+Prüfe ob die jeweilige Zieldatei existiert. **Nur bestehende Dateien aktualisieren** — keine neuen Docs anlegen.
 
 | Geänderte Dateien | Zu prüfende Docs |
 |---|---|
@@ -141,13 +163,14 @@ Bestimme anhand der geänderten Dateien, welche Docs geprüft werden müssen:
 | `skills/*.md` | README.md → Skills-Tabelle |
 | `pipeline/**`, `agents/*.md`, `commands/*.md` | README.md → Workflow-Diagramm |
 | Pipeline/Architektur-Strukturen | CLAUDE.md |
-| Keine der obigen | Schritt überspringen |
+| Keine der obigen | Teil 2 überspringen |
 
-Falls Anpassung nötig: direkt mit Edit-Tool ändern. Nur `README.md` und `CLAUDE.md` — keine anderen Docs.
+Falls Anpassung nötig: direkt mit Edit-Tool ändern.
 
 Ausgabe:
+- `✓ docs — CHANGELOG.md aktualisiert`
 - `✓ docs — README.md aktualisiert` (falls Änderungen gemacht)
-- `✓ docs — keine Änderungen nötig` (falls nichts zu tun)
+- `✓ docs — keine Änderungen nötig` (falls nur CHANGELOG und sonst nichts zu tun)
 
 **NICHT STOPPEN.** SOFORT weiter zu Schritt 8.
 
