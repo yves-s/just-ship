@@ -371,9 +371,11 @@ UPDATE public.tickets SET status = 'in_review', review_url = '$REVIEW_URL' WHERE
 
 Der PR bleibt offen bis der User ihn freigibt (via `/ship` oder "passt").
 
-### 9a. Vercel Preview URL (nur wenn `pipeline.hosting` === "vercel")
+### 9e. Vercel Preview URL
 
-**Nur ausführen wenn `pipeline.hosting` in `project.json` den Wert `"vercel"` hat.** Ohne dieses Feld: Schritt komplett überspringen.
+**Immer ausführen** — das Script erkennt automatisch ob ein Vercel-Deployment existiert und returned leer wenn nicht. Kein Config-Gate nötig.
+
+**WICHTIG:** Die Preview-URL MUSS eine Vercel-Deployment-URL sein (z.B. `https://<project>-<hash>.vercel.app`). NIEMALS einen GitHub-Link, PR-URL oder Repository-URL als `preview_url` setzen. Das `preview_url`-Feld ist ausschließlich für die live deployete Vorschau.
 
 ```bash
 PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)

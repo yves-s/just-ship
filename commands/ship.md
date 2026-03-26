@@ -108,9 +108,11 @@ fi
 
 SOFORT WEITER ZU SCHRITT 3b.
 
-### 3b. Vercel Preview URL (nur wenn `pipeline.hosting` === "vercel")
+### 3b. Vercel Preview URL
 
-**Nur ausführen wenn `pipeline.hosting` in `project.json` den Wert `"vercel"` hat.** Ohne dieses Feld: Schritt komplett überspringen.
+**Immer ausführen** — das Script erkennt automatisch ob ein Vercel-Deployment existiert und returned leer wenn nicht. Kein Config-Gate nötig.
+
+**WICHTIG:** Die Preview-URL MUSS eine Vercel-Deployment-URL sein (z.B. `https://<project>-<hash>.vercel.app`). NIEMALS einen GitHub-Link, PR-URL oder Repository-URL als `preview_url` setzen. Das `preview_url`-Feld ist ausschließlich für die live deployete Vorschau.
 
 ```bash
 PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)
