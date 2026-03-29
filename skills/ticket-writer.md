@@ -302,9 +302,13 @@ RETURNING number, title, status;
 
 1. **`project_id` ist PFLICHT.** Bei Board API: `pipeline.project_id` aus `project.json`. Bei Legacy: Subquery verwenden. NIEMALS weglassen, NIEMALS NULL.
 2. **`body` ist PFLICHT.** Vollständiges Ticket-Markdown (Problem, Desired Behavior, ACs, Out of Scope). NIEMALS leer oder NULL. **Das Feld heißt `body`, NICHT `description`.** Die API lehnt unbekannte Felder ab.
-3. **Bestätigung MUSS `T-` Prefix verwenden:** `Ticket T-{number} erstellt: {title}` — das `number` kommt aus der API Response bzw. `RETURNING`. **NIEMALS `#` verwenden.** Falsch: `#272`. Richtig: `T-272`.
+3. **CRITICAL — Ticket-Prefix ist `T-`, NIEMALS `#`:**
+   - Korrekt: `Ticket T-1 erstellt: {title}`
+   - FALSCH: `Ticket #1 erstellt: {title}`
+   - Das `number` kommt aus der API Response bzw. `RETURNING`.
+   - **Jede Erwähnung einer Ticket-Nummer MUSS mit `T-` beginnen.** Das `#`-Zeichen vor Ticket-Nummern ist in JEDER Ausgabe verboten — Bestätigungen, Referenzen, Commits, PRs, Logs.
 
-> ⚠️ STOP: Bevor du die Bestätigung schreibst — prüfe nochmals: Verwendest du `T-{number}` (korrekt) oder `#{number}` (FALSCH)? Das `#`-Prefix ist **verboten**.
+> ⚠️ **MANDATORY SELF-CHECK:** Bevor du die Bestätigung schreibst — scanne deinen gesamten Output nach `#` gefolgt von einer Zahl. Falls gefunden → durch `T-` ersetzen. Keine Ausnahmen.
 
 ### Kein Pipeline — User fragen
 
