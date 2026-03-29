@@ -37,12 +37,12 @@ Ein Shopify-Projekt soll sich genauso anfühlen wie ein Web-App-Projekt: `/setup
     "language": "liquid"
   },
   "build": {
-    "check": "shopify theme check --fail-level error"
+    "web": "shopify theme check --fail-level error",
+    "test": ""
   },
   "hosting": "shopify",
   "shopify": {
-    "store": "client-store.myshopify.com",
-    "store_password": ""
+    "store": "client-store.myshopify.com"
   },
   "pipeline": {
     "workspace_id": "...",
@@ -55,9 +55,12 @@ Ein Shopify-Projekt soll sich genauso anfühlen wie ein Web-App-Projekt: `/setup
 
 | Feld | Typ | Required | Beschreibung |
 |---|---|---|---|
-| `hosting` | `"vercel" \| "shopify"` | nein | Hosting-Typ. Default: keiner (Script erkennt automatisch). |
+| `hosting` | `"vercel" \| "shopify"` | nein | Hosting-Typ. Fallback: wenn leer und `stack.framework === "shopify"` → wird als `"shopify"` behandelt. |
 | `shopify.store` | string | nur bei Shopify | Store-URL (`client-store.myshopify.com`) |
-| `shopify.store_password` | string | nein | Storefront-Passwort für passwortgeschützte Stores (für QA/Playwright) |
+
+**Hinweis zu `build.web`:** Für Shopify-Projekte wird `build.web` mit `shopify theme check --fail-level error` belegt. Das Feld existiert bereits in `templates/project.json` und wird von `/develop` Schritt 6 gelesen. Kein neues Feld nötig.
+
+**Hinweis zu `shopify.store_password`:** Storefront-Passwörter für passwortgeschützte Stores (für QA/Playwright) werden als **Env-Variable `SHOPIFY_STORE_PASSWORD`** gesetzt, nicht in `project.json` committed. Auf dem VPS wird die Variable im systemd Service gesetzt, lokal kann der User sie in `.env` oder Shell-Profile setzen.
 
 ### Credentials (NICHT in project.json)
 
@@ -75,7 +78,12 @@ Theme Access Password für VPS/Pipeline in `~/.just-ship/config.json`:
 }
 ```
 
-Auflösung via bestehendem `write-config.sh read-workspace --id {uuid}`.
+Auflösung via `write-config.sh read-workspace --id {uuid}`.
+
+**Erweiterung nötig:** `write-config.sh` muss erweitert werden:
+- `add-workspace` bekommt optionalen Flag `--shopify-password`
+- `read-workspace` gibt `shopify_password` im JSON-Output mit zurück (falls gesetzt)
+- Wird beim VPS-Setup oder manuell via `write-config.sh add-workspace --shopify-password shptka_...` gesetzt
 
 ### Backward Compatibility
 
@@ -100,7 +108,7 @@ fi
 Bei Erkennung setzt `/setup-just-ship`:
 - `stack.framework: "shopify"`
 - `stack.language: "liquid"`
-- `build.check: "shopify theme check --fail-level error"`
+- `build.web: "shopify theme check --fail-level error"`
 - `hosting: "shopify"`
 
 ### Store-URL Auflösung (Priorität)
@@ -129,7 +137,7 @@ fi
 
 ### Schritt 6 — Build-Check (keine Änderung nötig)
 
-Build-Command kommt aus `project.json` (`build.check`). Für Shopify: `shopify theme check --fail-level error`. Funktioniert bereits — der Mechanismus ist projekt-agnostisch.
+Build-Command kommt aus `project.json` (`build.web`). Für Shopify: `shopify theme check --fail-level error`. Funktioniert bereits — der Mechanismus ist projekt-agnostisch.
 
 ### Schritt 9f — Preview (Hauptänderung)
 
@@ -138,9 +146,13 @@ Build-Command kommt aus `project.json` (`build.check`). Für Shopify: `shopify t
 PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)
 ```
 
-**Neu (Hosting-Weiche):**
+**Neu (Hosting-Weiche mit Fallback-Erkennung):**
 ```bash
-HOSTING=$(node -e "process.stdout.write(require('./project.json').hosting || '')")
+HOSTING=$(node -e "
+  const c = require('./project.json');
+  const h = c.hosting || (c.stack?.framework === 'shopify' ? 'shopify' : '');
+  process.stdout.write(h);
+")
 
 if [ "$HOSTING" = "shopify" ]; then
   PREVIEW_URL=$(bash .claude/scripts/shopify-preview.sh push "T-${N}" "${TITLE}")
@@ -148,6 +160,8 @@ else
   PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)
 fi
 ```
+
+**Fallback-Erkennung:** Wenn `hosting` leer ist aber `stack.framework === "shopify"`, wird automatisch `"shopify"` angenommen. Das schützt gegen Projekte die vor diesem Feature eingerichtet wurden.
 
 Output ans Board bleibt identisch — `preview_url` Feld existiert schon:
 ```bash
@@ -177,8 +191,8 @@ Ablauf:
    - Env-Variable `SHOPIFY_CLI_THEME_TOKEN` gesetzt? → verwenden
    - `~/.just-ship/config.json` hat `shopify_password`? → `--password` Flag
    - Weder noch? → CLI-Session (kein Flag nötig)
-3. Theme-Name bauen: `"T-{N}: {title}"`
-4. Push:
+3. Prüfe ob `.claude/.shopify-theme-id` existiert (Theme wurde schon erstellt)
+4. **Erster Push** (keine Theme-ID vorhanden):
    ```bash
    shopify theme push \
      --unpublished \
@@ -188,10 +202,28 @@ Ablauf:
      --json \
      [--password {pw}]
    ```
-5. Theme-ID aus JSON-Output extrahieren
-6. Preview-URL bauen: `https://{store}/?preview_theme_id={ID}`
-7. Theme-ID + Theme-Name in `.claude/.shopify-theme-id` speichern
-8. URL auf stdout ausgeben
+5. **Subsequent Push** (Theme-ID vorhanden — z.B. nach Code Review Nachbesserung):
+   ```bash
+   shopify theme push \
+     --theme {THEME_ID} \
+     --store {store} \
+     --ignore "config/settings_data.json" \
+     --json \
+     [--password {pw}]
+   ```
+   Wichtig: `--theme` akzeptiert eine numerische Theme-ID. Beim Update kein `--unpublished` — das würde ein neues Theme erstellen.
+6. Theme-ID aus JSON-Output extrahieren:
+   ```bash
+   # Shopify CLI --json output enthält theme.id
+   THEME_ID=$(echo "$OUTPUT" | node -e "
+     const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));
+     process.stdout.write(String(d.theme?.id || ''));
+   ")
+   ```
+   Fallback falls `--json` Format sich ändert: `shopify theme list --store {store} --json` und nach Theme-Name filtern.
+7. Preview-URL bauen: `https://{store}/?preview_theme_id={THEME_ID}`
+8. Theme-ID + Theme-Name in `.claude/.shopify-theme-id` speichern
+9. URL auf stdout ausgeben
 
 **`cleanup` — Theme löschen:**
 
@@ -231,13 +263,24 @@ Datei wird in `.gitignore` aufgenommen.
 
 ## 5. `/ship` — Theme Cleanup
 
-### Neuer Schritt 5b (nach Merge + Worktree Cleanup)
+### Neuer Schritt 5a.5 (nach Merge, VOR Worktree Cleanup)
+
+**Wichtig:** Shopify Cleanup muss VOR dem Worktree Removal laufen, weil `.claude/.shopify-theme-id` im Worktree liegt (`.worktrees/T-{N}/.claude/.shopify-theme-id`). Nach Worktree Removal ist die Datei weg.
+
+Einfügen zwischen Schritt 5 (zurück auf main) und Schritt 5a (Worktree Cleanup):
 
 ```bash
-HOSTING=$(node -e "process.stdout.write(require('./project.json').hosting || '')")
+HOSTING=$(node -e "
+  const c = require('./project.json');
+  const h = c.hosting || (c.stack?.framework === 'shopify' ? 'shopify' : '');
+  process.stdout.write(h);
+")
 
 if [ "$HOSTING" = "shopify" ]; then
-  bash .claude/scripts/shopify-preview.sh cleanup
+  # Falls Worktree: Theme-ID-Datei liegt dort
+  THEME_ID_FILE=".worktrees/T-${N}/.claude/.shopify-theme-id"
+  [ ! -f "$THEME_ID_FILE" ] && THEME_ID_FILE=".claude/.shopify-theme-id"
+  SHOPIFY_THEME_ID_FILE="$THEME_ID_FILE" bash .claude/scripts/shopify-preview.sh cleanup
 fi
 ```
 
@@ -246,9 +289,13 @@ fi
 - `✓ shopify — Theme "T-{N}: {title}" gelöscht`
 - `✓ shopify — kein Theme zum Aufräumen` (falls keine ID gespeichert)
 
+### `/ship` Schritt 3b — Vercel Preview
+
+Schritt 3b (`get-preview-url.sh`) bleibt unverändert. Für Shopify-Projekte returned das Vercel-Script leer (kein Vercel-Deployment), und die Preview-URL wurde bereits während `/develop` Schritt 9f ins Ticket geschrieben. Kein Handlungsbedarf.
+
 ### Timing
 
-Cleanup passiert NACH Merge, nicht bei PR-Close. Das Theme bleibt solange der PR offen ist — der Reviewer kann die Preview-URL nutzen. Nachbesserungen nach Code Review pushen auf dasselbe Theme (erneuter `shopify-preview.sh push` mit gleichem Namen überschreibt).
+Cleanup passiert NACH Merge, nicht bei PR-Close. Das Theme bleibt solange der PR offen ist — der Reviewer kann die Preview-URL nutzen. Nachbesserungen nach Code Review pushen auf dasselbe Theme (erneuter `shopify-preview.sh push` mit gespeicherter Theme-ID updated das bestehende Theme).
 
 ---
 
@@ -300,20 +347,29 @@ if (storePassword) {
 }
 ```
 
-Storefront-Passwort kommt aus `project.json` (`shopify.store_password`). Optional — wenn nicht gesetzt, wird der Schritt übersprungen.
+Storefront-Passwort kommt aus der Env-Variable `SHOPIFY_STORE_PASSWORD` (nicht in `project.json` — es ist ein Credential). Optional — wenn nicht gesetzt, wird der Schritt übersprungen.
 
 Alles andere (Screenshots, HTTP-Status-Check, Console-Errors, QA-Report) ist hosting-agnostisch und bleibt unverändert.
 
 ---
 
-## 8. Änderungsübersicht
+## 8. Sidekick — Shopify Themes
+
+Sidekick-Injection (Script-Tag in Layout) ist **nicht im Scope** für Shopify Themes. Grund: Shopify-Themes laufen auf der Shopify-Domain, nicht auf einer eigenen Domain. Der Sidekick wird über das Board genutzt (direkte URL), nicht als eingebettetes Widget im Store.
+
+Falls in Zukunft gewünscht: Shopify App Extension als separater Delivery-Mechanismus (P3+).
+
+---
+
+## 9. Änderungsübersicht
 
 | Datei | Aktion | Was |
 |---|---|---|
 | `commands/develop.md` | Edit | Schritt 9f: Hosting-Weiche Vercel/Shopify |
-| `commands/ship.md` | Edit | Schritt 5b: Theme Cleanup bei Shopify |
+| `commands/ship.md` | Edit | Schritt 5a.5: Theme Cleanup bei Shopify (vor Worktree Removal) |
 | `commands/setup-just-ship.md` | Edit | Shopify-Erkennung, Store-URL, Prereq |
 | `.claude/scripts/shopify-preview.sh` | Neu | Push + URL-Extraktion + Cleanup |
+| `.claude/scripts/write-config.sh` | Edit | `add-workspace --shopify-password`, `read-workspace` gibt `shopify_password` zurück |
 | `.claude/rules/no-settings-data-edit.md` | Neu | Hard Guard für settings_data.json |
 | `.claude/rules/shopify-skill-awareness.md` | Edit | `.shopifyignore` Hinweis |
 | `templates/project.json` | Edit | `hosting` + `shopify` Felder |
