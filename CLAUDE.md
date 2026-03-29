@@ -9,6 +9,10 @@
 
 **just-ship** – Portables Multi-Agent-Framework für autonome Softwareentwicklung mit Claude Code. Installierbar in beliebige Projekte via `setup.sh`.
 
+### Ecosystem
+
+Dieses Repo ist die **Engine** des Just Ship Produkts. Für den vollständigen Überblick über alle Repos (Board, Bot, Web), Features und wie sie zusammenhängen, lies `PRODUCT.md` im Root dieses Repos.
+
 ---
 
 ## Konventionen
