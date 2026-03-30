@@ -36,7 +36,8 @@ async function postEvent(config: EventConfig, payload: Record<string, unknown>):
 }
 
 interface EventHookOptions {
-  onPause?: (reason: string) => void;
+  onPause?: (reason: string, questionText?: string) => void;
+  getLastAssistantText?: () => string;
 }
 
 export function createEventHooks(
@@ -129,7 +130,7 @@ export function createEventHooks(
     const hookInput = input as PostToolUseHookInput;
     const toolResponse = String(hookInput.tool_response ?? "");
     if (toolResponse.includes("__WAITING_FOR_INPUT__")) {
-      options?.onPause?.("human_in_the_loop");
+      options?.onPause?.("human_in_the_loop", options?.getLastAssistantText?.());
       return { continue: false, stopReason: "human_in_the_loop" };
     }
     return { async: true as const };
