@@ -1,7 +1,7 @@
 # Workflow Reliability & Board Cockpit — Design Spec
 
 > **Date:** 2026-03-30
-> **Status:** Draft
+> **Status:** Review
 > **Scope:** just-ship (Engine), just-ship-board (Board UI), VPS Pipeline
 
 ---
@@ -48,6 +48,8 @@ Extend health response:
 }
 ```
 
+**Data source for `last_completed` / `last_error`:** In-memory ring buffer (last 10 runs), reset on server restart. This is acceptable because the Board can query `task_events` for full history — the health endpoint is for quick glance, not audit trail.
+
 ### 1b. Watchdog in Worker
 
 **Where:** `pipeline/worker.ts` — `runWorkerSlot()` function
@@ -63,12 +65,15 @@ const result = await withWatchdog(
 ```
 
 On watchdog timeout:
-1. Check for uncommitted changes in worktree
-2. If changes exist → `git add -A && git commit -m "WIP: watchdog timeout T-{N}"` + `git push`
-3. Set ticket `pipeline_status=failed`, `status=ready_to_develop`
-4. Clear Board agent events
-5. Send Sentry alert
-6. Release worker slot
+1. **Abort the subprocess first** — call `queryAbortController.abort()` and wait briefly (5s) for the Claude Code process to terminate. This prevents conflicts with a still-running agent writing to the worktree.
+2. Check for uncommitted changes in worktree
+3. If changes exist → `git add -A && git commit -m "WIP: watchdog timeout T-{N}"` + `git push`
+4. Set ticket `pipeline_status=failed`, `status=ready_to_develop`
+5. Clear Board agent events
+6. Send Sentry alert
+7. Release worker slot
+
+**Shared code:** Extract `withWatchdog()` from `server.ts` into `pipeline/lib/watchdog.ts` so both `server.ts` and `worker.ts` can import it.
 
 ### 1c. Board-Side Stuck Detection
 
@@ -76,8 +81,8 @@ On watchdog timeout:
 
 New logic (can be a periodic check in the Dashboard component or a Board API endpoint):
 - Query tickets where `status=in_progress` AND `pipeline_status=running`
-- Compare `updated_at` against current time
-- If > 35 minutes → mark as "stuck" (visual indicator only, no auto-reset — the Watchdog handles reset)
+- Compare against `task_events` timestamps (last event for this ticket) rather than `updated_at`, which can be bumped by unrelated PATCH operations
+- If > 35 minutes since last `task_event` → mark as "stuck" (visual indicator only, no auto-reset — the Watchdog handles reset)
 - Board shows stuck tickets with actions:
   - **"Retry"** → PATCH ticket: `pipeline_status=null, status=ready_to_develop`
   - **"Cancel"** → PATCH ticket: `pipeline_status=null, status=backlog`
@@ -88,7 +93,9 @@ New logic (can be a periodic check in the Dashboard component or a Board API end
 
 ### 2a. Complexity as Autonomy Gate in Worker
 
-**Prerequisite:** Ticket complexity field exists in DB (plan already prepared in Board repo: `docs/superpowers/plans/2026-03-30-ticket-complexity.md`). Must be implemented first.
+**Prerequisite:** Ticket complexity field exists in DB. Implementation plan exists in Board repo. The `TicketComplexity` type and `ComplexityBadge` component are already in the Board codebase — verify whether the DB column already exists before planning a migration.
+
+**NULL handling:** Tickets without a complexity value (NULL) are excluded from autonomous mode by default. The worker filter `complexity=in.(low,medium)` skips NULL. The ticket-writer skill MUST always set complexity on new tickets. Existing tickets without complexity should default to `medium` via a one-time DB migration.
 
 **Where:** `pipeline/worker.ts` — `getNextTicket()` and `pipeline/server.ts` — `handleLaunch()`
 
@@ -169,6 +176,11 @@ New component: `PipelineStatusWidget`
 
 **Polling:** Fetch `/health` every 30 seconds while Dashboard is open. Recent runs from DB via TanStack Query.
 
+**Board → Pipeline Server connectivity:**
+- The Pipeline Server URL is derived from the workspace's `board_url` (same domain, e.g. `pipeline.just-ship.io`). Store as `pipeline_url` in workspace settings or derive from convention.
+- CORS: Pipeline Server already serves API endpoints — add `Access-Control-Allow-Origin` for the Board domain.
+- Auth: `/health` requires no auth (public status). Action endpoints (`/api/answer`, `/api/launch`) use `X-Pipeline-Key` which the Board already has via workspace config.
+
 ### 3b. Ticket-Lifecycle Indicators
 
 **Where:** Board ticket cards (`src/components/board/ticket-card.tsx`) + list view
@@ -212,12 +224,32 @@ This replaces the need for terminal `/just-ship-status` for operational overview
 - `server.ts`: `/api/answer` endpoint that calls `resumePipeline()`
 - `worker.ts`: Session ID stored in ticket on pause
 
-**Missing:** UI to see the question and answer it.
+**Missing pieces (3):**
+1. UI to see the question and answer it
+2. `pending_question` field on tickets (DB column + Board type) — needs migration
+3. Question text extraction from SDK — the current `onPause` callback only receives a static reason string (`"human_in_the_loop"`), not the actual question text
+
+**Question text extraction — approach:**
+The SDK's `query()` emits `assistant` messages before a pause. Buffer the last assistant text message during the `for await` loop. When `onPause` fires, the buffered text IS the question. Implementation:
+```typescript
+let lastAssistantText = "";
+for await (const message of query({ ... })) {
+  if (message.type === "assistant") {
+    // Extract text blocks
+    const texts = message.content?.filter(b => b.type === "text").map(b => b.text) ?? [];
+    if (texts.length > 0) lastAssistantText = texts.join("\n");
+  }
+}
+// In onPause callback, use lastAssistantText as the question
+```
+This requires the `onPause` callback to have access to `lastAssistantText` via closure.
+
+**DB migration:** Add `pending_question TEXT` column to `tickets` table (nullable, cleared on resume).
 
 **Where:** Board ticket detail + Board API
 
 When agent pauses:
-1. Pipeline server stores question in ticket: PATCH ticket with `pending_question: "..."` and `pipeline_status: "paused"`
+1. Pipeline server stores question in ticket: PATCH ticket with `pending_question: lastAssistantText` and `pipeline_status: "paused"`
 2. A `task_event` is created: `event_type: "question"`, payload contains the question text
 3. Board ticket detail sheet shows:
    - Yellow banner: "Agent wartet auf Antwort"
@@ -252,7 +284,10 @@ Pipeline Server:
 - Ticket card shows yellow dot (from Section 3b)
 - Future: Telegram Bot notification (bot repo exists)
 
+**Multiple pause/resume cycles:** The agent may pause more than once in a single run. The Board UI must handle this — each new pause overwrites `pending_question` and resets the answer field. The question/answer history is preserved in `task_events`.
+
 **Timeout:**
+- The 24h timer is **DB-based**, not in-memory. When `pipeline_status` is set to `"paused"`, `updated_at` is bumped. The lifecycle timeout runner (Section 5a) checks `updated_at` for paused tickets — this survives server restarts.
 - If no answer after 24h:
   1. Push branch with current work: `git add -A && git commit -m "WIP: auto-cancelled after 24h pause T-{N}"` + `git push`
   2. Reset ticket: `pipeline_status=null, status=ready_to_develop`
@@ -265,13 +300,17 @@ Pipeline Server:
 
 ### 5a. Ticket Lifecycle Timeouts
 
-**Where:** Pipeline Server (periodic interval) or Board API cron
+**Where:** Pipeline Server — periodic interval (every 5 minutes) in the main loop. The Pipeline Server already runs continuously and has DB access. Board-side cron would require a separate scheduler (Vercel cron) and add complexity. The Pipeline Server is the right place because it also handles the worktree cleanup that follows timeout actions.
+
+**Race condition mitigation:** All timeout actions check the current `pipeline_status` before acting (optimistic concurrency). If a Board "Retry" click and a Watchdog timeout race, the second one to arrive finds the status already changed and skips.
+
+**Per-ticket retry counter:** Add `pipeline_retry_count INTEGER DEFAULT 0` to tickets table. Incremented on each auto-reset. Reset to 0 on manual status change or successful completion.
 
 | Condition | Timeout | Action |
 |---|---|---|
 | `in_progress` + `running` > 35 min | Watchdog | Reset to `ready_to_develop`, clear events, Sentry alert |
 | `in_progress` + `paused` > 24h | Auto-cancel | Push WIP branch, reset to `ready_to_develop`, notification |
-| `in_progress` + `failed` > 1h | Auto-reset | Reset to `ready_to_develop` (allows retry) |
+| `in_progress` + `failed` > 1h | Auto-reset | Reset to `ready_to_develop` IF retry_count < 3. After 3 failures → set to `backlog` with note "Blocked after 3 failed attempts" |
 | `in_review` > 72h | Warning | Badge in Board "Review überfällig" |
 
 All resets log a `task_event` with the reason for traceability.
@@ -286,8 +325,7 @@ All resets log a `task_event` with the reason for traceability.
 | **Watchdog Timeout** (35 min) | No | Delete worktree |
 | **Auto-Cancel** (24h pause) | Yes (likely) | `git push` (agent already committed during work) → delete worktree. Ticket note: "Branch contains partial work" |
 | **Auto-Cancel** (24h pause) | No | Delete worktree |
-| **Auto-Reset** (failed > 1h) | Yes | `git reset --hard origin/main` → delete worktree (failed work is not worth preserving — error is logged) |
-| **Auto-Reset** (failed > 1h) | No | Delete worktree |
+| **Auto-Reset** (failed > 1h) | Yes/No | Delete worktree directly (failed work is not worth preserving — error and failure reason are logged in `task_events`). No `git reset` needed — just remove the worktree. |
 | **Manual Retry** (user clicks) | N/A | Delete existing worktree, next run creates fresh one |
 | **Ticket done + branch merged** | N/A | Periodic cleanup: detect merged branches → delete worktree + local branch |
 
@@ -340,13 +378,16 @@ Consolidated view of everything that needs attention:
 
 ### Dependencies / Order
 
-1. **Ticket Complexity** (Board) — must ship first, all other complexity-dependent features need the field
-2. **Worker Watchdog + Diagnostics** (Engine) — independent, can parallel with #1
-3. **Complexity Gate** (Engine) — depends on #1
-4. **Pipeline Widget + Lifecycle Indicators** (Board) — depends on task_events data, independent of #1-3
-5. **Question Flow UI** (Board) — depends on pause/resume infrastructure (already exists in Engine)
-6. **Lifecycle Timeouts + Cleanup** (Engine + Board) — builds on #2 and #4
-7. **Cleanup Dashboard** (Board) — builds on #4 and #6
+1. **Worker Watchdog + Diagnostics** (Engine) — **highest priority**, no dependencies. Directly addresses "no ticket completes" problem. Extract `withWatchdog` to shared lib, add to worker, add structured logging + Sentry breadcrumbs.
+2. **Ticket Complexity DB + UI** (Board) — verify if DB column exists already. If not, migrate. Wire up existing `ComplexityBadge` component in remaining UI locations.
+3. **Complexity Gate** (Engine) — depends on #2. One-line filter change in worker + server guard.
+4. **DB migrations for Question Flow** (Board) — `pending_question TEXT`, `pipeline_retry_count INTEGER DEFAULT 0` columns. Independent of #1-3.
+5. **Pipeline Widget + Lifecycle Indicators** (Board) — depends on Pipeline Server URL being accessible from Board. Add CORS to Pipeline Server.
+6. **Question Flow — Engine side** (Engine) — buffer last assistant text in `run.ts`, extend `onPause` to store question. Depends on #4.
+7. **Question Flow — Board UI** (Board) — question banner + answer form in ticket detail. Depends on #4 and #6.
+8. **Lifecycle Timeouts + Cleanup** (Engine) — periodic interval in Pipeline Server. Depends on #1 (watchdog) and #4 (retry counter).
+9. **Cleanup Dashboard** (Board) — builds on #5 and #8. Final piece.
+10. **Ticket-Writer Skill Update** (Engine) — add complexity heuristics + spike due_date. Independent, can happen anytime after #2.
 
 ### What This Does NOT Include
 
@@ -355,6 +396,18 @@ Consolidated view of everything that needs attention:
 - VPS multi-worker parallelism (current: 1 ticket at a time, sufficient for now)
 - Cross-repo worktree management (out of scope)
 - `/develop` vs `/implement` command consolidation (separate concern)
+
+---
+
+## Edge Cases
+
+1. **Worker watchdog fires during `git push`** — Skip WIP commit/push if git lock exists. The worktree will be deleted anyway.
+2. **Multiple pause/resume cycles** — Board overwrites `pending_question` on each new pause. Full history in `task_events`.
+3. **Race: Board "Retry" + Watchdog timeout** — Both check `pipeline_status` before acting. Second arrival finds status changed, skips.
+4. **Failed ticket retry loop** — `pipeline_retry_count` incremented on each auto-reset. After 3 failures → moved to `backlog` with note. Counter resets on manual intervention or success.
+5. **NULL complexity on existing tickets** — One-time migration sets `DEFAULT 'medium'`. Worker filter excludes NULL, so un-migrated tickets are blocked from autonomous mode (safe default).
+6. **Pipeline Server restart during 24h pause** — Timer is DB-based (`updated_at` on the paused ticket). Lifecycle runner checks DB, not in-memory state. Survives restarts.
+7. **Watchdog fires while agent subprocess still running** — Abort subprocess first (`abortController.abort()`), wait 5s, then proceed with cleanup.
 
 ---
 
