@@ -10,6 +10,7 @@ import { runQaWithFixLoop } from "./lib/qa-fix-loop.ts";
 import type { QaContext } from "./lib/qa-runner.ts";
 import { generateChangeSummary } from "./lib/change-summary.ts";
 import { loadSkills, type AgentRole } from "./lib/load-skills.ts";
+import { Sentry } from "./lib/sentry.ts";
 
 // --- Stderr-capturing spawn wrapper for Claude Code subprocesses ---
 function makeSpawn(logPrefix: string) {
@@ -240,6 +241,7 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
   if (triagePrompt) {
     triageResult = await runTriage(workDir, ticket, triagePrompt, eventConfig, hasPipeline, opts.env);
     ticketDescription = triageResult.description;
+    Sentry.addBreadcrumb({ category: "pipeline", message: "triage_done", data: { verdict: triageResult?.verdict, qaTier: triageResult?.qaTier } });
   }
 
   // --- Build prompt ---
@@ -300,6 +302,20 @@ Branch ist bereits erstellt: ${branchName}`;
   let failureReason: string | undefined;
   try {
     if (hasPipeline) await postPipelineEvent(eventConfig, "agent_started", "orchestrator");
+
+    // --- Diagnostic logging ---
+    const agentNames = Object.keys(filteredAgents);
+    const skillNames = loadedSkills.skillNames;
+    console.error(`[Pipeline] Starting orchestrator query:`);
+    console.error(`[Pipeline]   workDir: ${workDir}`);
+    console.error(`[Pipeline]   model: opus`);
+    console.error(`[Pipeline]   agents: ${agentNames.join(", ") || "none"}`);
+    console.error(`[Pipeline]   skills: ${skillNames.join(", ") || "none"}`);
+    console.error(`[Pipeline]   prompt length: ${prompt.length} chars`);
+    console.error(`[Pipeline]   branch: ${branchName}`);
+    console.error(`[Pipeline]   timeout: ${timeoutMs / 60_000} min`);
+
+    Sentry.addBreadcrumb({ category: "pipeline", message: "orchestrator_start", data: { ticketId: ticket.ticketId, branch: branchName } });
 
     for await (const message of query({
       prompt,

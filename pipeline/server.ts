@@ -72,6 +72,23 @@ interface PipelineState {
 }
 const pipelineState: PipelineState = { running: null };
 
+// --- In-memory run history (ring buffer, last 10 runs) ---
+interface RunRecord {
+  ticketNumber: number;
+  status: "completed" | "failed";
+  error?: string;
+  at: string;
+  durationMs?: number;
+}
+const runHistory: RunRecord[] = [];
+const MAX_RUN_HISTORY = 10;
+const serverStartedAt = Date.now();
+
+function recordRun(record: RunRecord) {
+  runHistory.push(record);
+  if (runHistory.length > MAX_RUN_HISTORY) runHistory.shift();
+}
+
 // --- Drain manager (for zero-downtime updates) ---
 const drainManager = new DrainManager(() => runningTickets.size);
 
@@ -323,6 +340,7 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
   }
 
   (async () => {
+    const startTime = Date.now();
     let slotId: number | undefined;
     try {
       let workDir: string | undefined;
@@ -350,6 +368,7 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
       if (result.status === "completed") {
         log(`Pipeline completed: T-${ticketNumber} -> ${result.branch}`);
         await patchTicket(ticketNumber, { pipeline_status: "done", status: "in_review", branch: result.branch });
+        recordRun({ ticketNumber, status: "completed", at: new Date().toISOString(), durationMs: Date.now() - startTime });
       } else if (result.status === "paused") {
         log(`Pipeline paused: T-${ticketNumber}`);
         await patchTicket(ticketNumber, { pipeline_status: "paused", session_id: result.sessionId });
@@ -369,6 +388,7 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
         });
         log(`Pipeline failed: T-${ticketNumber} (${reason}) [${classification.action}]`);
         await patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Pipeline error: ${reason}` });
+        recordRun({ ticketNumber, status: "failed", error: reason, at: new Date().toISOString(), durationMs: Date.now() - startTime });
 
         if (classification.action === "auto_heal") {
           log(`Auto-healing: T-${ticketNumber} -- ${classification.reason}`);
@@ -395,6 +415,7 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
       log(`Pipeline crashed: T-${ticketNumber} -- ${reason} [${classification.action}]`);
       Sentry.captureException(error);
       await patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Server error: ${reason}` });
+      recordRun({ ticketNumber, status: "failed", error: reason, at: new Date().toISOString(), durationMs: Date.now() - startTime });
 
       if (classification.action === "auto_heal") {
         log(`Auto-healing: T-${ticketNumber} -- ${classification.reason}`);
@@ -508,29 +529,45 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   const method = req.method ?? "GET";
   const url = req.url ?? "/";
 
+  // CORS for Board dashboard access — scoped to Board domain
+  const boardOrigin = serverConfig?.workspace?.board_url ?? process.env.BOARD_URL ?? "https://board.just-ship.io";
+  const requestOrigin = req.headers.origin;
+  const allowedOrigin = requestOrigin === boardOrigin ? boardOrigin : "";
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": allowedOrigin,
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, X-Pipeline-Key",
+      "Access-Control-Max-Age": "86400",
+    });
+    res.end();
+    return;
+  }
+  if (allowedOrigin) res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+
   // GET /health — no auth
   if (method === "GET" && url === "/health") {
-    if (isMultiProjectMode) {
-      sendJson(res, 200, {
-        status: "ok",
-        mode: "multi-project",
-        running: pipelineState.running ? {
-          ticket_number: pipelineState.running.ticketNumber,
-          project: pipelineState.running.projectSlug,
-          started_at: pipelineState.running.startedAt.toISOString(),
-        } : null,
-        drain: drainManager.getStatus(),
-      });
-    } else {
-      sendJson(res, 200, {
-        status: "ok",
-        mode: "single-project",
-        running_count: runningTickets.size,
-        active_slots: worktreeManager?.getActiveSlots() ?? [],
-        max_workers: config.maxWorkers,
-        drain: drainManager.getStatus(),
-      });
-    }
+    const lastCompleted = runHistory.filter(r => r.status === "completed").at(-1) ?? null;
+    const lastError = runHistory.filter(r => r.status === "failed").at(-1) ?? null;
+
+    sendJson(res, 200, {
+      status: drainManager.getState() === "drained" ? "draining" : "ok",
+      mode: isMultiProjectMode ? "multi-project" : "single",
+      running: pipelineState.running
+        ? {
+            ticket_number: pipelineState.running.ticketNumber,
+            project: pipelineState.running.projectSlug,
+            started_at: pipelineState.running.startedAt.toISOString(),
+            elapsed_seconds: Math.round((Date.now() - pipelineState.running.startedAt.getTime()) / 1000),
+          }
+        : null,
+      last_completed: lastCompleted,
+      last_error: lastError,
+      recent_runs: runHistory.slice(-5),
+      uptime_seconds: Math.round((Date.now() - serverStartedAt) / 1000),
+      drain: drainManager.getStatus(),
+    });
     return;
   }
 
