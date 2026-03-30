@@ -10,6 +10,10 @@ export interface ErrorContext {
   projectDir?: string;
 }
 
+export interface TriageOptions {
+  skipAI?: boolean;
+}
+
 export interface ErrorClassification {
   action: "recovery" | "auto_heal" | "escalate";
   reason: string;
@@ -138,4 +142,25 @@ This ticket was automatically created by the pipeline error handler.`;
       ? `Auto-heal ticket T-${ticketNumber} created and resolved: ${classification.reason}`
       : `Auto-heal ticket T-${ticketNumber} created but status update failed: ${classification.reason}`,
   };
+}
+
+/**
+ * For errors classified as "escalate", optionally run AI triage
+ * to determine if the error is actually auto-healable.
+ * Uses haiku model for fast, cheap classification.
+ */
+export async function triageWithAI(
+  ctx: ErrorContext,
+  options?: TriageOptions,
+): Promise<ErrorClassification> {
+  // First try rule-based classification
+  const ruleResult = classifyError(ctx);
+  if (ruleResult.action !== "escalate") return ruleResult;
+
+  // If AI is skipped (testing) or no project dir, return escalate
+  if (options?.skipAI || !ctx.projectDir) return ruleResult;
+
+  // TODO: Implement AI triage call when auto-heal pipeline is ready
+  // Will call haiku model with error context to reclassify "escalate" → "auto_heal"
+  return ruleResult;
 }

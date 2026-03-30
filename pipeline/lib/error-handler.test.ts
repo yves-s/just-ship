@@ -123,3 +123,16 @@ describe("executeAutoHeal", () => {
     expect(result.summary).toContain("status update failed");
   });
 });
+
+describe("triageWithAI", () => {
+  it("returns escalate when no AI available", async () => {
+    const { triageWithAI } = await import("./error-handler.ts");
+    const result = await triageWithAI({
+      error: new Error("Something broke"),
+      ticketId: "123",
+      exitCode: 1,
+      timedOut: false,
+    }, { skipAI: true });
+    expect(result.action).toBe("escalate");
+  });
+});
