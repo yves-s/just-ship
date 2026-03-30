@@ -73,8 +73,9 @@ just-ship self-update
 | `/ticket` | Write a structured ticket (bug, feature, improvement, spike) | No |
 | `/implement` | Implement from chat context or description — no ticket required | Yes |
 | `/develop` | Pick next ticket, implement end-to-end, create PR | Yes |
-| `/ship` | Commit + push + PR + squash merge + board status "done" | Yes |
-| `/status` | Show current ticket, branch, and changes | -- |
+| `/ship` | Commit + push + PR + squash merge + board status "done". Supports `/ship T-{N}` | Yes |
+| `/review` | Checkout branch, install deps, build, start dev server for local testing | No |
+| `/status` | Show all branches, PRs, board status, worktrees, and cleanup recommendations | -- |
 | `/setup-just-ship` | Auto-detect stack, configure project, connect Dev Board, install Sidekick | Interactive |
 | `/just-ship-update` | Sync project files after framework update (auto-run by `just-ship update`) | Interactive |
 

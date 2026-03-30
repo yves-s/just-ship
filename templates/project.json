@@ -9,7 +9,10 @@
   },
   "build": {
     "web": "",
-    "test": ""
+    "test": "",
+    "dev": "",
+    "dev_port": null,
+    "install": ""
   },
   "hosting": "",
   "shopify": {
