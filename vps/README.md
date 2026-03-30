@@ -51,7 +51,7 @@ After VPS setup, connect individual projects. The command copies local env vars,
 |------|---------|
 | `Dockerfile` | Docker image: Node.js 20, git, gh, Claude Code, pipeline SDK |
 | `entrypoint.sh` | Container startup: configures git identity and gh auth |
-| `docker-compose.yml` | Caddy (HTTPS) + pipeline-server containers |
+| `docker-compose.yml` | Caddy (HTTPS) + pipeline-server + Bugsink + Dozzle containers |
 | `just-ship-updater.sh` | Update-Agent: watches for triggers, orchestrates zero-downtime updates |
 | `just-ship-updater.service` | systemd unit for Update-Agent (runs on host, outside Docker) |
 | `install-updater.sh` | Installs Update-Agent on a VPS host |
@@ -99,6 +99,27 @@ Located at `/home/claude-dev/.just-ship/server-config.json`:
   }
 }
 ```
+
+## Monitoring
+
+Built-in error tracking and live log visibility via two lightweight containers:
+
+| Service | Path | Purpose | RAM |
+|---------|------|---------|-----|
+| Bugsink | `/errors/` | Error tracking with stack traces (Sentry-compatible) | ~256 MB |
+| Dozzle | `/logs/` | Live Docker container log viewer | ~30 MB |
+
+Both UIs are protected by Caddy basicauth. The pipeline-server and worker automatically report errors to Bugsink via the `@sentry/node` SDK (configured through `BUGSINK_DSN` environment variable).
+
+### Environment Variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `BUGSINK_SECRET_KEY` | `changeme-generate-a-real-key` | Django secret key for Bugsink |
+| `BUGSINK_ADMIN_EMAIL` | `admin@localhost` | Bugsink admin email |
+| `BUGSINK_ADMIN_PASSWORD` | `admin` | Bugsink admin password (change on first login) |
+| `MONITORING_USER` | `admin` | Caddy basicauth username for `/errors/` and `/logs/` |
+| `MONITORING_HASH` | — | Caddy basicauth password hash (generate with `caddy hash-password`) |
 
 ## HTTPS einrichten (optional)
 

@@ -28,7 +28,34 @@ services:
       - /home/claude-dev/.env
     environment:
       - SERVER_CONFIG_PATH=/home/claude-dev/.just-ship/server-config.json
+      - BUGSINK_DSN=http://bugsink:8000/sentry/1/
+
+  bugsink:
+    image: bugsink/bugsink:latest
+    restart: unless-stopped
+    expose:
+      - "8000"
+    volumes:
+      - bugsink_data:/data
+    environment:
+      - BUGSINK_SECRET_KEY=${BUGSINK_SECRET_KEY:-changeme-generate-a-real-key}
+      - DATABASE_URL=sqlite:////data/bugsink.db
+      - BUGSINK_BASE_URL=${BUGSINK_BASE_URL:-http://localhost:8000}
+      - CREATE_SUPERUSER=admin
+      - SUPERUSER_EMAIL=${BUGSINK_ADMIN_EMAIL:-admin@localhost}
+      - SUPERUSER_PASSWORD=${BUGSINK_ADMIN_PASSWORD:-admin}
+
+  dozzle:
+    image: amir20/dozzle:latest
+    restart: unless-stopped
+    expose:
+      - "8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - DOZZLE_BASE=/logs
 
 volumes:
   caddy_data:
   caddy_config:
+  bugsink_data:
