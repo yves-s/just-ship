@@ -8,6 +8,7 @@ import { classifyError, executeAutoHeal } from "./lib/error-handler.ts";
 import { executePipeline, resumePipeline } from "./run.ts";
 import { WorktreeManager } from "./lib/worktree-manager.ts";
 import { DrainManager } from "./lib/drain.ts";
+import { withWatchdog, getWatchdogTimeoutMs } from "./lib/watchdog.ts";
 import {
   loadServerConfig,
   findProjectByProjectId,
@@ -75,34 +76,7 @@ const pipelineState: PipelineState = { running: null };
 const drainManager = new DrainManager(() => runningTickets.size);
 
 // --- Server-level watchdog timeout ---
-// If executePipeline/resumePipeline hangs (e.g. SDK async iterator doesn't propagate child exit),
-// the watchdog forces cleanup after the pipeline timeout + grace period.
-const WATCHDOG_GRACE_MS = 5 * 60_000; // 5 minutes grace on top of pipeline timeout
-const DEFAULT_PIPELINE_TIMEOUT_MS = 1_800_000; // 30 min — must match run.ts
-
-function getWatchdogTimeoutMs(): number {
-  const pipelineTimeout = Number(process.env.PIPELINE_TIMEOUT_MS) || DEFAULT_PIPELINE_TIMEOUT_MS;
-  return pipelineTimeout + WATCHDOG_GRACE_MS;
-}
-
-const WATCHDOG_SENTINEL = Symbol("watchdog");
-
-async function withWatchdog<T>(promise: Promise<T>, label: string): Promise<T> {
-  const timeoutMs = getWatchdogTimeoutMs();
-  let timer: ReturnType<typeof setTimeout>;
-  const watchdog = new Promise<typeof WATCHDOG_SENTINEL>((resolve) => {
-    timer = setTimeout(() => resolve(WATCHDOG_SENTINEL), timeoutMs);
-  });
-
-  const result = await Promise.race([promise, watchdog]);
-  clearTimeout(timer!);
-
-  if (result === WATCHDOG_SENTINEL) {
-    throw new Error(`Watchdog timeout: ${label} did not complete within ${Math.round(timeoutMs / 60_000)} minutes`);
-  }
-
-  return result as T;
-}
+// Shared watchdog module: withWatchdog() and getWatchdogTimeoutMs() imported from ./lib/watchdog.ts
 
 // --- Trigger file path (for Update-Agent communication) ---
 const TRIGGER_DIR = "/home/claude-dev/.just-ship/triggers";

@@ -176,6 +176,14 @@ export class WorktreeManager {
     return count;
   }
 
+  /**
+   * Returns the working directory for a given slot, or null if the slot doesn't exist.
+   */
+  getSlotDir(slotId: number): string | null {
+    const slot = this.slots.get(slotId);
+    return slot?.workDir ?? null;
+  }
+
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------

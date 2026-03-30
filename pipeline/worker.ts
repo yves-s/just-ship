@@ -5,6 +5,7 @@ import { mkdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { executePipeline } from "./run.ts";
 import { classifyError } from "./lib/error-handler.ts";
+import { withWatchdog, saveWorktreeWIP } from "./lib/watchdog.ts";
 import { WorktreeManager } from "./lib/worktree-manager.ts";
 import { loadProjectConfig } from "./lib/config.ts";
 import { generateChangeSummary } from "./lib/change-summary.ts";
@@ -237,6 +238,14 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
   const branchName = `${config.conventions.branch_prefix}${ticket.number}-${branchSlug}`;
 
   let slotId: number | undefined;
+  const runAbortController = new AbortController();
+  // Forward module-level abort to per-run controller
+  if (abortController.signal.aborted) {
+    runAbortController.abort();
+  } else {
+    abortController.signal.addEventListener("abort", () => runAbortController.abort(), { once: true });
+  }
+
   try {
     const slot = await worktreeManager.allocate(branchName);
     slotId = slot.slotId;
@@ -254,18 +263,21 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
 
     log(`Starting pipeline: T-${ticket.number} — ${ticket.title} (slot ${slotId})`);
 
-    const result = await executePipeline({
-      projectDir: PROJECT_DIR,
-      workDir: slot.workDir,
-      branchName,
-      ticket: {
-        ticketId: String(ticket.number),
-        title: ticket.title,
-        description: ticket.body ?? "No description provided",
-        labels: Array.isArray(ticket.tags) ? ticket.tags.join(",") : "",
-      },
-      abortSignal: abortController.signal,
-    });
+    const result = await withWatchdog(
+      executePipeline({
+        projectDir: PROJECT_DIR,
+        workDir: slot.workDir,
+        branchName,
+        ticket: {
+          ticketId: String(ticket.number),
+          title: ticket.title,
+          description: ticket.body ?? "No description provided",
+          labels: Array.isArray(ticket.tags) ? ticket.tags.join(",") : "",
+        },
+        abortSignal: runAbortController.signal,
+      }),
+      `T-${ticket.number}`
+    );
 
     if (result.status === "paused") {
       await supabasePatch(
@@ -301,6 +313,22 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
     if (slotId !== undefined) slotFailures.delete(slotId);
   } catch (error) {
     const errorObj = error instanceof Error ? error : new Error(String(error));
+    const isWatchdog = errorObj.message.startsWith("Watchdog timeout:");
+
+    if (isWatchdog) {
+      // Abort only this run's subprocess, not the entire worker
+      runAbortController.abort();
+      // Wait briefly for subprocess to terminate
+      await sleep(5000);
+      // Try to save WIP
+      if (slotId !== undefined) {
+        const worktreeDir = worktreeManager.getSlotDir(slotId);
+        if (worktreeDir) {
+          saveWorktreeWIP(worktreeDir, ticket.number);
+        }
+      }
+    }
+
     const classification = classifyError({
       error: errorObj,
       ticketId: String(ticket.number),
