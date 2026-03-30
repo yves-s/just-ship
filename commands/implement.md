@@ -8,10 +8,11 @@ disable-model-invocation: true
 
 Starte den vollen Agent-Workflow direkt aus dem Chat-Kontext oder einer expliziten Beschreibung.
 Kein Board, kein Ticket, keine Status-Updates erforderlich.
+Gleicher Prozess wie `/develop`, aber ohne Pipeline-Events, Triage und Ticket-Status.
 
 ## WICHTIGSTE REGEL
 
-**STOPPE NICHT ZWISCHEN DEN SCHRITTEN.** Alle Schritte 1–7 hintereinander ausführen.
+**STOPPE NICHT ZWISCHEN DEN SCHRITTEN.** Alle Schritte 1–9 hintereinander ausführen.
 Kein "Soll ich...?", kein "Möchtest du...?". ALLES DURCHLAUFEN.
 Schritt 8 endet mit einem offenen PR — **KEIN Merge**, nicht warten auf Bestätigung.
 
@@ -60,7 +61,7 @@ Lies die aktuelle Konversation und destilliere eine kompakte Spec:
 
 Danach SOFORT weiter — kein Warten auf Bestätigung.
 
-### 2. Feature-Branch erstellen
+### 2. Feature-Branch in Worktree erstellen (parallelsicher)
 
 Branch-Prefix aus Spec ableiten:
 - Spec enthält "bug", "fix", "fehler" → `fix/`
@@ -70,6 +71,25 @@ Branch-Prefix aus Spec ableiten:
 
 `{slug}` = kurze Kebab-Case-Zusammenfassung der Spec (max. 5 Wörter)
 
+Prüfe zuerst ob das aktuelle Verzeichnis bereits ein Worktree ist:
+```bash
+git rev-parse --git-dir 2>/dev/null
+```
+Falls die Ausgabe `.git` enthält (kein Worktree):
+
+```bash
+# Worktree erstellen für parallele Ausführung
+git fetch origin main
+BRANCH="{prefix}/{slug}"
+WORKTREE_DIR=".worktrees/{slug}"
+git worktree add "$WORKTREE_DIR" -b "$BRANCH" origin/main
+```
+
+Danach: **Alle weiteren Schritte (3-9) im Worktree-Verzeichnis ausführen.** Nutze `$WORKTREE_DIR` als Arbeitsverzeichnis für alle Bash-Befehle (`cwd`), Read, Edit, Glob, Grep.
+
+Ausgabe: `▶ worktree — .worktrees/{slug} erstellt`
+
+Falls bereits in einem Worktree (z.B. bei Resume): einfach den Branch erstellen wie bisher:
 ```bash
 git checkout main && git pull origin main
 git checkout -b {prefix}/{slug}
@@ -154,33 +174,42 @@ Falls `CHANGELOG.md` existiert aber keine `[Unreleased]`-Sektion hat, füge sie 
 
 #### Teil 2: Projektspezifische Docs (nur wenn Datei existiert)
 
-Prüfe ob die jeweilige Zieldatei existiert. **Nur bestehende Dateien aktualisieren** — keine neuen Docs anlegen.
+Prüfe ob die jeweilige Zieldatei existiert. **Nur bestehende Dateien aktualisieren** — keine neuen Docs anlegen. Falls eine Zieldatei nicht existiert, diesen Eintrag überspringen.
 
-| Geänderte Dateien | Zu prüfende Docs |
-|---|---|
-| `commands/*.md` | README.md → Commands-Tabelle + Architecture-Abschnitt |
-| `agents/*.md` | README.md → Agents-Tabelle |
-| `skills/*.md` | README.md → Skills-Tabelle |
-| `pipeline/**`, `agents/*.md`, `commands/*.md` | README.md → Workflow-Diagramm |
-| Pipeline/Architektur-Strukturen | CLAUDE.md |
-| Keine der obigen | Teil 2 überspringen |
+| Geänderte Dateien | Zu prüfende Docs | Aktion |
+|---|---|---|
+| `commands/*.md` | `README.md` | Commands-Tabelle + Architecture-Abschnitt |
+| `agents/*.md` | `README.md` | Agents-Tabelle |
+| `skills/*.md` | `README.md` | Skills-Tabelle |
+| `pipeline/**`, `agents/*.md`, `commands/*.md` | `README.md` | Workflow-Diagramm |
+| `pipeline/**`, `agents/*.md`, `.claude/**` | `docs/ARCHITECTURE.md` | Betroffene Sektionen (Agent System, Slash Commands, Pipeline SDK, etc.) |
+| Pipeline/Architektur-Strukturen | `CLAUDE.md` | Architektur-Abschnitt |
+| `commands/*.md`, `agents/*.md`, `skills/*.md` | `templates/CLAUDE.md` | Template aktualisieren falls Commands/Agents/Skills-Referenzen enthalten |
+| `vps/**`, `pipeline/worker.ts`, `pipeline/server.ts` | `vps/README.md` | VPS-spezifische Doku |
+| Workflow, Conventions, Dev-Setup | `CONTRIBUTING.md` | Contributing Guidelines |
+| Keine der obigen Trigger-Dateien | — | Teil 2 überspringen |
 
 Falls Anpassung nötig: direkt mit Edit-Tool ändern.
 
-Ausgabe:
+Ausgabe pro geprüfter Datei:
 - `✓ docs — CHANGELOG.md aktualisiert`
-- `✓ docs — README.md aktualisiert` (falls Änderungen gemacht)
-- `✓ docs — keine Änderungen nötig` (falls nur CHANGELOG und sonst nichts zu tun)
+- `✓ docs — README.md aktualisiert`
+- `✓ docs — docs/ARCHITECTURE.md aktualisiert`
+- `✓ docs — templates/CLAUDE.md aktualisiert`
+- `✓ docs — vps/README.md aktualisiert`
+- `✓ docs — CONTRIBUTING.md aktualisiert`
+- `✓ docs — keine Änderungen nötig` (falls nur CHANGELOG und sonst nichts zu tun war)
 
 **NICHT STOPPEN.** SOFORT weiter zu Schritt 8.
 
 ### 8. Abschließen — Commit + Push + PR (KEIN Merge)
 
-```bash
-git status
-```
+NICHT den Skill `finishing-a-development-branch` aufrufen.
+NICHT dem User Optionen präsentieren.
+NICHT fragen ob committed/gepusht werden soll.
+NICHT mergen. NICHT auf main wechseln.
 
-Falls uncommitted changes:
+**8a. Commit:**
 ```bash
 git add <betroffene-dateien>
 git commit -m "feat: {englische Beschreibung}
@@ -188,12 +217,12 @@ git commit -m "feat: {englische Beschreibung}
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 ```
 
-Push:
+**8b. Push:**
 ```bash
 git push -u origin $(git branch --show-current)
 ```
 
-PR erstellen (kein Merge):
+**8c. PR erstellen:**
 ```bash
 gh pr view 2>/dev/null || gh pr create \
   --title "feat: {Beschreibung}" \
@@ -211,12 +240,30 @@ EOF
 
 **NICHT mergen.** Der PR bleibt offen bis der User freigibt (via `/ship` oder "passt").
 
+### 9. Vercel Preview URL
+
+**Immer ausführen** — das Script erkennt automatisch ob ein Vercel-Deployment existiert und returned leer wenn nicht. Kein Config-Gate nötig.
+
+**WICHTIG:** Die Preview-URL MUSS eine Vercel-Deployment-URL sein (z.B. `https://<project>-<hash>.vercel.app`). NIEMALS einen GitHub-Link, PR-URL oder Repository-URL als Preview-URL verwenden.
+
+```bash
+PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)
+```
+
+Falls eine URL gefunden wurde, nur ausgeben:
+- `✓ preview — {PREVIEW_URL}`
+- `✓ preview — kein Vercel-Deployment gefunden, übersprungen` (falls keine URL)
+
+**Kein Fehler wenn keine URL gefunden wird.** Projekte ohne Vercel-Integration überspringen diesen Schritt automatisch.
+
 ### Abschluss-Ausgabe
 
 ```
 ✓ Implementiert: {Beschreibung}
   Branch: {branch-name}
+  Worktree: {worktree-dir}
   PR: {url}
   → Zum Mergen: /ship oder "passt"
 ```
 
+**Hinweis:** Worktree wird NICHT hier aufgeräumt — das passiert in `/ship` nach dem Merge, damit Nachbesserungen nach Code Review im Worktree möglich bleiben.
