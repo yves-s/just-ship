@@ -52,6 +52,9 @@ After VPS setup, connect individual projects. The command copies local env vars,
 | `Dockerfile` | Docker image: Node.js 20, git, gh, Claude Code, pipeline SDK |
 | `entrypoint.sh` | Container startup: configures git identity and gh auth |
 | `docker-compose.yml` | Caddy (HTTPS) + pipeline-server containers |
+| `just-ship-updater.sh` | Update-Agent: watches for triggers, orchestrates zero-downtime updates |
+| `just-ship-updater.service` | systemd unit for Update-Agent (runs on host, outside Docker) |
+| `install-updater.sh` | Installs Update-Agent on a VPS host |
 | `setup-vps.sh` | **DEPRECATED** — legacy bare-metal setup script |
 | `just-ship-pipeline@.service` | **DEPRECATED** — legacy systemd unit for polling worker |
 | `just-ship-server@.service` | **DEPRECATED** — legacy systemd unit for HTTP server |
@@ -65,10 +68,14 @@ After VPS setup, connect individual projects. The command copies local env vars,
 | `POST` | `/api/events` | Yes | Board event handler (filters to "launch") |
 | `POST` | `/api/answer` | Yes | Resume paused pipeline with human answer |
 | `POST` | `/api/ship` | Yes | Merge PR for a ticket |
-| `GET` | `/health` | No | Server status |
+| `POST` | `/api/update` | `X-Update-Secret` | Receive update trigger from Board |
+| `POST` | `/api/drain` | Yes | Start graceful drain for updates |
+| `POST` | `/api/force-drain` | Yes | Force immediate drain |
+| `GET` | `/health` | No | Server status (includes `drain` field) |
 | `GET` | `/api/status/:ticket` | No | Pipeline status for a ticket |
 
 Auth = `X-Pipeline-Key` header matching `server.pipeline_key` in server-config.json.
+`X-Update-Secret` = per-VPS secret matching `server.update_secret` in server-config.json.
 
 ## Server Config
 
@@ -76,7 +83,7 @@ Located at `/home/claude-dev/.just-ship/server-config.json`:
 
 ```json
 {
-  "server": { "port": 3001, "pipeline_key": "<secret>" },
+  "server": { "port": 3001, "pipeline_key": "<secret>", "update_secret": "<per-vps-secret>" },
   "workspace": {
     "workspace_id": "<uuid>",
     "board_url": "https://board.just-ship.io",
@@ -119,6 +126,20 @@ Der VPS laeuft standardmaessig ohne HTTPS auf `http://IP:3001`. Das funktioniert
 
 ## Update
 
+Updates are orchestrated by the Board via the Update-Agent (see design spec: `docs/superpowers/specs/2026-03-30-vps-update-process-design.md`).
+
+**Automatic:** Push to `main` → Board triggers canary rollout → Update-Agent handles git pull, docker build, drain, switch, health-check, and project updates.
+
+**Manual (emergency):**
 ```bash
 ssh root@<IP> "cd /home/claude-dev/just-ship && git pull && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml build --no-cache && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d"
 ```
+
+### Update-Agent
+
+The Update-Agent runs as a systemd service on the host (outside Docker). Install via:
+```bash
+sudo bash vps/install-updater.sh
+```
+
+It watches `/home/claude-dev/.just-ship/triggers/update-trigger.json` for update signals from the pipeline-server container and orchestrates: git checkout → docker build → drain → switch → health-check → rollback on failure.

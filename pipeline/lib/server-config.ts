@@ -11,6 +11,7 @@ export interface ServerConfig {
   server: {
     port: number;
     pipeline_key: string;
+    update_secret?: string;
   };
   workspace: {
     workspace_id: string;
