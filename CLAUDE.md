@@ -42,6 +42,26 @@ Dieses Repo nutzt ein Multi-Agent-System. Ob lokal oder auf dem Server:
 4. **Commit + PR** am Ende des Workflows → Board-Status "in_review"
 5. **Merge erst nach Freigabe** — User sagt "passt"/"ship it" oder `/ship`
 
+### Workflow-Modi
+
+Es gibt drei Modi, je nach Situation. Punkte 4+5 oben gelten für **Geplant** und **Ad-hoc**, nicht für Auto-Heal:
+
+| Modus | Trigger | Ticket | Branch | Review | Board |
+|---|---|---|---|---|---|
+| **Geplant** | User wählt Ticket (`/develop`) | existiert bereits | `feature/T-xxx-...` | PR + User-Review | `in_progress` → `in_review` → `done` |
+| **Ad-hoc** | User sagt "fix das" | optional | `fix/beschreibung` | PR + User-Review | — |
+| **Auto-Heal** | System erkennt Fehler | wird automatisch erstellt | `fix/auto-heal-T-xxx` | **kein PR, direkt merge** | `created` → `done` |
+
+**Geplant** = Standard-Workflow via `/develop` → `/ship`. Ticket existiert, Board-Updates sind Pflicht.
+
+**Ad-hoc** = User findet Bug in Session, will sofort fixen. Worktree erstellen, fix, PR. Kein Ticket nötig, kein Board-Update.
+
+**Auto-Heal** = Pipeline erkennt Fehler und fixt ihn selbstständig:
+1. Error Handler klassifiziert den Fehler (rule-based + AI triage)
+2. Bei `auto_heal`: Bug-Ticket wird erstellt (Audit-Trail)
+3. Fix wird implementiert und direkt gemergt (kein PR, kein Review)
+4. Bei Fehlschlag: Ticket bleibt auf `ready_to_develop`, User entscheidet
+
 ## Ticket-Workflow (Just Ship Board)
 
 > Nur aktiv wenn `pipeline.workspace_id` und `pipeline.project_id` in `project.json` gesetzt sind. Ohne Pipeline-Config werden diese Schritte übersprungen.
