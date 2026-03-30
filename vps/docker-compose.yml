@@ -39,7 +39,7 @@ services:
       - bugsink_data:/data
     environment:
       - BUGSINK_SECRET_KEY=${BUGSINK_SECRET_KEY:-changeme-generate-a-real-key}
-      - DATABASE_URL=sqlite:////data/bugsink.db
+      - BUGSINK_DB_DIR=/data
       - BUGSINK_BASE_URL=${BUGSINK_BASE_URL:-http://localhost:8000}
       - CREATE_SUPERUSER=admin
       - SUPERUSER_EMAIL=${BUGSINK_ADMIN_EMAIL:-admin@localhost}
