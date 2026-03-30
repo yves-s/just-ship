@@ -23,6 +23,7 @@ services:
     volumes:
       - /home/claude-dev/projects:/home/claude-dev/projects
       - /home/claude-dev/.just-ship:/home/claude-dev/.just-ship:ro
+      - /home/claude-dev/.just-ship/triggers:/home/claude-dev/.just-ship/triggers:rw
     env_file:
       - /home/claude-dev/.env
     environment:

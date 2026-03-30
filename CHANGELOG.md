@@ -3,6 +3,16 @@
 ## [Unreleased]
 
 ### Added
+- VPS Update-Agent (`just-ship-updater.sh`) — host-level systemd service that orchestrates zero-downtime updates
+- Drain mechanism (`pipeline/lib/drain.ts`) — graceful drain state machine (normal → draining → drained) for zero-downtime container replacement
+- `/api/update` endpoint — receives update triggers from the Board, writes trigger file for Update-Agent
+- `/api/drain` and `/api/force-drain` endpoints — control graceful shutdown of running pipelines
+- Health endpoint extended with `drain` status field (backward-compatible)
+- `install-updater.sh` — installer for the Update-Agent on VPS hosts
+- `update_secret` field in `ServerConfig` — per-VPS authentication for update triggers
+- Docker trigger volume mount (`/home/claude-dev/.just-ship/triggers:rw`) for container-to-host communication
+
+### Added
 - Shopify as first-class hosting type — `/develop` pushes unpublished theme per ticket, `/ship` cleans up after merge
 - `shopify-preview.sh` script for theme push, preview URL extraction, and cleanup
 - `no-settings-data-edit.md` rule — hard guard preventing agents from editing merchant customizations

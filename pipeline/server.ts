@@ -1,8 +1,10 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { execSync } from "node:child_process";
+import { writeFileSync, mkdirSync } from "node:fs";
 import { loadProjectConfig, type ProjectConfig } from "./lib/config.ts";
 import { executePipeline, resumePipeline } from "./run.ts";
 import { WorktreeManager } from "./lib/worktree-manager.ts";
+import { DrainManager } from "./lib/drain.ts";
 import {
   loadServerConfig,
   findProjectByProjectId,
@@ -66,6 +68,12 @@ interface PipelineState {
 }
 const pipelineState: PipelineState = { running: null };
 
+// --- Drain manager (for zero-downtime updates) ---
+const drainManager = new DrainManager(() => runningTickets.size);
+
+// --- Trigger file path (for Update-Agent communication) ---
+const TRIGGER_DIR = "/home/claude-dev/.just-ship/triggers";
+
 // --- Board API helpers ---
 function getApiCredentials(): { apiUrl: string; apiKey: string } {
   if (serverConfig) {
@@ -127,6 +135,18 @@ function readBody(req: IncomingMessage): Promise<string> {
 
 // --- Launch logic (shared between /api/launch and /api/events) ---
 async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId?: string): Promise<void> {
+  // 0. Drain guard — reject new runs when draining/drained
+  if (!drainManager.canAcceptWork()) {
+    res.setHeader("Retry-After", "60");
+    sendJson(res, 503, {
+      status: "unavailable",
+      ticket_number: ticketNumber,
+      message: "Server is draining for update — retry later",
+      drain: drainManager.getStatus(),
+    });
+    return;
+  }
+
   // 1. In-memory guard
   if (runningTickets.has(ticketNumber)) {
     sendJson(res, 409, {
@@ -429,6 +449,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
           project: pipelineState.running.projectSlug,
           started_at: pipelineState.running.startedAt.toISOString(),
         } : null,
+        drain: drainManager.getStatus(),
       });
     } else {
       sendJson(res, 200, {
@@ -437,6 +458,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
         running_count: runningTickets.size,
         active_slots: worktreeManager?.getActiveSlots() ?? [],
         max_workers: config.maxWorkers,
+        drain: drainManager.getStatus(),
       });
     }
     return;
@@ -699,6 +721,100 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 
     const projectId = body.project_id as string | undefined;
     await handleShip(ticketNumber, res, projectId);
+    return;
+  }
+
+  // POST /api/update — Receive update trigger from Board, write trigger file for Update-Agent
+  if (method === "POST" && url === "/api/update") {
+    const updateSecret = serverConfig?.server.update_secret;
+    const headerSecret = req.headers["x-update-secret"] as string | undefined;
+    if (!updateSecret || !headerSecret || headerSecret !== updateSecret) {
+      sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Update-Secret" });
+      return;
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      const raw = await readBody(req);
+      body = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
+      return;
+    }
+
+    const version = body.version as string | undefined;
+    const rolloutId = body.rollout_id as string | undefined;
+    if (!version || !rolloutId) {
+      sendJson(res, 400, { status: "bad_request", message: "Missing required fields: version, rollout_id" });
+      return;
+    }
+
+    // Write trigger file for the host-level Update-Agent
+    try {
+      mkdirSync(TRIGGER_DIR, { recursive: true });
+      const triggerPayload = {
+        schema_version: 1,
+        version,
+        rollout_id: rolloutId,
+        triggered_at: new Date().toISOString(),
+      };
+      writeFileSync(`${TRIGGER_DIR}/update-trigger.json`, JSON.stringify(triggerPayload, null, 2));
+      log(`Update trigger written: version=${version} rollout=${rolloutId}`);
+      sendJson(res, 202, { status: "accepted", message: "Update trigger written for Update-Agent" });
+    } catch (err: unknown) {
+      const reason = err instanceof Error ? err.message : "Unknown error";
+      log(`Failed to write update trigger: ${reason}`);
+      sendJson(res, 500, { status: "error", message: `Failed to write trigger file: ${reason}` });
+    }
+    return;
+  }
+
+  // POST /api/drain — Start graceful drain (authenticated with X-Pipeline-Key)
+  if (method === "POST" && url === "/api/drain") {
+    const apiKey = req.headers["x-pipeline-key"] as string | undefined;
+    if (!apiKey || apiKey !== PIPELINE_SERVER_KEY) {
+      sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Pipeline-Key" });
+      return;
+    }
+
+    const started = drainManager.startDrain({
+      onForceStop: async () => {
+        // Mark all running tickets as interrupted
+        for (const ticketNumber of runningTickets) {
+          log(`Force-drain: marking T-${ticketNumber} as interrupted_by_update`);
+          await patchTicket(ticketNumber, {
+            pipeline_status: "failed",
+            status: "ready_to_develop",
+            summary: "Pipeline interrupted by VPS update — will be re-queued",
+          });
+        }
+      },
+    });
+
+    if (started) {
+      log("Drain started — new runs will be rejected");
+      sendJson(res, 202, { status: "accepted", message: "Drain started", drain: drainManager.getStatus() });
+    } else {
+      sendJson(res, 409, {
+        status: "conflict",
+        message: `Server is already in state: ${drainManager.getState()}`,
+        drain: drainManager.getStatus(),
+      });
+    }
+    return;
+  }
+
+  // POST /api/force-drain — Force immediate drain (authenticated with X-Pipeline-Key)
+  if (method === "POST" && url === "/api/force-drain") {
+    const apiKey = req.headers["x-pipeline-key"] as string | undefined;
+    if (!apiKey || apiKey !== PIPELINE_SERVER_KEY) {
+      sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Pipeline-Key" });
+      return;
+    }
+
+    log("Force-drain requested");
+    await drainManager.forceDrain();
+    sendJson(res, 200, { status: "ok", message: "Force-drain completed", drain: drainManager.getStatus() });
     return;
   }
 
