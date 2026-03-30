@@ -30,6 +30,8 @@ export interface QaContext {
   buildCommand?: string;
   testCommand?: string;
   env?: Record<string, string>;
+  verifyOutput?: string;
+  verifyFailed?: boolean;
 }
 
 export interface QaCheckResult {

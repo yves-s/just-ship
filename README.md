@@ -229,7 +229,7 @@ just-ship/
 │   ├── worker.ts               # Supabase polling worker (VPS)
 │   ├── server.ts               # HTTP server (webhooks, /api/answer)
 │   ├── run.sh                  # Bash wrapper
-│   └── lib/                    # Config, agent loader, event hooks
+│   └── lib/                    # Config, agent loader, skill loader, event hooks, cost tracking
 ├── templates/                  # CLAUDE.md + project.json templates
 ├── vps/                        # VPS deployment (systemd, setup script)
 └── .claude/                    # Claude Code config (hooks, scripts, settings)

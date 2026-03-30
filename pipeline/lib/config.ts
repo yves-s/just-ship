@@ -23,10 +23,21 @@ export interface ProjectConfig {
   name: string;
   description: string;
   conventions: { branch_prefix: string };
-  pipeline: PipelineConfig;
+  pipeline: PipelineConfig & { skipAgents?: string[] };
   maxWorkers: number;
   qa: QaConfig;
-  stack: { packageManager: string; buildCommand?: string; testCommand?: string };
+  stack: {
+    packageManager: string;
+    buildCommand?: string;
+    testCommand?: string;
+    verifyCommand?: string;
+    platform?: string;
+    variant?: string;
+  };
+  skills?: {
+    domain?: string[];
+    custom?: string[];
+  };
 }
 
 export interface TicketArgs {
@@ -77,7 +88,7 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
       name: "project",
       description: "",
       conventions: { branch_prefix: "feature/" },
-      pipeline: buildPipelineConfig({}),
+      pipeline: { ...buildPipelineConfig({}), skipAgents: [] },
       maxWorkers: 1,
       qa: {
         maxFixIterations: 3,
@@ -89,6 +100,7 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
         vercelPreviewMaxWaitMs: 300000,
       },
       stack: { packageManager: "npm" },
+      skills: undefined,
     };
   }
   const raw = JSON.parse(readFileSync(configPath, "utf-8"));
@@ -175,14 +187,21 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
     name: raw.name ?? "project",
     description: raw.description ?? "",
     conventions: { branch_prefix: raw.conventions?.branch_prefix ?? "feature/" },
-    pipeline,
+    pipeline: {
+      ...pipeline,
+      skipAgents: (rawPipeline.skip_agents as string[]) ?? [],
+    },
     maxWorkers: Number(rawPipeline.max_workers ?? 1),
     qa,
     stack: {
       packageManager: raw.stack?.package_manager ?? "npm",
       buildCommand: raw.build?.web as string | undefined,
       testCommand: raw.build?.test as string | undefined,
+      verifyCommand: raw.build?.verify as string | undefined,
+      platform: raw.stack?.platform as string | undefined,
+      variant: raw.stack?.variant as string | undefined,
     },
+    skills: raw.skills as { domain?: string[]; custom?: string[] } | undefined,
   };
 }
 
