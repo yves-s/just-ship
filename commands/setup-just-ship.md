@@ -171,7 +171,7 @@ Lies die vorhandenen Dateien im Projekt-Root um den Stack zu erkennen:
 - `go.mod` → Go
 - `Cargo.toml` → Rust
 
-**Framework-Erkennung (aus Dependencies):**
+**Framework-Erkennung (aus Dependencies oder Dateistruktur):**
 - `next` → Next.js (prüfe `next.config.*` für App Router vs Pages Router)
 - `nuxt` → Nuxt
 - `@angular/core` → Angular
@@ -180,6 +180,7 @@ Lies die vorhandenen Dateien im Projekt-Root um den Stack zu erkennen:
 - `vue` (ohne nuxt) → Vue
 - `express` / `fastify` / `hono` → Node Backend
 - `django` / `flask` / `fastapi` → Python Backend
+- `sections/` + `layout/theme.liquid` existieren → Shopify Theme (kein package.json nötig)
 
 **Datenbank:**
 - `supabase/` Verzeichnis oder `@supabase/supabase-js` → Supabase
@@ -233,6 +234,13 @@ Lies die aktuelle `project.json`. Befülle/aktualisiere folgende Felder basieren
   }
 }
 ```
+
+**Shopify-Projekte:** Falls als Shopify-Theme erkannt:
+- `stack.framework: "shopify"`
+- `stack.language: "liquid"`
+- `build.web: "shopify theme check --fail-level error"`
+- `hosting: "shopify"`
+- `shopify.store`: Aus `shopify.theme.toml` ([environments.default].store) lesen, falls vorhanden. Sonst aus bestehendem `project.json`. Falls nicht vorhanden → User fragen: "Shopify Store URL? (z.B. `client-store.myshopify.com`)"
 
 **Regeln:**
 - Nur Felder setzen die du sicher erkannt hast — nichts raten

@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+- Shopify as first-class hosting type — `/develop` pushes unpublished theme per ticket, `/ship` cleans up after merge
+- `shopify-preview.sh` script for theme push, preview URL extraction, and cleanup
+- `no-settings-data-edit.md` rule — hard guard preventing agents from editing merchant customizations
+- `write-config.sh` extended with `--shopify-password` flag for Theme Access passwords on VPS
+- `/setup-just-ship` auto-detects Shopify themes (`sections/` + `layout/theme.liquid`) and configures project accordingly
+- `setup.sh` checks for Shopify CLI as optional prerequisite when theme project detected
+- Playwright QA now works with Shopify preview URLs (hosting-agnostic), with storefront password support
+- `templates/project.json` includes `hosting` and `shopify.store` fields
+
 ### Fixed
 - VPS pipeline now runs as non-root user (uid=1001) — Claude Code refused `--dangerously-skip-permissions` as root
 - VPS pipeline container now correctly receives `ANTHROPIC_API_KEY` — project env was not forwarded to triage and QA-fix-loop query calls

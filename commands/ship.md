@@ -157,7 +157,30 @@ git checkout main && git pull origin main
 
 SOFORT WEITER ZU SCHRITT 5a.
 
-### 5a. Worktree Cleanup (falls Worktree existiert)
+### 5a. Shopify Theme Cleanup (falls Shopify-Projekt)
+
+```bash
+HOSTING=$(node -e "
+  const c = require('./project.json');
+  const h = c.hosting || (c.stack?.framework === 'shopify' ? 'shopify' : '');
+  process.stdout.write(h);
+")
+
+if [ "$HOSTING" = "shopify" ]; then
+  # Falls Worktree: Theme-ID-Datei liegt dort
+  THEME_ID_FILE=".worktrees/T-${N}/.claude/.shopify-theme-id"
+  [ ! -f "$THEME_ID_FILE" ] && THEME_ID_FILE=".claude/.shopify-theme-id"
+  SHOPIFY_THEME_ID_FILE="$THEME_ID_FILE" bash .claude/scripts/shopify-preview.sh cleanup
+fi
+```
+
+Ausgabe:
+- `✓ shopify — Theme gelöscht` (falls Theme-ID vorhanden)
+- Still überspringen falls kein Shopify-Projekt oder keine Theme-ID
+
+SOFORT WEITER ZU SCHRITT 5b.
+
+### 5b. Worktree Cleanup (falls Worktree existiert)
 
 Prüfe ob ein Worktree für dieses Ticket existiert:
 ```bash
@@ -170,6 +193,8 @@ Ausgabe: `✓ worktree — .worktrees/T-{N} aufgeräumt` (falls vorhanden)
 Falls kein Worktree existiert: still überspringen.
 
 SOFORT WEITER ZU SCHRITT 6.
+
+**Hinweis:** Schritt 3b (Vercel Preview URL) bleibt unverändert. Für Shopify-Projekte returned das Vercel-Script leer, und die Preview-URL wurde bereits während `/develop` Schritt 9f ins Ticket geschrieben.
 
 ### 6. Pipeline-Status auf "done" (nur wenn konfiguriert)
 

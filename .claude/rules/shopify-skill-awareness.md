@@ -24,3 +24,4 @@ If the Skill tool doesn't find them, read the files directly from `.claude/skill
 3. For section development: always load `shopify-liquid` — it covers schema patterns, snippet vs section decisions, and Liquid gotchas
 4. For structural changes (new templates, asset loading, settings): also load `shopify-theme`
 5. For custom data (metafields, metaobjects): also load `shopify-metafields`
+6. Respect `.shopifyignore` — never modify or push files listed there
