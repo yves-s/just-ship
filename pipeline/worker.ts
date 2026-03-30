@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { mkdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { executePipeline } from "./run.ts";
+import { classifyError } from "./lib/error-handler.ts";
 import { WorktreeManager } from "./lib/worktree-manager.ts";
 import { loadProjectConfig } from "./lib/config.ts";
 import { generateChangeSummary } from "./lib/change-summary.ts";
@@ -295,9 +296,23 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
 
     if (slotId !== undefined) slotFailures.delete(slotId);
   } catch (error) {
-    const reason = error instanceof Error ? error.message : "Unknown error";
-    log(`Pipeline failed: T-${ticket.number} (${reason})`);
-    await failTicket(ticket.number, `Pipeline error: ${reason}`);
+    const errorObj = error instanceof Error ? error : new Error(String(error));
+    const classification = classifyError({
+      error: errorObj,
+      ticketId: String(ticket.number),
+      exitCode: 1,
+      timedOut: false,
+      branch: branchName,
+      projectDir: PROJECT_DIR,
+    });
+
+    log(`Pipeline failed: T-${ticket.number} (${errorObj.message}) [${classification.action}]`);
+    await failTicket(ticket.number, `Pipeline error: ${errorObj.message}`);
+
+    // Auto-heal: worker only logs the classification for now.
+    // Full auto-heal (ticket creation + fix) runs via server.ts which has Board REST API access.
+    // The worker talks to Supabase directly and lacks a POST helper for ticket creation.
+    // Future: add supabasePost to worker.ts or route auto-heal through the server.
 
     if (slotId !== undefined) {
       const count = (slotFailures.get(slotId) ?? 0) + 1;

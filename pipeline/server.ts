@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { execSync } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { loadProjectConfig, type ProjectConfig } from "./lib/config.ts";
+import { classifyError, executeAutoHeal } from "./lib/error-handler.ts";
 import { executePipeline, resumePipeline } from "./run.ts";
 import { WorktreeManager } from "./lib/worktree-manager.ts";
 import { DrainManager } from "./lib/drain.ts";
@@ -110,6 +111,26 @@ function getApiCredentials(): { apiUrl: string; apiKey: string } {
     return { apiUrl: serverConfig.workspace.board_url, apiKey: serverConfig.workspace.api_key };
   }
   return { apiUrl: config.pipeline.apiUrl, apiKey: config.pipeline.apiKey };
+}
+
+function boardApiAdapter(projectCfg: ProjectConfig) {
+  return {
+    createTicket: async (title: string, body: string): Promise<number | null> => {
+      const { apiUrl, apiKey } = getApiCredentials();
+      try {
+        const res = await fetch(`${apiUrl}/api/tickets`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Pipeline-Key": apiKey },
+          body: JSON.stringify({ title, body, tags: ["auto-heal", "bug"], project_id: projectCfg.pipeline.projectId }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) return null;
+        const json = (await res.json()) as { data?: { number?: number } };
+        return json.data?.number ?? null;
+      } catch { return null; }
+    },
+    patchTicket: (n: number, data: Record<string, unknown>) => patchTicket(n, data),
+  };
 }
 
 async function fetchTicket(ticketNumber: number): Promise<Record<string, unknown> | null> {
@@ -362,13 +383,51 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
         }
       } else {
         const reason = result.failureReason ?? `exited with code ${result.exitCode}`;
-        log(`Pipeline failed: T-${ticketNumber} (${reason})`);
+        const classification = classifyError({
+          error: new Error(reason),
+          ticketId: String(ticketNumber),
+          exitCode: result.exitCode,
+          timedOut: false,
+          branch: branchName,
+          projectDir,
+        });
+        log(`Pipeline failed: T-${ticketNumber} (${reason}) [${classification.action}]`);
         await patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Pipeline error: ${reason}` });
+
+        if (classification.action === "auto_heal") {
+          log(`Auto-healing: T-${ticketNumber} -- ${classification.reason}`);
+          const healResult = await executeAutoHeal(
+            { error: new Error(reason), ticketId: String(ticketNumber), exitCode: result.exitCode, timedOut: false, branch: branchName, projectDir },
+            classification,
+            boardApiAdapter(projectConfig),
+          );
+          if (healResult.healed) log(`Auto-heal complete: ${healResult.summary}`);
+        }
       }
     } catch (error) {
-      const reason = error instanceof Error ? error.message : "Unknown error";
-      log(`Pipeline crashed: T-${ticketNumber} -- ${reason}`);
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      const classification = classifyError({
+        error: errorObj,
+        ticketId: String(ticketNumber),
+        exitCode: 1,
+        timedOut: false,
+        branch: branchName,
+        projectDir,
+      });
+
+      const reason = errorObj.message;
+      log(`Pipeline crashed: T-${ticketNumber} -- ${reason} [${classification.action}]`);
       await patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Server error: ${reason}` });
+
+      if (classification.action === "auto_heal") {
+        log(`Auto-healing: T-${ticketNumber} -- ${classification.reason}`);
+        const healResult = await executeAutoHeal(
+          { error: errorObj, ticketId: String(ticketNumber), exitCode: 1, timedOut: false, branch: branchName, projectDir },
+          classification,
+          boardApiAdapter(projectConfig),
+        );
+        if (healResult.healed) log(`Auto-heal complete: ${healResult.summary}`);
+      }
     } finally {
       if (!isMultiProjectMode && slotId !== undefined) await worktreeManager!.release(slotId);
       if (isMultiProjectMode) pipelineState.running = null;
@@ -717,12 +776,51 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
           await patchTicket(ticketNumber, { pipeline_status: "done", status: "in_review", branch: result.branch, session_id: null });
         } else {
           const reason = result.failureReason ?? `exited with code ${result.exitCode}`;
+          const classification = classifyError({
+            error: new Error(reason),
+            ticketId: String(ticketNumber),
+            exitCode: result.exitCode,
+            timedOut: false,
+            branch: branchName,
+            projectDir: answerProjectDir,
+          });
+          log(`Pipeline failed: T-${ticketNumber} (${reason}) [${classification.action}]`);
           await patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Pipeline error: ${reason}`, session_id: null });
+
+          if (classification.action === "auto_heal") {
+            log(`Auto-healing: T-${ticketNumber} -- ${classification.reason}`);
+            const healResult = await executeAutoHeal(
+              { error: new Error(reason), ticketId: String(ticketNumber), exitCode: result.exitCode, timedOut: false, branch: branchName, projectDir: answerProjectDir },
+              classification,
+              boardApiAdapter(answerProjectConfig),
+            );
+            if (healResult.healed) log(`Auto-heal complete: ${healResult.summary}`);
+          }
         }
       } catch (error) {
-        const reason = error instanceof Error ? error.message : "Unknown error";
-        log(`Pipeline resume crashed: T-${ticketNumber} -- ${reason}`);
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        const classification = classifyError({
+          error: errorObj,
+          ticketId: String(ticketNumber),
+          exitCode: 1,
+          timedOut: false,
+          branch: branchName,
+          projectDir: answerProjectDir,
+        });
+
+        const reason = errorObj.message;
+        log(`Pipeline resume crashed: T-${ticketNumber} -- ${reason} [${classification.action}]`);
         await patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Resume error: ${reason}`, session_id: null });
+
+        if (classification.action === "auto_heal") {
+          log(`Auto-healing: T-${ticketNumber} -- ${classification.reason}`);
+          const healResult = await executeAutoHeal(
+            { error: errorObj, ticketId: String(ticketNumber), exitCode: 1, timedOut: false, branch: branchName, projectDir: answerProjectDir },
+            classification,
+            boardApiAdapter(answerProjectConfig),
+          );
+          if (healResult.healed) log(`Auto-heal complete: ${healResult.summary}`);
+        }
       } finally {
         if (!isMultiProjectMode && slotId !== undefined) await worktreeManager!.release(slotId);
         runningTickets.delete(ticketNumber);
