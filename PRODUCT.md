@@ -26,7 +26,7 @@ The core framework. Gets installed into target projects via `setup.sh`. Contains
 - **Worker** — Supabase polling for queued tasks, multi-worker concurrency
 - **Server** — HTTP endpoints for Board integration (`/api/launch`, `/api/events`, `/api/answer`, `/api/ship`)
 
-**Slash Commands:** `/develop`, `/ship`, `/ticket`, `/connect-board`, `/disconnect-board`, `/setup-just-ship`, `/just-ship-update`, `/just-ship-vps`, `/add-project`, `/status`
+**Slash Commands:** `/develop`, `/ship`, `/ticket`, `/review`, `/just-ship-status`, `/connect-board`, `/disconnect-board`, `/setup-just-ship`, `/just-ship-update`, `/just-ship-vps`, `/add-project`
 
 **Skills (23):** brainstorming, writing-plans, executing-plans, TDD, systematic-debugging, code-review, frontend-design, creative-design, ux-planning, backend, data-engineer, Shopify (theme, liquid, metafields), webapp-testing, and more
 

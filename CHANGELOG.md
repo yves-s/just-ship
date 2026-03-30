@@ -10,7 +10,7 @@
 - `build.dev`, `build.dev_port`, `build.install` fields in `project.json` for dev-server and dependency configuration
 
 ### Changed
-- `/status` command rewritten — now shows all branches, PRs, board status, worktrees, and cleanup recommendations (replaces legacy single-ticket Supabase view)
+- `/just-ship-status` command rewritten — now shows all branches, PRs, board status, worktrees, and cleanup recommendations (replaces legacy single-ticket Supabase view)
 
 ### Added
 - VPS Update-Agent (`just-ship-updater.sh`) — host-level systemd service that orchestrates zero-downtime updates

@@ -131,7 +131,7 @@ just-ship/                         # Framework repository
 |   +-- develop.md                 # Implement next ticket (/develop)
 |   +-- ship.md                    # Commit, push, PR, merge, done (/ship, /ship T-{N})
 |   +-- review.md                  # Checkout, build, dev-server, test (/review, /review T-{N})
-|   +-- status.md                  # Show branches, PRs, board, worktrees (/status)
+|   +-- just-ship-status.md         # Show branches, PRs, board, worktrees (/just-ship-status)
 |   +-- setup-just-ship.md          # Auto-detect stack, configure project
 |   +-- just-ship-update.md          # Sync templates after framework update
 +-- skills/                        # Framework skills (copied to projects)
@@ -304,7 +304,7 @@ Commands are markdown files in `commands/` with frontmatter metadata. They provi
 
 | Command | Purpose |
 |---------|---------|
-| `/status` | Show all branches, PRs, board status, worktrees, and cleanup recommendations |
+| `/just-ship-status` | Show all branches, PRs, board status, worktrees, and cleanup recommendations |
 | `/setup-just-ship` | Auto-detect stack, fill `project.json`, connect Just Ship Board |
 | `/just-ship-update` | Sync `CLAUDE.md` and `project.json` after framework update (auto-run by `just-ship update`) |
 

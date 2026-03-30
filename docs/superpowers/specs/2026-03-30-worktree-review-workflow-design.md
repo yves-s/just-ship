@@ -20,7 +20,7 @@ Das fuehrt dazu, dass Tickets in Review versauern, Worktrees und Branches stale 
 
 Drei Aenderungen am Command-Set:
 
-1. **`/status`** — Read-only Uebersicht ueber den lokalen Repo-Zustand
+1. **`/just-ship-status`** — Read-only Uebersicht ueber den lokalen Repo-Zustand
 2. **`/review`** — Branch auschecken, builden, Dev-Server starten, auf Feedback warten
 3. **`/ship` Erweiterung** — Ticket-Argument, Dev-Server-Cleanup, Stale-Hinweis
 
@@ -47,7 +47,7 @@ User (lokal):
 
 ---
 
-## 1. `/status` Command
+## 1. `/just-ship-status` Command
 
 ### Zweck
 
@@ -177,7 +177,7 @@ Falls der Fix den Build bricht: Output zeigen, Claude versucht den Build-Fehler 
 
 - Build-Fehler: Output zeigen, fragen ob trotzdem Dev-Server starten
 - Checkout-Fehler (uncommitted changes): Warnung, abbrechen
-- Kein Branch gefunden: Fehlermeldung mit Hinweis auf `/status`
+- Kein Branch gefunden: Fehlermeldung mit Hinweis auf `/just-ship-status`
 - Bereits auf einem Review-Branch mit laufendem Dev-Server: alten Dev-Server stoppen (PID aus `.claude/.dev-server-pid`), dann neuen Branch auschecken
 
 ---

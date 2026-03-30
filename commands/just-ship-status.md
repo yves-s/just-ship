@@ -1,6 +1,6 @@
 ---
-name: status
-description: /status — Lokalen Repo-Zustand anzeigen (Branches, PRs, Board, Worktrees)
+name: just-ship-status
+description: /just-ship-status — Lokalen Repo-Zustand anzeigen (Branches, PRs, Board, Worktrees)
 ---
 
 # /status — Lokalen Repo-Zustand anzeigen
