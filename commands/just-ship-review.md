@@ -1,6 +1,6 @@
 ---
-name: review
-description: /review — Branch lokal auschecken, builden, Dev-Server starten und testen
+name: just-ship-review
+description: /just-ship-review — Branch lokal auschecken, builden, Dev-Server starten und testen
 ---
 
 # /review — Branch lokal auschecken, builden und testen

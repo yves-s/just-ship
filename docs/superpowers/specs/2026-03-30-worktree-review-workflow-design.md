@@ -21,7 +21,7 @@ Das fuehrt dazu, dass Tickets in Review versauern, Worktrees und Branches stale 
 Drei Aenderungen am Command-Set:
 
 1. **`/just-ship-status`** — Read-only Uebersicht ueber den lokalen Repo-Zustand
-2. **`/review`** — Branch auschecken, builden, Dev-Server starten, auf Feedback warten
+2. **`/just-ship-review`** — Branch auschecken, builden, Dev-Server starten, auf Feedback warten
 3. **`/ship` Erweiterung** — Ticket-Argument, Dev-Server-Cleanup, Stale-Hinweis
 
 ### Lifecycle
@@ -103,7 +103,7 @@ Nur ausfuehren wenn `pipeline.workspace_id` in `project.json` gesetzt ist.
 
 ---
 
-## 2. `/review` Command
+## 2. `/just-ship-review` Command
 
 ### Zweck
 
@@ -111,7 +111,7 @@ Den fehlenden Schritt zwischen Board und `/ship` — Branch lokal auschecken, bu
 
 ### Zwei Modi
 
-#### `/review` (ohne Argument) — Branch-Auswahl
+#### `/just-ship-review` (ohne Argument) — Branch-Auswahl
 
 Sammelt alle Feature/Fix-Branches mit Kontext (PR-Status, Board-Status) und praesentiert sie als Auswahl (Multiple-Choice-Optionen im Chat):
 
@@ -199,13 +199,13 @@ Wie bisher: shipped den aktuellen Branch. Fehler wenn auf `main`.
 
 ### `/ship T-{N}` mit Argument
 
-1. Branch zum Ticket finden (gleiche Logik wie `/review`)
+1. Branch zum Ticket finden (gleiche Logik wie `/just-ship-review`)
 2. `git checkout {branch}`
 3. Normaler `/ship`-Flow ab Schritt 1
 
 ### Dev-Server Cleanup
 
-**PID-Tracking:** Wenn `/review` den Dev-Server startet, wird die PID in `.claude/.dev-server-pid` gespeichert.
+**PID-Tracking:** Wenn `/just-ship-review` den Dev-Server startet, wird die PID in `.claude/.dev-server-pid` gespeichert.
 
 Vor dem Merge-Schritt:
 1. `.claude/.dev-server-pid` lesen

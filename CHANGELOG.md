@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### Added
-- `/review` command — checkout branch, install deps, build, start dev server for local testing. Supports `/review T-{N}` direct access and interactive branch selection without arguments
+- `/just-ship-review` command — checkout branch, install deps, build, start dev server for local testing. Supports `/review T-{N}` direct access and interactive branch selection without arguments
 - `/ship T-{N}` argument support — ship a specific ticket's branch without checking it out first
 - `/ship` dev-server cleanup — kills background dev server (PID-tracked) before merging
 - `/ship` stale-branch hints — warns about `[gone]` branches and branches >50 commits behind main after shipping
