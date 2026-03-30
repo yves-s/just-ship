@@ -5,18 +5,25 @@
     "language": "typescript",
     "framework": "react",
     "backend": "node",
-    "package_manager": "pnpm"
+    "package_manager": "pnpm",
+    "platform": "",
+    "variant": ""
   },
   "build": {
     "web": "",
     "test": "",
     "dev": "",
     "dev_port": null,
-    "install": ""
+    "install": "",
+    "verify": ""
   },
   "hosting": "",
   "shopify": {
     "store": ""
+  },
+  "skills": {
+    "domain": [],
+    "custom": []
   },
   "paths": {
     "src": "src/",
@@ -27,7 +34,8 @@
   },
   "pipeline": {
     "workspace_id": "",
-    "project_id": ""
+    "project_id": "",
+    "skip_agents": []
   },
   "conventions": {
     "commit_format": "conventional",
