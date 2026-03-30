@@ -44,6 +44,8 @@ export function createEventHooks(
 ): Partial<Record<HookEvent, HookCallbackMatcher[]>> {
   // Cache agent_id → agent_type mapping (SubagentStop doesn't include agent_type)
   const agentTypeByIdMap = new Map<string, string>();
+  // Track agents that already received a "completed" event (prevent duplicates)
+  const completedAgentIds = new Set<string>();
 
   const onAgentStarted: HookCallback = async (input) => {
     const hookInput = input as SubagentStartHookInput;
@@ -57,8 +59,19 @@ export function createEventHooks(
 
   const onAgentCompleted: HookCallback = async (input) => {
     const hookInput = input as SubagentStopHookInput;
-    // Clean up map only — PostToolUse (Agent) sends the completed event with token data
-    agentTypeByIdMap.delete(hookInput.agent_id);
+    // Send completed event here — this hook fires reliably for ALL agent types
+    // (registered custom agents AND built-in subagent_type agents).
+    // PostToolUse(Agent) only fires for built-in Agent tool calls, NOT for
+    // registered agents dispatched via the agents config.
+    const agentType = agentTypeByIdMap.get(hookInput.agent_id);
+    if (agentType && !completedAgentIds.has(hookInput.agent_id)) {
+      completedAgentIds.add(hookInput.agent_id);
+      await postEvent(config, {
+        agent_type: agentType,
+        event_type: "completed",
+      });
+    }
+    // Don't delete from map yet — PostToolUse may still need it for token data
     return { async: true as const };
   };
 
@@ -72,11 +85,22 @@ export function createEventHooks(
     const tokensMatch = responseText.match(/total_tokens:\s*(\d+)/);
     const tokensUsed = tokensMatch ? parseInt(tokensMatch[1], 10) : 0;
 
-    await postEvent(config, {
-      agent_type: agentType,
-      event_type: "completed",
-      ...(tokensUsed > 0 ? { metadata: { tokens_used: tokensUsed } } : {}),
-    });
+    // Send token data if available (SubagentStop already sent the "completed" event,
+    // but the Board accumulates tokens from completed events with metadata.tokens_used)
+    if (tokensUsed > 0) {
+      await postEvent(config, {
+        agent_type: agentType,
+        event_type: "completed",
+        metadata: { tokens_used: tokensUsed },
+      });
+    }
+
+    // Clean up the agent_id → agent_type cache (deferred from SubagentStop)
+    const agentId = responseText.match(/agentId:\s*(\S+)/)?.[1];
+    if (agentId) {
+      agentTypeByIdMap.delete(agentId);
+      completedAgentIds.delete(agentId);
+    }
     return { async: true as const };
   };
 
