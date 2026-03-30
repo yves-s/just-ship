@@ -23,7 +23,7 @@ export interface ProjectConfig {
   name: string;
   description: string;
   conventions: { branch_prefix: string };
-  pipeline: PipelineConfig & { skipAgents?: string[] };
+  pipeline: PipelineConfig & { skipAgents?: string[]; maxAutonomousComplexity?: string };
   maxWorkers: number;
   qa: QaConfig;
   stack: {
@@ -190,6 +190,7 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
     pipeline: {
       ...pipeline,
       skipAgents: (rawPipeline.skip_agents as string[]) ?? [],
+      maxAutonomousComplexity: (rawPipeline.max_autonomous_complexity as string) ?? "medium",
     },
     maxWorkers: Number(rawPipeline.max_workers ?? 1),
     qa,

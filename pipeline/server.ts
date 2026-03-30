@@ -293,6 +293,21 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
     log(`Retrying paused ticket: T-${ticketNumber}`);
   }
 
+  // Complexity gate
+  const ticketComplexity = (ticket.complexity as string) ?? "medium";
+  const maxComplexity = projectConfig.pipeline.maxAutonomousComplexity ?? "medium";
+  const allowedLevels = ["low", "medium", "high", "critical"];
+  const maxIdx = allowedLevels.indexOf(maxComplexity);
+  const ticketIdx = allowedLevels.indexOf(ticketComplexity);
+  if (ticketIdx > maxIdx) {
+    sendJson(res, 422, {
+      status: "rejected",
+      ticket_number: ticketNumber,
+      message: `Ticket complexity '${ticketComplexity}' exceeds max autonomous level '${maxComplexity}'`,
+    });
+    return;
+  }
+
   // 4. Reserve ticket in-memory before async PATCH to close concurrent-request race window
   // SECURITY: add before awaiting so two simultaneous requests cannot both pass step 1
   runningTickets.add(ticketNumber);

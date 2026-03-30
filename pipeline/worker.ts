@@ -85,6 +85,13 @@ async function supabasePatch<T>(path: string, body: Record<string, unknown>): Pr
   }
 }
 
+// --- Complexity gate ---
+function getAllowedComplexities(maxLevel: string): string[] {
+  const levels = ["low", "medium", "high", "critical"];
+  const idx = levels.indexOf(maxLevel);
+  return idx >= 0 ? levels.slice(0, idx + 1) : ["low", "medium"];
+}
+
 // --- Ticket functions ---
 interface Ticket {
   number: number;
@@ -92,6 +99,7 @@ interface Ticket {
   body: string | null;
   priority: string;
   tags: string[] | null;
+  complexity: string | null;
 }
 
 async function checkConnectivity(): Promise<boolean> {
@@ -100,8 +108,10 @@ async function checkConnectivity(): Promise<boolean> {
 }
 
 async function getNextTicket(): Promise<Ticket | null> {
+  const maxComplexity = config.pipeline.maxAutonomousComplexity ?? "medium";
+  const allowedComplexities = getAllowedComplexities(maxComplexity);
   const tickets = await supabaseGet<Ticket[]>(
-    `/rest/v1/tickets?status=eq.ready_to_develop&project_id=eq.${SUPABASE_PROJECT_ID}&pipeline_status=is.null&order=priority.asc,created_at.asc&limit=1&select=number,title,body,priority,tags`
+    `/rest/v1/tickets?status=eq.ready_to_develop&project_id=eq.${SUPABASE_PROJECT_ID}&pipeline_status=is.null&complexity=in.(${allowedComplexities.join(",")})&order=priority.asc,created_at.asc&limit=1&select=number,title,body,priority,tags,complexity`
   );
   return tickets?.[0] ?? null;
 }
