@@ -368,6 +368,65 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
   }
 }
 
+// --- Lifecycle timeout runner (runs every poll cycle) ---
+async function runLifecycleChecks(): Promise<void> {
+  const now = new Date();
+
+  // 1. Failed tickets > 1h → auto-reset (max 3 retries)
+  const failedTickets = await supabaseGet<Array<{ number: number; pipeline_retry_count: number; updated_at: string }>>(
+    `/rest/v1/tickets?pipeline_status=eq.failed&project_id=eq.${SUPABASE_PROJECT_ID}&select=number,pipeline_retry_count,updated_at`
+  );
+  if (failedTickets) {
+    for (const t of failedTickets) {
+      const age = now.getTime() - new Date(t.updated_at).getTime();
+      if (age < 60 * 60_000) continue; // < 1h, skip
+      const retries = t.pipeline_retry_count ?? 0;
+      if (retries >= 3) {
+        // Max retries reached → move to backlog
+        await supabasePatch(`/rest/v1/tickets?number=eq.${t.number}`, {
+          pipeline_status: null,
+          status: "backlog",
+          summary: `Blocked after ${retries} failed autonomous attempts. Requires manual intervention.`,
+        });
+        log(`T-${t.number}: moved to backlog after ${retries} failed retries`);
+      } else {
+        // Auto-reset for retry
+        await supabasePatch(`/rest/v1/tickets?number=eq.${t.number}`, {
+          pipeline_status: null,
+          status: "ready_to_develop",
+          pipeline_retry_count: retries + 1,
+        });
+        log(`T-${t.number}: auto-reset for retry (attempt ${retries + 1}/3)`);
+      }
+      await clearBoardAgentEvents(t.number);
+    }
+  }
+
+  // 2. Paused tickets > 24h → auto-cancel
+  const pausedTickets = await supabaseGet<Array<{ number: number; updated_at: string }>>(
+    `/rest/v1/tickets?pipeline_status=eq.paused&project_id=eq.${SUPABASE_PROJECT_ID}&select=number,updated_at`
+  );
+  if (pausedTickets) {
+    for (const t of pausedTickets) {
+      const age = now.getTime() - new Date(t.updated_at).getTime();
+      if (age < 24 * 60 * 60_000) continue; // < 24h, skip
+      // Try to save WIP from parked worktree
+      const worktreeDir = worktreeManager.findParkedForTicket(t.number);
+      if (worktreeDir) {
+        saveWorktreeWIP(worktreeDir, t.number);
+        await worktreeManager.releaseByDir(worktreeDir);
+      }
+      await supabasePatch(`/rest/v1/tickets?number=eq.${t.number}`, {
+        pipeline_status: null,
+        status: "ready_to_develop",
+        summary: "Auto-cancelled after 24h without answer. Branch may contain partial work.",
+      });
+      await clearBoardAgentEvents(t.number);
+      log(`T-${t.number}: auto-cancelled after 24h pause`);
+    }
+  }
+}
+
 // --- Main loop: fetch tickets sequentially, run pipelines in parallel ---
 while (running) {
   const activeSlots = worktreeManager.getActiveSlots();
@@ -401,6 +460,13 @@ while (running) {
   if (totalFailures >= MAX_FAILURES) {
     log(`CRITICAL: ${totalFailures} total failures across slots. Worker stopping.`);
     process.exit(1);
+  }
+
+  // Run lifecycle checks each poll cycle
+  try {
+    await runLifecycleChecks();
+  } catch (e) {
+    log(`Lifecycle check error: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   await sleep(POLL_INTERVAL);
