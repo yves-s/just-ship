@@ -11,6 +11,10 @@
     "web": "",
     "test": ""
   },
+  "hosting": "",
+  "shopify": {
+    "store": ""
+  },
   "paths": {
     "src": "src/",
     "tests": "tests/"

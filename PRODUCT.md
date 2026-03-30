@@ -30,6 +30,8 @@ The core framework. Gets installed into target projects via `setup.sh`. Contains
 
 **Skills (23):** brainstorming, writing-plans, executing-plans, TDD, systematic-debugging, code-review, frontend-design, creative-design, ux-planning, backend, data-engineer, Shopify (theme, liquid, metafields), webapp-testing, and more
 
+**Hosting:** Vercel (auto-detected) and Shopify (theme push/preview/cleanup) as first-class hosting types
+
 **VPS:** Docker-based deployment with Caddy reverse proxy, automatic HTTPS, multi-project support
 
 **Repo:** `just-ship` | **Local path:** `../just-ship`

@@ -194,6 +194,16 @@ check_prereq "git" || MISSING=1
 check_prereq "gh" || MISSING=1
 check_prereq "node" || MISSING=1
 
+# Shopify CLI check (optional — only for Shopify theme projects)
+if [ -d "$PROJECT_DIR/sections" ] && [ -f "$PROJECT_DIR/layout/theme.liquid" ]; then
+  echo ""
+  echo "Shopify theme detected:"
+  check_prereq "shopify" || {
+    echo "  ⚠ Shopify CLI recommended for theme development"
+    echo "  Install: npm install -g @shopify/cli"
+  }
+fi
+
 if [ "$MISSING" -eq 1 ]; then
   echo ""
   echo "Missing prerequisites. Please install and try again."

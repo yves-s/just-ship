@@ -423,14 +423,24 @@ UPDATE public.tickets SET status = 'in_review', review_url = '$REVIEW_URL' WHERE
 
 Der PR bleibt offen bis der User ihn freigibt (via `/ship` oder "passt").
 
-### 9f. Vercel Preview URL
+### 9f. Preview URL (Vercel oder Shopify)
 
-**Immer ausführen** — das Script erkennt automatisch ob ein Vercel-Deployment existiert und returned leer wenn nicht. Kein Config-Gate nötig.
+**Immer ausführen** — die Scripts erkennen automatisch ob ein Deployment existiert und returnen leer wenn nicht. Kein Config-Gate nötig.
 
-**WICHTIG:** Die Preview-URL MUSS eine Vercel-Deployment-URL sein (z.B. `https://<project>-<hash>.vercel.app`). NIEMALS einen GitHub-Link, PR-URL oder Repository-URL als `preview_url` setzen. Das `preview_url`-Feld ist ausschließlich für die live deployete Vorschau.
+**WICHTIG:** Die Preview-URL MUSS eine Deployment-URL sein (z.B. `https://<project>-<hash>.vercel.app` oder `https://<store>.myshopify.com/?preview_theme_id=...`). NIEMALS einen GitHub-Link, PR-URL oder Repository-URL als `preview_url` setzen. Das `preview_url`-Feld ist ausschließlich für die live deployete Vorschau.
 
 ```bash
-PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)
+HOSTING=$(node -e "
+  const c = require('./project.json');
+  const h = c.hosting || (c.stack?.framework === 'shopify' ? 'shopify' : '');
+  process.stdout.write(h);
+")
+
+if [ "$HOSTING" = "shopify" ]; then
+  PREVIEW_URL=$(bash .claude/scripts/shopify-preview.sh push "T-${N}" "${TITLE}")
+else
+  PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)
+fi
 ```
 
 Falls eine URL gefunden wurde (`$PREVIEW_URL` nicht leer), ins Ticket schreiben:
@@ -454,9 +464,9 @@ fi
 
 Ausgabe:
 - `✓ preview — {PREVIEW_URL}` (falls URL gefunden)
-- `✓ preview — kein Vercel-Deployment gefunden, übersprungen` (falls keine URL)
+- `✓ preview — kein Deployment gefunden, übersprungen` (falls keine URL)
 
-**Kein Fehler wenn keine URL gefunden wird.** Das Script exits immer mit Code 0. Projekte ohne Vercel-Integration überspringen diesen Schritt automatisch.
+**Kein Fehler wenn keine URL gefunden wird.** Die Scripts exiten immer mit Code 0. Projekte ohne Vercel- oder Shopify-Integration überspringen diesen Schritt automatisch.
 
 ### 10. Automated QA
 
@@ -469,7 +479,7 @@ Ausgabe: `▶ qa-auto — Automatisierte QA ({qa_tier} tier)`
 
 | Tier | Was passiert |
 |------|-------------|
-| **full** | Build + Tests + Playwright Smoke Tests gegen Vercel Preview (falls `pipeline.hosting === "vercel"` und `$PREVIEW_URL` aus Schritt 9a vorhanden) |
+| **full** | Build + Tests + Playwright Smoke Tests gegen Preview URL (falls `$PREVIEW_URL` aus Schritt 9f vorhanden — egal ob Vercel oder Shopify) |
 | **light** | Build + Tests (falls konfiguriert) |
 | **skip** | Nur Build-Check |
 
@@ -477,11 +487,21 @@ Ausgabe: `▶ qa-auto — Automatisierte QA ({qa_tier} tier)`
 
 Lies Build- und Test-Commands aus `project.json` und führe sie aus (identisch zu Schritt 6, aber als erneute Verification nach PR-Push).
 
-#### 10b. Playwright Smoke Tests (nur `full` tier + Vercel Preview)
+#### 10b. Playwright Smoke Tests (nur `full` tier + Preview URL)
 
-**Voraussetzung:** `qa_tier === "full"` UND `pipeline.hosting === "vercel"` in `project.json` UND `$PREVIEW_URL` aus Schritt 9a ist nicht leer.
+**Voraussetzung:** `qa_tier === "full"` UND `$PREVIEW_URL` aus Schritt 9f ist nicht leer.
 
 Falls eine dieser Bedingungen nicht erfüllt: Playwright komplett überspringen.
+
+**Shopify-spezifisch:** Falls der Store passwortgeschützt ist (Env-Variable `SHOPIFY_STORE_PASSWORD` gesetzt), muss Playwright zuerst das Storefront-Passwort eingeben:
+```javascript
+const storePassword = process.env.SHOPIFY_STORE_PASSWORD || '';
+if (storePassword) {
+  await page.fill('input[type="password"]', storePassword);
+  await page.click('button[type="submit"]');
+  await page.waitForNavigation();
+}
+```
 
 **Playwright installieren (falls nötig):**
 ```bash
