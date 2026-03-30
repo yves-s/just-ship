@@ -299,6 +299,7 @@ Commands are markdown files in `commands/` with frontmatter metadata. They provi
 | `/develop` | Pick next ticket, implement end-to-end, create PR | Yes -- fully autonomous |
 | `/ship` | Commit, push, PR, squash merge, delete branch, update board status. Supports `/ship T-{N}` | Yes -- zero questions |
 | `/just-ship-review` | Checkout branch, install deps, build, start dev server for local testing | No -- interactive |
+| `/spike-review` | Review completed spike, summarize findings, create follow-up tickets. Supports `--auto` | Both |
 
 ### Utility Commands
 
@@ -317,7 +318,7 @@ The following phrases automatically trigger `/ship`:
 ### Command Flow
 
 ```
-/ticket ---- writes ticket to Supabase ---------------------+
+/ticket ---- writes ticket to Board -----------------------+
                                                             |
 /develop -- picks ticket -- implements -- PR ------+        |
                                                    |        |
@@ -328,9 +329,11 @@ The following phrases automatically trigger `/ship`:
                                           delete branch     |
                                           status: done      |
                                                             |
+/spike-review T-{N} -- locate doc -- summarize -- create follow-up tickets
+                                                            |
                               +-----------------------------+
                               v
-                    Supabase Ticket Queue
+                    Board Ticket Queue
                     (ready_to_develop -> in_progress -> in_review -> done)
 ```
 
