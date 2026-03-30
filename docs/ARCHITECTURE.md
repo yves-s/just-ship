@@ -299,6 +299,7 @@ Commands are markdown files in `commands/` with frontmatter metadata. They provi
 | `/develop` | Pick next ticket, implement end-to-end, create PR | Yes -- fully autonomous |
 | `/ship` | Commit, push, PR, squash merge, delete branch, update board status. Supports `/ship T-{N}` | Yes -- zero questions |
 | `/just-ship-review` | Checkout branch, install deps, build, start dev server for local testing | No -- interactive |
+| `/spike-review` | Review completed spike, summarize findings, create follow-up tickets. Supports `--auto` | Both |
 
 ### Utility Commands
 
@@ -317,7 +318,7 @@ The following phrases automatically trigger `/ship`:
 ### Command Flow
 
 ```
-/ticket ---- writes ticket to Supabase ---------------------+
+/ticket ---- writes ticket to Board -----------------------+
                                                             |
 /develop -- picks ticket -- implements -- PR ------+        |
                                                    |        |
@@ -328,9 +329,11 @@ The following phrases automatically trigger `/ship`:
                                           delete branch     |
                                           status: done      |
                                                             |
+/spike-review T-{N} -- locate doc -- summarize -- create follow-up tickets
+                                                            |
                               +-----------------------------+
                               v
-                    Supabase Ticket Queue
+                    Board Ticket Queue
                     (ready_to_develop -> in_progress -> in_review -> done)
 ```
 
@@ -1110,6 +1113,16 @@ VPS (Ubuntu 22.04)
 | `POLL_INTERVAL` | Polling interval in seconds (default: 60) |
 | `MAX_FAILURES` | Consecutive failures before worker stops (default: 5) |
 | `LOG_DIR` | Log directory (default: `~/pipeline-logs`) |
+| `BUGSINK_DSN` | Bugsink error tracking DSN (auto-configured in Docker) |
+
+### Monitoring
+
+VPS deployments include built-in monitoring via two lightweight containers (~286 MB total):
+
+- **Bugsink** (`/errors/`) — Error tracking with stack traces. The pipeline-server and worker use `@sentry/node` SDK pointed at the Bugsink DSN. Sentry-compatible, so switching to GlitchTip or Sentry Cloud later only requires changing the DSN.
+- **Dozzle** (`/logs/`) — Live Docker container log viewer. Reads the Docker socket (read-only), zero code changes required.
+
+Both UIs are protected by Caddy basicauth and only accessible through the reverse proxy.
 
 ### Multi-Project Support
 

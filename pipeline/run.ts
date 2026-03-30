@@ -5,10 +5,11 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { loadProjectConfig, parseCliArgs, type TicketArgs } from "./lib/config.ts";
 import { loadAgents, loadOrchestratorPrompt, loadTriagePrompt } from "./lib/load-agents.ts";
-import { createEventHooks, postPipelineEvent, type EventConfig } from "./lib/event-hooks.ts";
+import { createEventHooks, postPipelineEvent, postPipelineSummary, type EventConfig } from "./lib/event-hooks.ts";
 import { runQaWithFixLoop } from "./lib/qa-fix-loop.ts";
 import type { QaContext } from "./lib/qa-runner.ts";
 import { generateChangeSummary } from "./lib/change-summary.ts";
+import { loadSkills, type AgentRole } from "./lib/load-skills.ts";
 
 // --- Stderr-capturing spawn wrapper for Claude Code subprocesses ---
 function makeSpawn(logPrefix: string) {
@@ -191,7 +192,34 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
 
   // --- Load agents + orchestrator prompt ---
   const agents = loadAgents(workDir);
-  const orchestratorPrompt = loadOrchestratorPrompt(workDir);
+  const loadedSkills = loadSkills(projectDir, config);
+  if (loadedSkills.skillNames.length > 0) {
+    console.error(`[Pipeline] Skills loaded: ${loadedSkills.skillNames.join(", ")}`);
+  }
+
+  // Filter agents by skipAgents config
+  const skipAgents = config.pipeline.skipAgents ?? [];
+  const filteredAgents = Object.fromEntries(
+    Object.entries(agents).filter(([name]) => !skipAgents.includes(name))
+  );
+  if (skipAgents.length > 0) {
+    console.error(`[Pipeline] Skipping agents: ${skipAgents.join(", ")}`);
+  }
+
+  // Inject skills into agent prompts
+  for (const [name, def] of Object.entries(filteredAgents)) {
+    const roleSkills = loadedSkills.byRole.get(name as AgentRole);
+    if (roleSkills && def.prompt) {
+      def.prompt += `\n\n${roleSkills}`;
+    }
+  }
+
+  // Build orchestrator prompt with skills
+  let orchestratorPrompt = loadOrchestratorPrompt(workDir);
+  const orchestratorSkills = loadedSkills.byRole.get("orchestrator");
+  if (orchestratorSkills) {
+    orchestratorPrompt += `\n\n${orchestratorSkills}`;
+  }
 
   // --- Event hooks ---
   const hasPipeline = !!(config.pipeline.apiUrl && config.pipeline.apiKey);
@@ -200,9 +228,10 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
     apiKey: config.pipeline.apiKey,
     ticketNumber: ticket.ticketId,
   };
-  const hooks = hasPipeline ? createEventHooks(eventConfig, {
+  const eventHooks = hasPipeline ? createEventHooks(eventConfig, {
     onPause: (reason) => { pauseReason = reason; },
-  }) : {};
+  }) : null;
+  const hooks = eventHooks?.hooks ?? {};
 
   // --- Triage: analyze ticket quality before orchestrator ---
   let ticketDescription = ticket.description;
@@ -280,7 +309,7 @@ Branch ist bereits erstellt: ${branchName}`;
         permissionMode: "bypassPermissions",
         allowDangerouslySkipPermissions: true,
         allowedTools: ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent"],
-        agents,
+        agents: filteredAgents,
         hooks,
         maxTurns: 200,
         settingSources: ["project"],
@@ -377,6 +406,36 @@ Branch ist bereits erstellt: ${branchName}`;
       env: opts.env,
     };
 
+    // Run verify command if configured
+    let verifyCommand = config.stack.verifyCommand;
+    if (!verifyCommand && config.stack.platform === "shopify" && config.stack.variant === "liquid") {
+      // Shopify default: only use if CLI is available
+      try {
+        execSync("which shopify", { stdio: "pipe" });
+        verifyCommand = "shopify theme check --fail-level error";
+      } catch {
+        console.warn("[Pipeline] shopify CLI not found — skipping default verify.");
+      }
+    }
+
+    if (verifyCommand) {
+      console.error(`[Pipeline] Running verify: ${verifyCommand}`);
+      try {
+        const verifyOutput = execSync(verifyCommand, {
+          cwd: workDir,
+          encoding: "utf-8",
+          timeout: 60000,
+        });
+        console.error("[Pipeline] Verify passed.");
+        qaContext.verifyOutput = verifyOutput;
+      } catch (error: unknown) {
+        const err = error as { stdout?: string; message?: string };
+        console.error("[Pipeline] Verify failed — passing to QA agent.");
+        qaContext.verifyOutput = err.stdout ?? err.message ?? "Verify command failed";
+        qaContext.verifyFailed = true;
+      }
+    }
+
     const { finalReport, iterations } = await runQaWithFixLoop(qaContext);
     console.error(`[QA] ${finalReport.tier} tier — ${finalReport.status} (${iterations} fix loops)`);
 
@@ -388,6 +447,14 @@ Branch ist bereits erstellt: ${branchName}`;
         checks_passed: finalReport.checks.filter((c) => c.passed).length,
         checks_total: finalReport.checks.length,
       });
+    }
+  }
+
+  // Post pipeline summary with aggregated token costs
+  if (hasPipeline && eventHooks && exitCode === 0) {
+    const totals = eventHooks.getTotals();
+    if (totals.inputTokens > 0) {
+      await postPipelineSummary(eventConfig, totals);
     }
   }
 
@@ -450,6 +517,22 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
   }
 
   const agents = loadAgents(workDir);
+  const loadedSkills = loadSkills(projectDir, config);
+
+  // Filter agents by skipAgents config
+  const skipAgents = config.pipeline.skipAgents ?? [];
+  const filteredAgents = Object.fromEntries(
+    Object.entries(agents).filter(([name]) => !skipAgents.includes(name))
+  );
+
+  // Inject skills into agent prompts
+  for (const [name, def] of Object.entries(filteredAgents)) {
+    const roleSkills = loadedSkills.byRole.get(name as AgentRole);
+    if (roleSkills && def.prompt) {
+      def.prompt += `\n\n${roleSkills}`;
+    }
+  }
+
   const hasPipeline = !!(config.pipeline.apiUrl && config.pipeline.apiKey);
   const eventConfig: EventConfig = {
     apiUrl: config.pipeline.apiUrl,
@@ -460,9 +543,10 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
   let pauseReason: string | undefined;
   let newSessionId: string | undefined;
 
-  const hooks = hasPipeline ? createEventHooks(eventConfig, {
+  const eventHooks = hasPipeline ? createEventHooks(eventConfig, {
     onPause: (reason) => { pauseReason = reason; },
-  }) : {};
+  }) : null;
+  const hooks = eventHooks?.hooks ?? {};
 
   // Timeout
   const DEFAULT_TIMEOUT_MS = 1_800_000;
@@ -503,7 +587,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
         permissionMode: "bypassPermissions",
         allowDangerouslySkipPermissions: true,
         allowedTools: ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent"],
-        agents,
+        agents: filteredAgents,
         hooks,
         maxTurns: 200,
         settingSources: ["project"],
@@ -578,6 +662,14 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
     clearTimeout(timeoutId);
     if (exitCode !== 0) {
       console.error(`[Pipeline] Final state: exitCode=${exitCode}, reason=${failureReason ?? "unknown"}, timedOut=${timedOut}`);
+    }
+  }
+
+  // Post pipeline summary with aggregated token costs
+  if (hasPipeline && eventHooks && exitCode === 0) {
+    const totals = eventHooks.getTotals();
+    if (totals.inputTokens > 0) {
+      await postPipelineSummary(eventConfig, totals);
     }
   }
 

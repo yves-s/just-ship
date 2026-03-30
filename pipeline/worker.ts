@@ -1,3 +1,5 @@
+import { initSentry, Sentry } from "./lib/sentry.ts";
+initSentry();
 import { resolve } from "node:path";
 import { mkdirSync } from "node:fs";
 import { execSync } from "node:child_process";
@@ -166,11 +168,13 @@ process.on("SIGINT", () => {
   log("SIGINT received, cancelling pipeline and stopping...");
   running = false;
   abortController.abort();
+  Sentry.close(2000);
 });
 process.on("SIGTERM", () => {
   log("SIGTERM received, cancelling pipeline and stopping...");
   running = false;
   abortController.abort();
+  Sentry.close(2000);
 });
 
 // --- Main loop ---
@@ -307,6 +311,7 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
     });
 
     log(`Pipeline failed: T-${ticket.number} (${errorObj.message}) [${classification.action}]`);
+    Sentry.captureException(error);
     await failTicket(ticket.number, `Pipeline error: ${errorObj.message}`);
 
     // Auto-heal: worker only logs the classification for now.

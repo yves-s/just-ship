@@ -74,6 +74,7 @@ just-ship self-update
 | `/implement` | Implement from chat context or description — no ticket required | Yes |
 | `/develop` | Pick next ticket, implement end-to-end, create PR | Yes |
 | `/ship` | Commit + push + PR + squash merge + board status "done". Supports `/ship T-{N}` | Yes |
+| `/spike-review` | Review completed spike, summarize findings, create follow-up tickets. Supports `--auto` | Both |
 | `/just-ship-review` | Checkout branch, install deps, build, start dev server for local testing | No |
 | `/just-ship-status` | Show all branches, PRs, board status, worktrees, and cleanup recommendations | -- |
 | `/setup-just-ship` | Auto-detect stack, configure project, connect Dev Board, install Sidekick | Interactive |
@@ -229,7 +230,7 @@ just-ship/
 │   ├── worker.ts               # Supabase polling worker (VPS)
 │   ├── server.ts               # HTTP server (webhooks, /api/answer)
 │   ├── run.sh                  # Bash wrapper
-│   └── lib/                    # Config, agent loader, event hooks
+│   └── lib/                    # Config, agent loader, skill loader, event hooks, cost tracking
 ├── templates/                  # CLAUDE.md + project.json templates
 ├── vps/                        # VPS deployment (systemd, setup script)
 └── .claude/                    # Claude Code config (hooks, scripts, settings)

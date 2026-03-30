@@ -185,6 +185,9 @@ Ich richte jetzt just-ship auf deinem VPS ein. Dafuer brauche ich von dir:
    → Paste die URL hier in den Chat, dann richte ich HTTPS gleich mit ein
    → Ohne HTTPS wird der API Key unverschluesselt uebertragen
 
+Monitoring (Bugsink Error Tracking + Dozzle Live Logs) wird automatisch
+mit eingerichtet — Credentials generiere ich fuer dich.
+
 Gib mir diese 5 Dinge, dann mache ich den Rest.
 ```
 
@@ -268,8 +271,17 @@ ssh root@<IP> "su - claude-dev -c 'git clone https://github.com/yves-s/just-ship
 
 ### 1.7 Globale Env-Datei erstellen
 
-Erstelle `/home/claude-dev/.env` mit GitHub Token und Anthropic API Key.
-Diese gelten global fuer alle Projekte auf dem VPS:
+Erstelle `/home/claude-dev/.env` mit API Keys und Monitoring-Credentials.
+Diese gelten global fuer alle Projekte auf dem VPS.
+
+**Monitoring-Credentials generieren** (lokal, vor dem SSH-Call):
+```bash
+BUGSINK_SECRET=$(openssl rand -hex 32)
+MONITORING_PW=$(openssl rand -base64 16)
+```
+
+Fuer den Caddy-Basicauth-Hash muss `caddy` auf dem VPS verfuegbar sein (laeuft im Container).
+Den Hash generieren wir spaeter in Phase 1.9 nach dem ersten `docker compose up`, und patchen die .env dann nach.
 
 ```bash
 ssh root@<IP> "
@@ -280,8 +292,23 @@ GH_TOKEN=<github-token>
 ANTHROPIC_API_KEY=<anthropic-key>
 CLAUDE_UID=\$CLAUDE_UID
 CLAUDE_GID=\$CLAUDE_GID
+
+# Monitoring (Bugsink + Dozzle)
+BUGSINK_SECRET_KEY=$BUGSINK_SECRET
+BUGSINK_ADMIN_EMAIL=admin@<domain-oder-ip>
+BUGSINK_ADMIN_PASSWORD=$MONITORING_PW
+MONITORING_USER=admin
+MONITORING_HASH=placeholder-wird-in-1.9-ersetzt
 ENVEOF
 chmod 600 /home/claude-dev/.env && chown claude-dev:claude-dev /home/claude-dev/.env"
+```
+
+Dem User die Monitoring-Credentials mitteilen (maskiert):
+```
+Monitoring-Zugang generiert:
+- Bugsink Login: admin@<domain> / <MONITORING_PW erste 4>...
+- Caddy Basicauth: admin / <MONITORING_PW erste 4>...
+(gleiches Passwort fuer beide)
 ```
 
 ### 1.8 Server-Config erstellen
@@ -317,11 +344,13 @@ Die Workspace-Felder werden in Phase 2 befuellt.
 
 ### 1.9 Docker Image bauen und starten
 
-Ohne HTTPS (Default):
+Ohne HTTPS (Default — startet pipeline-server, bugsink und dozzle, aber NICHT caddy):
 
 ```bash
-ssh root@<IP> "cd /home/claude-dev/just-ship && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml build pipeline-server && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d pipeline-server"
+ssh root@<IP> "cd /home/claude-dev/just-ship && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml build pipeline-server && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d pipeline-server bugsink dozzle"
 ```
+
+**Hinweis:** Ohne HTTPS/Caddy sind Bugsink und Dozzle nur intern erreichbar (Docker-Netzwerk). Fuer direkten Zugriff temporaer Ports oeffnen: `docker compose -f vps/docker-compose.yml exec -d` oder SSH-Tunnel: `ssh -L 8000:localhost:8000 root@<IP>`.
 
 Mit HTTPS (falls User eine Domain angegeben hat): Zuerst Caddyfile erstellen, dann alle Services starten:
 
@@ -329,11 +358,43 @@ Mit HTTPS (falls User eine Domain angegeben hat): Zuerst Caddyfile erstellen, da
 ssh root@<IP> "cat > /home/claude-dev/just-ship/vps/Caddyfile << 'CADDYEOF'
 <domain> {
     reverse_proxy pipeline-server:3001
+
+    handle_path /errors/* {
+        basicauth {
+            {$MONITORING_USER:admin} {$MONITORING_HASH}
+        }
+        reverse_proxy bugsink:8000
+    }
+
+    handle_path /logs/* {
+        basicauth {
+            {$MONITORING_USER:admin} {$MONITORING_HASH}
+        }
+        reverse_proxy dozzle:8080
+    }
 }
 CADDYEOF
 chown claude-dev:claude-dev /home/claude-dev/just-ship/vps/Caddyfile"
 
 ssh root@<IP> "cd /home/claude-dev/just-ship && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml build pipeline-server && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d"
+```
+
+**Caddy-Basicauth-Hash generieren und .env patchen** (nach dem ersten `docker compose up`, damit der Caddy-Container verfuegbar ist):
+
+```bash
+CADDY_HASH=$(ssh root@<IP> "docker compose -f /home/claude-dev/just-ship/vps/docker-compose.yml exec -T caddy caddy hash-password --plaintext '$MONITORING_PW'" 2>/dev/null | tr -d '\r\n')
+ssh root@<IP> "sed -i 's|MONITORING_HASH=placeholder-wird-in-1.9-ersetzt|MONITORING_HASH='\"$CADDY_HASH\"'|' /home/claude-dev/.env"
+```
+
+Falls der Caddy-Container noch nicht laeuft (kein HTTPS), den Hash lokal generieren oder mit `htpasswd` erzeugen:
+```bash
+# Alternative: htpasswd auf dem VPS installieren
+ssh root@<IP> "apt-get install -y apache2-utils -qq && CADDY_HASH=\$(htpasswd -nbBC 10 '' '$MONITORING_PW' | tr -d ':\n' | sed 's/\$2y/\$2a/') && sed -i \"s|MONITORING_HASH=placeholder-wird-in-1.9-ersetzt|MONITORING_HASH=\$CADDY_HASH|\" /home/claude-dev/.env"
+```
+
+Nach dem Hash-Update die Container neu starten damit Caddy die Env-Var liest:
+```bash
+ssh root@<IP> "cd /home/claude-dev/just-ship && docker compose -f vps/docker-compose.yml up -d"
 ```
 
 ### 1.10 Verifizieren
@@ -370,9 +431,11 @@ VPS ist eingerichtet!
 
 - Server: http://<IP>:3001
 - Pipeline Key: <PIPELINE_KEY> (maskiert)
+- Monitoring: Bugsink + Dozzle laufen (nur intern erreichbar ohne HTTPS/Caddy)
 - Status: Bereit fuer Projekte
 
 HTTPS ist nicht aktiv. Fuer HTTPS siehe vps/README.md → "HTTPS einrichten".
+Ohne HTTPS sind Bugsink (/errors/) und Dozzle (/logs/) nur per SSH-Tunnel erreichbar.
 
 **Naechster Schritt: Projekt verbinden.**
 
@@ -386,6 +449,10 @@ VPS ist eingerichtet!
 
 - Server: https://<domain>
 - Pipeline Key: <PIPELINE_KEY> (maskiert)
+- Monitoring:
+  - Error Tracking: https://<domain>/errors/ (Bugsink)
+  - Live Logs: https://<domain>/logs/ (Dozzle)
+  - Login: admin / <MONITORING_PW erste 4>...
 - Status: Bereit fuer Projekte
 
 **Naechster Schritt: Projekt verbinden.**
@@ -473,3 +540,57 @@ Falls bereits gesetzt (bestehendes Setup): Diesen Schritt ueberspringen.
 - **Port 3001 nicht erreichbar:** Firewall pruefen, `ufw allow 3001/tcp` oder Hostinger Firewall-Settings
 - **HTTPS-Zertifikat fehlschlaegt:** DNS A-Record pruefen (kann bis zu 24h dauern), Port 80+443 muessen offen sein
 - **Health-Check fehlschlaegt:** Container-Logs pruefen, Port-Mapping verifizieren
+
+---
+
+## Monitoring
+
+Der VPS laeuft mit zwei integrierten Monitoring-Diensten, die ueber Caddy erreichbar sind:
+
+### Dienste
+
+| URL | Dienst | Funktion |
+|---|---|---|
+| `https://<domain>/errors/` | Bugsink | Error Tracking UI (Sentry-kompatibel) |
+| `https://<domain>/logs/` | Dozzle | Live Container Log Viewer |
+
+Beide Endpunkte sind durch Caddy Basicauth geschuetzt.
+
+### Erstzugang
+
+Bugsink erstellt beim ersten Start automatisch einen Admin-User:
+- **User:** Wert von `BUGSINK_ADMIN_EMAIL` (Default: `admin@localhost`)
+- **Passwort:** Wert von `BUGSINK_ADMIN_PASSWORD` (Default: `admin`)
+
+**Wichtig:** Default-Credentials sofort aendern oder via Env-Vars ueberschreiben.
+
+### Umgebungsvariablen
+
+Folgende Variablen in `/home/claude-dev/.env` auf dem VPS setzen:
+
+```
+# Bugsink
+BUGSINK_SECRET_KEY=<langer-zufaelliger-string>
+BUGSINK_BASE_URL=https://<domain>/errors
+BUGSINK_ADMIN_EMAIL=admin@example.com
+BUGSINK_ADMIN_PASSWORD=<sicheres-passwort>
+
+# Caddy Basicauth fuer /errors/ und /logs/
+MONITORING_USER=admin
+MONITORING_HASH=<caddy-hash>
+```
+
+### Passwort-Hash generieren
+
+Caddy erwartet einen bcrypt-Hash fuer Basicauth. Hash generieren mit:
+
+```bash
+caddy hash-password --plaintext 'dein-passwort'
+```
+
+Den ausgegebenen Hash als `MONITORING_HASH` in `/home/claude-dev/.env` eintragen.
+
+### Sentry DSN
+
+Der `pipeline-server` Container hat `BUGSINK_DSN=http://bugsink:8000/sentry/1/` gesetzt.
+Das Sentry SDK verbindet sich automatisch — keine weitere Konfiguration noetig.

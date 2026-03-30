@@ -1,3 +1,5 @@
+import { initSentry, Sentry } from "./lib/sentry.ts";
+initSentry();
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { execSync } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -417,6 +419,7 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
 
       const reason = errorObj.message;
       log(`Pipeline crashed: T-${ticketNumber} -- ${reason} [${classification.action}]`);
+      Sentry.captureException(error);
       await patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Server error: ${reason}` });
 
       if (classification.action === "auto_heal") {
@@ -518,6 +521,7 @@ async function handleShip(ticketNumber: number, res: ServerResponse, projectId?:
     } catch (err: unknown) {
       const reason = err instanceof Error ? err.message : "Unknown error";
       log(`Ship failed: T-${ticketNumber} -- ${reason}`);
+      Sentry.captureException(err);
       await patchTicket(ticketNumber, {
         summary: `Ship error: ${reason}`,
       });
@@ -961,6 +965,7 @@ const server = createServer((req, res) => {
   handleRequest(req, res).catch((error: unknown) => {
     const reason = error instanceof Error ? error.message : "Unknown error";
     log(`Unhandled error: ${reason}`);
+    Sentry.captureException(error);
     if (!res.headersSent) {
       sendJson(res, 500, { status: "error", message: "Internal server error" });
     }
@@ -970,11 +975,11 @@ const server = createServer((req, res) => {
 // --- Graceful shutdown ---
 process.on("SIGINT", () => {
   log("SIGINT received, shutting down...");
-  server.close(() => process.exit(0));
+  Sentry.close(2000).finally(() => server.close(() => process.exit(0)));
 });
 process.on("SIGTERM", () => {
   log("SIGTERM received, shutting down...");
-  server.close(() => process.exit(0));
+  Sentry.close(2000).finally(() => server.close(() => process.exit(0)));
 });
 
 // --- Start ---
