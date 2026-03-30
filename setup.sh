@@ -421,6 +421,7 @@ if [ "$MODE" = "update" ]; then
   echo "  ✓ hooks (event streaming)"
 
   echo "Updating pipeline..."
+  mkdir -p "$PROJECT_DIR/.pipeline"
   # Copy all pipeline files
   cp "$FRAMEWORK_DIR/pipeline/run.sh" "$PROJECT_DIR/.pipeline/run.sh"
   cp "$FRAMEWORK_DIR/pipeline/run.ts" "$PROJECT_DIR/.pipeline/run.ts"
