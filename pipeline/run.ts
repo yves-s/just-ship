@@ -1,6 +1,8 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { execSync, spawn } from "node:child_process";
+import { writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { loadProjectConfig, parseCliArgs, type TicketArgs } from "./lib/config.ts";
 import { loadAgents, loadOrchestratorPrompt, loadTriagePrompt } from "./lib/load-agents.ts";
 import { createEventHooks, postPipelineEvent, type EventConfig } from "./lib/event-hooks.ts";
@@ -176,6 +178,15 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
     } catch {
       execSync(`git checkout ${branchName}`, { cwd: projectDir, stdio: "pipe" });
     }
+  }
+
+  // --- Write .active-ticket so Claude Code hooks can send events ---
+  try {
+    const claudeDir = join(workDir, ".claude");
+    mkdirSync(claudeDir, { recursive: true });
+    writeFileSync(join(claudeDir, ".active-ticket"), ticket.ticketId);
+  } catch {
+    console.error(`[Pipeline] Warning: could not write .active-ticket`);
   }
 
   // --- Load agents + orchestrator prompt ---
@@ -423,6 +434,15 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
     try {
       execSync(`git checkout ${branchName}`, { cwd: projectDir, stdio: "pipe" });
     } catch { /* branch may already be checked out */ }
+  }
+
+  // --- Write .active-ticket so Claude Code hooks can send events ---
+  try {
+    const claudeDir = join(workDir, ".claude");
+    mkdirSync(claudeDir, { recursive: true });
+    writeFileSync(join(claudeDir, ".active-ticket"), ticket.ticketId);
+  } catch {
+    console.error(`[Pipeline] Warning: could not write .active-ticket`);
   }
 
   const agents = loadAgents(workDir);
