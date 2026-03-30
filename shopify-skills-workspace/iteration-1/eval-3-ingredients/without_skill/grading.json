@@ -1,0 +1,16 @@
+{
+  "eval_id": 3,
+  "eval_name": "ingredients-metaobjects",
+  "configuration": "without_skill",
+  "expectations": [
+    { "text": "Accesses product.metafields.custom.ingredients.value", "passed": true, "evidence": "Line 7: assign ingredients = product.metafields.custom.ingredients.value" },
+    { "text": "Iterates with {% for %}", "passed": true, "evidence": "Line 35: for ingredient in ingredients" },
+    { "text": "Uses .value on metaobject fields", "passed": true, "evidence": "ingredient.name.value (line 52), ingredient.is_allergen.value (lines 16, 36), ingredient.description.value (line 60), ingredient.icon.value (line 38, 41)" },
+    { "text": "Nil-guard on the metafield", "passed": true, "evidence": "Line 9: if ingredients != blank and ingredients.size > 0" },
+    { "text": "Uses | image_url for file_reference icon", "passed": true, "evidence": "Line 41: ingredient.icon.value | image_url: width: 48" },
+    { "text": "Conditional allergen styling", "passed": true, "evidence": "Line 37: conditional --allergen class; lines 53-57: allergen badge; lines 22-31: allergen notice banner" },
+    { "text": "Uses localization (| t)", "passed": false, "evidence": "No | t usage — all text is hardcoded in English. Schema labels are hardcoded strings, not t: prefixed" },
+    { "text": "Schema restricted to product template", "passed": true, "evidence": "enabled_on templates: ['product'] at line 77" },
+    { "text": "Uses CSS custom properties (not hardcoded colors)", "passed": false, "evidence": "Hardcoded hex colors throughout: #fef3c7, #f59e0b, #92400e, #e5e7eb, #fff, #fffbeb, #fbbf24, #6b7280" }
+  ]
+}

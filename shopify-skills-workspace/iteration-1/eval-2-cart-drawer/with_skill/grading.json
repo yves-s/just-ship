@@ -1,0 +1,16 @@
+{
+  "eval_id": 2,
+  "eval_name": "cart-drawer-js",
+  "configuration": "with_skill",
+  "expectations": [
+    { "text": "Uses class X extends HTMLElement pattern", "passed": true, "evidence": "CartDrawerItems extends HTMLElement (line 9), AddToCartButton extends HTMLElement (line 57)" },
+    { "text": "Uses connectedCallback()", "passed": true, "evidence": "Both classes have connectedCallback: lines 19 and 80" },
+    { "text": "Uses disconnectedCallback() for cleanup", "passed": true, "evidence": "Both classes: lines 24 and 86" },
+    { "text": "Fetches /cart/add.js with POST", "passed": true, "evidence": "Line 121: fetch('/cart/add.js', { method: 'POST' ... })" },
+    { "text": "Uses Section Rendering API (?sections=)", "passed": true, "evidence": "Line 34: fetch(`${window.location.pathname}?sections=${this.sectionId}`)" },
+    { "text": "Handles 422 error (out of stock)", "passed": true, "evidence": "Line 130: if (response.status === 422) with error handling" },
+    { "text": "No jQuery ($() or jQuery)", "passed": true, "evidence": "Zero jQuery references in the entire file" },
+    { "text": "Uses customElements.define()", "passed": true, "evidence": "Lines 53-54 and 184-185" },
+    { "text": "Handles shopify:section:load event", "passed": true, "evidence": "Line 193: document.addEventListener('shopify:section:load', ...)" }
+  ]
+}
