@@ -129,11 +129,13 @@ This ticket was automatically created by the pipeline error handler.`;
 
   // Mark ticket as done immediately — actual fix execution is a future task.
   // For now the ticket serves as audit-trail documentation.
-  await boardApi.patchTicket(ticketNumber, { status: "done", pipeline_status: "done" });
+  const patched = await boardApi.patchTicket(ticketNumber, { status: "done", pipeline_status: "done" });
 
   return {
     healed: true,
     ticketNumber,
-    summary: `Auto-heal ticket T-${ticketNumber} created and resolved: ${classification.reason}`,
+    summary: patched
+      ? `Auto-heal ticket T-${ticketNumber} created and resolved: ${classification.reason}`
+      : `Auto-heal ticket T-${ticketNumber} created but status update failed: ${classification.reason}`,
   };
 }
