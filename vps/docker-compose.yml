@@ -41,7 +41,6 @@ services:
       - /home/claude-dev/.env
     environment:
       - BUGSINK_DB_DIR=/data
-      - CREATE_SUPERUSER=admin
 
   dozzle:
     image: amir20/dozzle:latest
