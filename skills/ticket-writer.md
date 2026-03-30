@@ -241,6 +241,23 @@ Set these for every ticket:
 
 When in doubt: if the ticket has no clear urgency signal, default to `medium`.
 
+### Komplexität
+
+Setze die Komplexität basierend auf diesen Heuristiken:
+
+| Komplexität | Signale |
+|---|---|
+| `low` | Einzelne Datei, Bug-Fix mit klarer Reproduktion, Config-Update, Text-Änderung, Dependency-Bump |
+| `medium` | Feature in 1 Repo, 2-5 Dateien, klare Acceptance Criteria, eine Domain (Frontend ODER Backend ODER DB) |
+| `high` | Cross-Domain (Frontend + Backend + DB), Architektur-Änderung, Migration, vage Anforderungen, 6+ Dateien |
+| `critical` | Cross-Repo, System-Redesign, Breaking Changes, Infrastruktur-Umbau, durchgehend menschliches Urteil nötig |
+
+**Wichtig:** `low` und `medium` Tickets können autonom auf dem VPS bearbeitet werden. `high` und `critical` werden nur lokal via `/develop` bearbeitet. Setze die Komplexität konservativ — im Zweifel eher höher.
+
+### Spike Due Date
+
+Bei Spike-Tickets: Setze automatisch ein `due_date` von +3 Tagen ab Erstellung. Spikes sind zeitbegrenzte Untersuchungen — ohne Deadline werden sie vergessen.
+
 ## Output and Delivery
 
 ### Pipeline-Modus bestimmen

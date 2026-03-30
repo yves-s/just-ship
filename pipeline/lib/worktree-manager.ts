@@ -176,6 +176,39 @@ export class WorktreeManager {
     return count;
   }
 
+  /**
+   * Returns the working directory for a given slot, or null if the slot doesn't exist.
+   */
+  getSlotDir(slotId: number): string | null {
+    const slot = this.slots.get(slotId);
+    return slot?.workDir ?? null;
+  }
+
+  /**
+   * Find a parked worktree whose branch name contains the given ticket number.
+   * Returns the workDir or null if no match is found.
+   */
+  findParkedForTicket(ticketNumber: number): string | null {
+    for (const [, slot] of this.slots) {
+      if (slot.status === "parked" && slot.branchName?.includes(String(ticketNumber))) {
+        return slot.workDir;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Release a worktree by its working directory path.
+   */
+  async releaseByDir(workDir: string): Promise<void> {
+    for (const [slotId, slot] of this.slots) {
+      if (slot.workDir === workDir) {
+        await this.release(slotId);
+        return;
+      }
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------

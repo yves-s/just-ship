@@ -10,6 +10,7 @@ import { runQaWithFixLoop } from "./lib/qa-fix-loop.ts";
 import type { QaContext } from "./lib/qa-runner.ts";
 import { generateChangeSummary } from "./lib/change-summary.ts";
 import { loadSkills, type AgentRole } from "./lib/load-skills.ts";
+import { Sentry } from "./lib/sentry.ts";
 
 // --- Stderr-capturing spawn wrapper for Claude Code subprocesses ---
 function makeSpawn(logPrefix: string) {
@@ -148,6 +149,8 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
   const config = loadProjectConfig(projectDir);
 
   let pauseReason: string | undefined;
+  let pauseQuestion: string | undefined;
+  let lastAssistantText = "";
   let sessionId: string | undefined;
 
   // --- Branch name: use pre-computed value if provided, otherwise derive (CLI mode) ---
@@ -229,7 +232,11 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
     ticketNumber: ticket.ticketId,
   };
   const eventHooks = hasPipeline ? createEventHooks(eventConfig, {
-    onPause: (reason) => { pauseReason = reason; },
+    onPause: (reason, questionText) => {
+      pauseReason = reason;
+      pauseQuestion = questionText;
+    },
+    getLastAssistantText: () => lastAssistantText,
   }) : null;
   const hooks = eventHooks?.hooks ?? {};
 
@@ -240,6 +247,7 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
   if (triagePrompt) {
     triageResult = await runTriage(workDir, ticket, triagePrompt, eventConfig, hasPipeline, opts.env);
     ticketDescription = triageResult.description;
+    Sentry.addBreadcrumb({ category: "pipeline", message: "triage_done", data: { verdict: triageResult?.verdict, qaTier: triageResult?.qaTier } });
   }
 
   // --- Build prompt ---
@@ -301,6 +309,20 @@ Branch ist bereits erstellt: ${branchName}`;
   try {
     if (hasPipeline) await postPipelineEvent(eventConfig, "agent_started", "orchestrator");
 
+    // --- Diagnostic logging ---
+    const agentNames = Object.keys(filteredAgents);
+    const skillNames = loadedSkills.skillNames;
+    console.error(`[Pipeline] Starting orchestrator query:`);
+    console.error(`[Pipeline]   workDir: ${workDir}`);
+    console.error(`[Pipeline]   model: opus`);
+    console.error(`[Pipeline]   agents: ${agentNames.join(", ") || "none"}`);
+    console.error(`[Pipeline]   skills: ${skillNames.join(", ") || "none"}`);
+    console.error(`[Pipeline]   prompt length: ${prompt.length} chars`);
+    console.error(`[Pipeline]   branch: ${branchName}`);
+    console.error(`[Pipeline]   timeout: ${timeoutMs / 60_000} min`);
+
+    Sentry.addBreadcrumb({ category: "pipeline", message: "orchestrator_start", data: { ticketId: ticket.ticketId, branch: branchName } });
+
     for await (const message of query({
       prompt,
       options: {
@@ -325,6 +347,13 @@ Branch ist bereits erstellt: ${branchName}`;
         spawnClaudeCodeProcess: makeSpawn(`[T-${ticket.ticketId}]`),
       },
     })) {
+      if (message.type === "assistant") {
+        const msg = message as SDKMessage & { content?: Array<{ type: string; text?: string }> };
+        if (Array.isArray(msg.content)) {
+          const texts = msg.content.filter(b => b.type === "text" && b.text).map(b => b.text!);
+          if (texts.length > 0) lastAssistantText = texts.join("\n");
+        }
+      }
       if (message.type === "result") {
         const resultMsg = message as SDKMessage & { type: "result"; subtype: string };
         if (resultMsg.subtype !== "success") {
@@ -341,6 +370,37 @@ Branch ist bereits erstellt: ${branchName}`;
 
     // Check if pipeline was paused for human input
     if (pauseReason === 'human_in_the_loop') {
+      // Store question via Board API
+      if (hasPipeline && pauseQuestion) {
+        try {
+          await fetch(`${config.pipeline.apiUrl}/api/events`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Pipeline-Key": config.pipeline.apiKey,
+            },
+            body: JSON.stringify({
+              ticket_number: Number(ticket.ticketId),
+              agent_type: "orchestrator",
+              event_type: "question",
+              metadata: { question: pauseQuestion },
+            }),
+            signal: AbortSignal.timeout(8000),
+          });
+          // Also store as denormalized field for quick widget display
+          await fetch(`${config.pipeline.apiUrl}/api/tickets/${ticket.ticketId}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Pipeline-Key": config.pipeline.apiKey,
+            },
+            body: JSON.stringify({ pending_question: pauseQuestion, pipeline_status: "paused" }),
+            signal: AbortSignal.timeout(8000),
+          });
+        } catch {
+          console.error("[Pipeline] Warning: could not store question in ticket");
+        }
+      }
       return {
         status: "paused",
         exitCode: 0,
@@ -541,10 +601,16 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
   };
 
   let pauseReason: string | undefined;
+  let pauseQuestion: string | undefined;
+  let lastAssistantText = "";
   let newSessionId: string | undefined;
 
   const eventHooks = hasPipeline ? createEventHooks(eventConfig, {
-    onPause: (reason) => { pauseReason = reason; },
+    onPause: (reason, questionText) => {
+      pauseReason = reason;
+      pauseQuestion = questionText;
+    },
+    getLastAssistantText: () => lastAssistantText,
   }) : null;
   const hooks = eventHooks?.hooks ?? {};
 
@@ -604,6 +670,13 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
         spawnClaudeCodeProcess: makeSpawn(`[T-${ticket.ticketId}]`),
       },
     })) {
+      if (message.type === "assistant") {
+        const msg = message as SDKMessage & { content?: Array<{ type: string; text?: string }> };
+        if (Array.isArray(msg.content)) {
+          const texts = msg.content.filter(b => b.type === "text" && b.text).map(b => b.text!);
+          if (texts.length > 0) lastAssistantText = texts.join("\n");
+        }
+      }
       if (message.type === "result") {
         const resultMsg = message as SDKMessage & { type: "result"; subtype: string };
         if (resultMsg.subtype !== "success") {
@@ -618,6 +691,37 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
     }
 
     if (pauseReason === 'human_in_the_loop') {
+      // Store question via Board API
+      if (hasPipeline && pauseQuestion) {
+        try {
+          await fetch(`${config.pipeline.apiUrl}/api/events`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Pipeline-Key": config.pipeline.apiKey,
+            },
+            body: JSON.stringify({
+              ticket_number: Number(ticket.ticketId),
+              agent_type: "orchestrator",
+              event_type: "question",
+              metadata: { question: pauseQuestion },
+            }),
+            signal: AbortSignal.timeout(8000),
+          });
+          // Also store as denormalized field for quick widget display
+          await fetch(`${config.pipeline.apiUrl}/api/tickets/${ticket.ticketId}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Pipeline-Key": config.pipeline.apiKey,
+            },
+            body: JSON.stringify({ pending_question: pauseQuestion, pipeline_status: "paused" }),
+            signal: AbortSignal.timeout(8000),
+          });
+        } catch {
+          console.error("[Pipeline] Warning: could not store question in ticket");
+        }
+      }
       return {
         status: "paused",
         exitCode: 0,

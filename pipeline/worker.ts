@@ -5,6 +5,7 @@ import { mkdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { executePipeline } from "./run.ts";
 import { classifyError } from "./lib/error-handler.ts";
+import { withWatchdog, saveWorktreeWIP } from "./lib/watchdog.ts";
 import { WorktreeManager } from "./lib/worktree-manager.ts";
 import { loadProjectConfig } from "./lib/config.ts";
 import { generateChangeSummary } from "./lib/change-summary.ts";
@@ -84,6 +85,13 @@ async function supabasePatch<T>(path: string, body: Record<string, unknown>): Pr
   }
 }
 
+// --- Complexity gate ---
+function getAllowedComplexities(maxLevel: string): string[] {
+  const levels = ["low", "medium", "high", "critical"];
+  const idx = levels.indexOf(maxLevel);
+  return idx >= 0 ? levels.slice(0, idx + 1) : ["low", "medium"];
+}
+
 // --- Ticket functions ---
 interface Ticket {
   number: number;
@@ -91,6 +99,7 @@ interface Ticket {
   body: string | null;
   priority: string;
   tags: string[] | null;
+  complexity: string | null;
 }
 
 async function checkConnectivity(): Promise<boolean> {
@@ -99,8 +108,10 @@ async function checkConnectivity(): Promise<boolean> {
 }
 
 async function getNextTicket(): Promise<Ticket | null> {
+  const maxComplexity = config.pipeline.maxAutonomousComplexity ?? "medium";
+  const allowedComplexities = getAllowedComplexities(maxComplexity);
   const tickets = await supabaseGet<Ticket[]>(
-    `/rest/v1/tickets?status=eq.ready_to_develop&project_id=eq.${SUPABASE_PROJECT_ID}&pipeline_status=is.null&order=priority.asc,created_at.asc&limit=1&select=number,title,body,priority,tags`
+    `/rest/v1/tickets?status=eq.ready_to_develop&project_id=eq.${SUPABASE_PROJECT_ID}&pipeline_status=is.null&complexity=in.(${allowedComplexities.join(",")})&order=priority.asc,created_at.asc&limit=1&select=number,title,body,priority,tags,complexity`
   );
   return tickets?.[0] ?? null;
 }
@@ -237,6 +248,14 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
   const branchName = `${config.conventions.branch_prefix}${ticket.number}-${branchSlug}`;
 
   let slotId: number | undefined;
+  const runAbortController = new AbortController();
+  // Forward module-level abort to per-run controller
+  if (abortController.signal.aborted) {
+    runAbortController.abort();
+  } else {
+    abortController.signal.addEventListener("abort", () => runAbortController.abort(), { once: true });
+  }
+
   try {
     const slot = await worktreeManager.allocate(branchName);
     slotId = slot.slotId;
@@ -254,18 +273,21 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
 
     log(`Starting pipeline: T-${ticket.number} — ${ticket.title} (slot ${slotId})`);
 
-    const result = await executePipeline({
-      projectDir: PROJECT_DIR,
-      workDir: slot.workDir,
-      branchName,
-      ticket: {
-        ticketId: String(ticket.number),
-        title: ticket.title,
-        description: ticket.body ?? "No description provided",
-        labels: Array.isArray(ticket.tags) ? ticket.tags.join(",") : "",
-      },
-      abortSignal: abortController.signal,
-    });
+    const result = await withWatchdog(
+      executePipeline({
+        projectDir: PROJECT_DIR,
+        workDir: slot.workDir,
+        branchName,
+        ticket: {
+          ticketId: String(ticket.number),
+          title: ticket.title,
+          description: ticket.body ?? "No description provided",
+          labels: Array.isArray(ticket.tags) ? ticket.tags.join(",") : "",
+        },
+        abortSignal: runAbortController.signal,
+      }),
+      `T-${ticket.number}`
+    );
 
     if (result.status === "paused") {
       await supabasePatch(
@@ -301,6 +323,22 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
     if (slotId !== undefined) slotFailures.delete(slotId);
   } catch (error) {
     const errorObj = error instanceof Error ? error : new Error(String(error));
+    const isWatchdog = errorObj.message.startsWith("Watchdog timeout:");
+
+    if (isWatchdog) {
+      // Abort only this run's subprocess, not the entire worker
+      runAbortController.abort();
+      // Wait briefly for subprocess to terminate
+      await sleep(5000);
+      // Try to save WIP
+      if (slotId !== undefined) {
+        const worktreeDir = worktreeManager.getSlotDir(slotId);
+        if (worktreeDir) {
+          saveWorktreeWIP(worktreeDir, ticket.number);
+        }
+      }
+    }
+
     const classification = classifyError({
       error: errorObj,
       ticketId: String(ticket.number),
@@ -326,6 +364,65 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
   } finally {
     if (slotId !== undefined) {
       await worktreeManager.release(slotId);
+    }
+  }
+}
+
+// --- Lifecycle timeout runner (runs every poll cycle) ---
+async function runLifecycleChecks(): Promise<void> {
+  const now = new Date();
+
+  // 1. Failed tickets > 1h → auto-reset (max 3 retries)
+  const failedTickets = await supabaseGet<Array<{ number: number; pipeline_retry_count: number; updated_at: string }>>(
+    `/rest/v1/tickets?pipeline_status=eq.failed&project_id=eq.${SUPABASE_PROJECT_ID}&select=number,pipeline_retry_count,updated_at`
+  );
+  if (failedTickets) {
+    for (const t of failedTickets) {
+      const age = now.getTime() - new Date(t.updated_at).getTime();
+      if (age < 60 * 60_000) continue; // < 1h, skip
+      const retries = t.pipeline_retry_count ?? 0;
+      if (retries >= 3) {
+        // Max retries reached → move to backlog
+        await supabasePatch(`/rest/v1/tickets?number=eq.${t.number}`, {
+          pipeline_status: null,
+          status: "backlog",
+          summary: `Blocked after ${retries} failed autonomous attempts. Requires manual intervention.`,
+        });
+        log(`T-${t.number}: moved to backlog after ${retries} failed retries`);
+      } else {
+        // Auto-reset for retry
+        await supabasePatch(`/rest/v1/tickets?number=eq.${t.number}`, {
+          pipeline_status: null,
+          status: "ready_to_develop",
+          pipeline_retry_count: retries + 1,
+        });
+        log(`T-${t.number}: auto-reset for retry (attempt ${retries + 1}/3)`);
+      }
+      await clearBoardAgentEvents(t.number);
+    }
+  }
+
+  // 2. Paused tickets > 24h → auto-cancel
+  const pausedTickets = await supabaseGet<Array<{ number: number; updated_at: string }>>(
+    `/rest/v1/tickets?pipeline_status=eq.paused&project_id=eq.${SUPABASE_PROJECT_ID}&select=number,updated_at`
+  );
+  if (pausedTickets) {
+    for (const t of pausedTickets) {
+      const age = now.getTime() - new Date(t.updated_at).getTime();
+      if (age < 24 * 60 * 60_000) continue; // < 24h, skip
+      // Try to save WIP from parked worktree
+      const worktreeDir = worktreeManager.findParkedForTicket(t.number);
+      if (worktreeDir) {
+        saveWorktreeWIP(worktreeDir, t.number);
+        await worktreeManager.releaseByDir(worktreeDir);
+      }
+      await supabasePatch(`/rest/v1/tickets?number=eq.${t.number}`, {
+        pipeline_status: null,
+        status: "ready_to_develop",
+        summary: "Auto-cancelled after 24h without answer. Branch may contain partial work.",
+      });
+      await clearBoardAgentEvents(t.number);
+      log(`T-${t.number}: auto-cancelled after 24h pause`);
     }
   }
 }
@@ -363,6 +460,13 @@ while (running) {
   if (totalFailures >= MAX_FAILURES) {
     log(`CRITICAL: ${totalFailures} total failures across slots. Worker stopping.`);
     process.exit(1);
+  }
+
+  // Run lifecycle checks each poll cycle
+  try {
+    await runLifecycleChecks();
+  } catch (e) {
+    log(`Lifecycle check error: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   await sleep(POLL_INTERVAL);
