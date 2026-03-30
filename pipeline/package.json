@@ -7,5 +7,8 @@
     "@anthropic-ai/claude-agent-sdk": "^0.1.0",
     "@sentry/node": "^9.0.0",
     "tsx": "^4.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.2"
   }
 }

@@ -330,6 +330,7 @@ Branch ist bereits erstellt: ${branchName}`;
         if (resultMsg.subtype !== "success") {
           console.error("[SDK Result]", resultMsg.subtype);
           exitCode = 1;
+          throw new Error(`Pipeline exited with status: ${resultMsg.subtype}`);
         }
       }
       // Extract session ID from any message that has it
@@ -382,6 +383,9 @@ Branch ist bereits erstellt: ${branchName}`;
     if (hasPipeline) await postPipelineEvent(eventConfig, "pipeline_failed", "orchestrator");
   } finally {
     clearTimeout(timeoutId);
+    if (exitCode !== 0) {
+      console.error(`[Pipeline] Final state: exitCode=${exitCode}, reason=${failureReason ?? "unknown"}, timedOut=${timedOut}`);
+    }
   }
 
   // --- Phase 3: QA with Fix Loops ---
@@ -605,6 +609,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
         if (resultMsg.subtype !== "success") {
           console.error("[SDK Result]", resultMsg.subtype);
           exitCode = 1;
+          throw new Error(`Pipeline exited with status: ${resultMsg.subtype}`);
         }
       }
       if ('session_id' in message && typeof (message as Record<string, unknown>).session_id === 'string') {
@@ -655,6 +660,9 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
     if (hasPipeline) await postPipelineEvent(eventConfig, "pipeline_failed", "orchestrator");
   } finally {
     clearTimeout(timeoutId);
+    if (exitCode !== 0) {
+      console.error(`[Pipeline] Final state: exitCode=${exitCode}, reason=${failureReason ?? "unknown"}, timedOut=${timedOut}`);
+    }
   }
 
   // Post pipeline summary with aggregated token costs
