@@ -3,6 +3,21 @@
 ## [Unreleased]
 
 ### Added
+- Shared watchdog module (`pipeline/lib/watchdog.ts`) — `withWatchdog()` timeout wrapper and `saveWorktreeWIP()` helper, extracted from server.ts for reuse
+- Worker watchdog — `executePipeline()` wrapped in `withWatchdog()` with per-run AbortController; on timeout: abort subprocess, save WIP, reset ticket
+- Structured diagnostic logging before orchestrator `query()` call (agents, skills, prompt length, timeout, branch)
+- Sentry breadcrumbs at `triage_done` and `orchestrator_start` phases
+- In-memory ring buffer (last 10 runs) for `/health` endpoint with `last_completed`, `last_error`, `recent_runs`, `uptime_seconds`
+- CORS headers on Pipeline Server scoped to Board domain for dashboard polling
+- Complexity gate — worker filters tickets by `maxAutonomousComplexity` (default: `medium`); server rejects high/critical complexity via HTTP 422
+- Question text capture — buffers last assistant message before pause, stores question via Board API events + denormalized `pending_question` field
+- Lifecycle timeout runner in worker main loop: failed tickets > 1h auto-reset (max 3 retries, then backlog); paused tickets > 24h auto-cancel with WIP saved
+- `findParkedForTicket()` and `releaseByDir()` methods on WorktreeManager
+- `getSlotDir()` method on WorktreeManager
+- Complexity heuristics in ticket-writer skill (low/medium for autonomous, high/critical for local)
+- Spike tickets get automatic +3 day `due_date` via ticket-writer skill
+
+### Changed
 - Bugsink + Dozzle monitoring for VPS deployments — error tracking via `@sentry/node` SDK and live container log viewer, both behind Caddy basicauth at `/errors/` and `/logs/`
 - `BUGSINK_DSN` environment variable auto-configured in Docker pipeline-server container
 - `/spike-review` command — review completed spike tickets, auto-locate spike documents in `docs/spikes/`, present concise summaries, convert Implementation Steps into follow-up tickets. Supports interactive and autonomous (`--auto`) modes
