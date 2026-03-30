@@ -10,13 +10,12 @@
 - Token usage reporting in pipeline events — `input_tokens`, `output_tokens`, `model`, `estimated_cost_usd` on agent completion events
 - Pipeline summary event (`pipeline_completed`) with aggregated token costs at end of run
 - Path traversal guard on skill name validation
+- Spike T-472: Monitoring solution research — evaluated 10+ tools, recommends Bugsink + Dozzle for VPS error logging and live log visibility
+- `/just-ship-review` command — checkout branch, install deps, build, start dev server for local testing. Supports `/review T-{N}` direct access and interactive branch selection without arguments
 
 ### Changed
 - `createEventHooks()` now returns `{ hooks, getTotals }` to support token accumulation
 - `executePipeline()` and `resumePipeline()` now load skills, filter agents by `skip_agents`, and inject domain skills into agent prompts
-
-### Added
-- `/review` command — checkout branch, install deps, build, start dev server for local testing. Supports `/review T-{N}` direct access and interactive branch selection without arguments
 - `/ship T-{N}` argument support — ship a specific ticket's branch without checking it out first
 - `/ship` dev-server cleanup — kills background dev server (PID-tracked) before merging
 - `/ship` stale-branch hints — warns about `[gone]` branches and branches >50 commits behind main after shipping

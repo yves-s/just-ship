@@ -71,6 +71,36 @@ const pipelineState: PipelineState = { running: null };
 // --- Drain manager (for zero-downtime updates) ---
 const drainManager = new DrainManager(() => runningTickets.size);
 
+// --- Server-level watchdog timeout ---
+// If executePipeline/resumePipeline hangs (e.g. SDK async iterator doesn't propagate child exit),
+// the watchdog forces cleanup after the pipeline timeout + grace period.
+const WATCHDOG_GRACE_MS = 5 * 60_000; // 5 minutes grace on top of pipeline timeout
+const DEFAULT_PIPELINE_TIMEOUT_MS = 1_800_000; // 30 min — must match run.ts
+
+function getWatchdogTimeoutMs(): number {
+  const pipelineTimeout = Number(process.env.PIPELINE_TIMEOUT_MS) || DEFAULT_PIPELINE_TIMEOUT_MS;
+  return pipelineTimeout + WATCHDOG_GRACE_MS;
+}
+
+const WATCHDOG_SENTINEL = Symbol("watchdog");
+
+async function withWatchdog<T>(promise: Promise<T>, label: string): Promise<T> {
+  const timeoutMs = getWatchdogTimeoutMs();
+  let timer: ReturnType<typeof setTimeout>;
+  const watchdog = new Promise<typeof WATCHDOG_SENTINEL>((resolve) => {
+    timer = setTimeout(() => resolve(WATCHDOG_SENTINEL), timeoutMs);
+  });
+
+  const result = await Promise.race([promise, watchdog]);
+  clearTimeout(timer!);
+
+  if (result === WATCHDOG_SENTINEL) {
+    throw new Error(`Watchdog timeout: ${label} did not complete within ${Math.round(timeoutMs / 60_000)} minutes`);
+  }
+
+  return result as T;
+}
+
 // --- Trigger file path (for Update-Agent communication) ---
 const TRIGGER_DIR = "/home/claude-dev/.just-ship/triggers";
 
@@ -309,13 +339,16 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
         workDir = slot.workDir;
       }
 
-      const result = await executePipeline({
-        projectDir: projectDir,
-        workDir,
-        branchName,
-        ticket: { ticketId: String(ticketNumber), title, description: body, labels: tags },
-        env: Object.keys(projectEnv).length > 0 ? projectEnv : undefined,
-      });
+      const result = await withWatchdog(
+        executePipeline({
+          projectDir: projectDir,
+          workDir,
+          branchName,
+          ticket: { ticketId: String(ticketNumber), title, description: body, labels: tags },
+          env: Object.keys(projectEnv).length > 0 ? projectEnv : undefined,
+        }),
+        `T-${ticketNumber} executePipeline`,
+      );
 
       if (result.status === "completed") {
         log(`Pipeline completed: T-${ticketNumber} -> ${result.branch}`);
@@ -661,15 +694,18 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
           workDir = slot.workDir;
         }
 
-        const result = await resumePipeline({
-          projectDir: answerProjectDir,
-          workDir,
-          branchName,
-          ticket: { ticketId: String(ticketNumber), title, description: ticketBody, labels: tags },
-          sessionId,
-          answer: answer.trim(),
-          env: Object.keys(answerProjectEnv).length > 0 ? answerProjectEnv : undefined,
-        });
+        const result = await withWatchdog(
+          resumePipeline({
+            projectDir: answerProjectDir,
+            workDir,
+            branchName,
+            ticket: { ticketId: String(ticketNumber), title, description: ticketBody, labels: tags },
+            sessionId,
+            answer: answer.trim(),
+            env: Object.keys(answerProjectEnv).length > 0 ? answerProjectEnv : undefined,
+          }),
+          `T-${ticketNumber} resumePipeline`,
+        );
 
         if (result.status === "paused") {
           await patchTicket(ticketNumber, { pipeline_status: "paused", session_id: result.sessionId });

@@ -7,7 +7,6 @@
       "Glob(**)",
       "Grep(**)",
       "Bash(*)",
-      "mcp__claude_ai_Notion__*",
       "mcp__claude_ai_Supabase__*",
       "mcp__claude_ai_Vercel__*",
       "mcp__claude_ai_n8n__*"

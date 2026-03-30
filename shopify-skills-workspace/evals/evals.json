@@ -1,0 +1,23 @@
+{
+  "skill_name": "shopify-skills",
+  "evals": [
+    {
+      "id": 1,
+      "skill": "shopify-liquid",
+      "prompt": "Build a new section called 'trust-badges' that shows 3-5 configurable trust badges (icon image + text label) in a horizontal row. The merchant should be able to add/remove badges and change the heading. Write the complete section file.",
+      "expected_output": "A complete .liquid section file with: schema using blocks for badges (image_picker + text settings), for-loop over blocks with shopify_attributes, heading from section settings, minimal preset, proper whitespace control, nil-guards on optional fields."
+    },
+    {
+      "id": 2,
+      "skill": "shopify-theme",
+      "prompt": "The client wants a cart drawer that updates dynamically when items are added — no page reload. The existing theme has a section called 'cart-drawer' with id 'cart-drawer'. Write the JavaScript for the add-to-cart buttons that adds the item and refreshes the cart drawer section.",
+      "expected_output": "JavaScript using Web Component pattern (class extends HTMLElement), fetch to /cart/add.js, then Section Rendering API to refresh the cart-drawer section. Error handling for 422 (out of stock). connectedCallback for initialization. No jQuery."
+    },
+    {
+      "id": 3,
+      "skill": "shopify-metafields",
+      "prompt": "The client has a food store and wants to display a list of ingredients with allergen warnings on each product page. Each ingredient is a metaobject (type: ingredient) with fields: name, description, is_allergen (boolean), icon (file_reference). Products have a list.metaobject_reference metafield at custom.ingredients. Write the Liquid code for a product page section that displays this.",
+      "expected_output": "Liquid code that: accesses product.metafields.custom.ingredients.value, iterates with for-loop, uses .value on each field (name.value, description.value, is_allergen.value, icon.value), nil-guards on the metafield, image_url filter for icon, conditional styling for allergens, proper whitespace control."
+    }
+  ]
+}

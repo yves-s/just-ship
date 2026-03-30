@@ -47,7 +47,6 @@ Commands:
     --key           API key for the board (required)
     --slug          Workspace slug (optional)
     --board         Board URL, e.g. https://board.just-ship.io (optional, sets global board_url)
-    --shopify-password  Shopify Theme Access password (optional, for VPS/CI)
 
   set-project     Write workspace_id + project_id to project.json
     --workspace-id  Workspace UUID (required)
@@ -80,7 +79,7 @@ USAGE
 # ---------------------------------------------------------------------------
 
 cmd_add_workspace() {
-  local workspace_id="" key="" slug="" board="" shopify_password=""
+  local workspace_id="" key="" slug="" board=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -88,7 +87,6 @@ cmd_add_workspace() {
       --key)          key="$2"; shift 2 ;;
       --slug)         slug="$2"; shift 2 ;;
       --board)        board="$2"; shift 2 ;;
-      --shopify-password) shopify_password="$2"; shift 2 ;;
       *) echo "Error: Unknown option '$1' for add-workspace"; exit 1 ;;
     esac
   done
@@ -105,7 +103,6 @@ cmd_add_workspace() {
   JS_KEY="$key" \
   JS_SLUG="${slug:-}" \
   JS_BOARD="${board:-}" \
-  JS_SHOPIFY_PW="${shopify_password:-}" \
   node -e "
     const fs = require('fs');
     const configFile = process.env.JS_CONFIG_FILE;
@@ -113,7 +110,6 @@ cmd_add_workspace() {
     const key = process.env.JS_KEY;
     const slug = process.env.JS_SLUG || null;
     const board = process.env.JS_BOARD || null;
-    const shopifyPw = process.env.JS_SHOPIFY_PW || null;
 
     const config = JSON.parse(fs.readFileSync(configFile, 'utf-8'));
 
@@ -130,9 +126,6 @@ cmd_add_workspace() {
     };
     if (slug) {
       config.workspaces[workspaceId].slug = slug;
-    }
-    if (shopifyPw) {
-      config.workspaces[workspaceId].shopify_password = shopifyPw;
     }
 
     // Auto-set default_workspace if this is the first workspace
@@ -271,7 +264,6 @@ cmd_read_workspace() {
       slug: ws.slug || null,
       api_key: ws.api_key || '',
       board_url: boardUrl,
-      shopify_password: ws.shopify_password || '',
     }, null, 2));
   "
 }

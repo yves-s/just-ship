@@ -1,0 +1,16 @@
+{
+  "eval_id": 2,
+  "eval_name": "cart-drawer-js",
+  "configuration": "without_skill",
+  "expectations": [
+    { "text": "Uses class X extends HTMLElement pattern", "passed": false, "evidence": "Uses IIFE pattern (function() { ... })() — no Web Components at all" },
+    { "text": "Uses connectedCallback()", "passed": false, "evidence": "No connectedCallback — uses event delegation via document.addEventListener instead" },
+    { "text": "Uses disconnectedCallback() for cleanup", "passed": false, "evidence": "No disconnectedCallback — MutationObserver is never disconnected, event listeners are never cleaned up" },
+    { "text": "Fetches /cart/add.js with POST", "passed": true, "evidence": "Line 98: fetchJSON with /cart/add.js POST" },
+    { "text": "Uses Section Rendering API (?sections=)", "passed": true, "evidence": "Line 59: fetch with ?sections=${DRAWER_SECTION_ID}" },
+    { "text": "Handles 422 error (out of stock)", "passed": false, "evidence": "Generic fetchJSON throws on !response.ok but no specific 422 handling — all errors treated the same" },
+    { "text": "No jQuery ($() or jQuery)", "passed": true, "evidence": "No jQuery references" },
+    { "text": "Uses customElements.define()", "passed": false, "evidence": "No Web Components — uses IIFE with loose functions" },
+    { "text": "Handles shopify:section:load event", "passed": false, "evidence": "No shopify:section:load handler — drawer interactions break after section re-render in editor" }
+  ]
+}

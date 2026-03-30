@@ -1,0 +1,230 @@
+{%- comment -%}
+  Section: Product Ingredients
+  Displays a list of ingredients from the product metafield custom.ingredients
+  (type: list.metaobject_reference, metaobject type: ingredient).
+  Each ingredient metaobject has fields: name, description, is_allergen (boolean), icon (file_reference).
+{%- endcomment -%}
+
+{%- assign ingredients = product.metafields.custom.ingredients.value -%}
+
+{%- if ingredients.size > 0 -%}
+  <section class="product-ingredients">
+    <div class="product-ingredients__header">
+      <h2 class="product-ingredients__title">
+        {{ section.settings.heading | default: 'sections.ingredients.heading' | t }}
+      </h2>
+      {%- if section.settings.description != blank -%}
+        <p class="product-ingredients__description">{{ section.settings.description }}</p>
+      {%- endif -%}
+    </div>
+
+    {%- assign has_allergens = false -%}
+
+    <ul class="product-ingredients__list" role="list">
+      {%- for ingredient in ingredients -%}
+        {%- assign is_allergen = ingredient.is_allergen.value -%}
+        {%- if is_allergen -%}
+          {%- assign has_allergens = true -%}
+        {%- endif -%}
+
+        <li class="product-ingredients__item{% if is_allergen %} product-ingredients__item--allergen{% endif %}">
+          {%- assign icon = ingredient.icon.value -%}
+          {%- if icon -%}
+            <div class="product-ingredients__icon">
+              <img
+                src="{{ icon | image_url: width: 64 }}"
+                alt="{{ ingredient.name.value | escape }}"
+                width="32"
+                height="32"
+                loading="lazy"
+              >
+            </div>
+          {%- endif -%}
+
+          <div class="product-ingredients__content">
+            <span class="product-ingredients__name">
+              {{- ingredient.name.value -}}
+              {%- if is_allergen -%}
+                <span class="product-ingredients__allergen-badge" aria-label="{{ 'sections.ingredients.allergen_label' | t }}">
+                  {{ 'sections.ingredients.allergen_badge' | t | default: 'Allergen' }}
+                </span>
+              {%- endif -%}
+            </span>
+
+            {%- if ingredient.description.value != blank -%}
+              <p class="product-ingredients__detail">{{ ingredient.description.value }}</p>
+            {%- endif -%}
+          </div>
+        </li>
+      {%- endfor -%}
+    </ul>
+
+    {%- if has_allergens and section.settings.show_allergen_notice -%}
+      <div class="product-ingredients__notice" role="alert">
+        <p>{{ section.settings.allergen_notice | default: 'sections.ingredients.allergen_notice' | t }}</p>
+      </div>
+    {%- endif -%}
+  </section>
+{%- endif -%}
+
+<style>
+  .product-ingredients {
+    padding: {{ section.settings.padding_top }}px 0 {{ section.settings.padding_bottom }}px;
+  }
+
+  .product-ingredients__header {
+    margin-bottom: 1.5rem;
+  }
+
+  .product-ingredients__title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem;
+  }
+
+  .product-ingredients__description {
+    color: rgba(var(--color-foreground), 0.7);
+    margin: 0;
+  }
+
+  .product-ingredients__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .product-ingredients__item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid rgba(var(--color-foreground), 0.08);
+    border-radius: 0.375rem;
+  }
+
+  .product-ingredients__item--allergen {
+    border-color: rgba(var(--color-foreground), 0.2);
+    background-color: rgba(var(--color-foreground), 0.02);
+  }
+
+  .product-ingredients__icon {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+  }
+
+  .product-ingredients__icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .product-ingredients__content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .product-ingredients__name {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 500;
+    line-height: 1.4;
+  }
+
+  .product-ingredients__allergen-badge {
+    display: inline-block;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    background-color: rgba(var(--color-foreground), 0.08);
+    color: rgb(var(--color-foreground));
+    white-space: nowrap;
+  }
+
+  .product-ingredients__detail {
+    margin: 0.25rem 0 0;
+    font-size: 0.875rem;
+    color: rgba(var(--color-foreground), 0.7);
+    line-height: 1.5;
+  }
+
+  .product-ingredients__notice {
+    margin-top: 1.25rem;
+    padding: 0.75rem 1rem;
+    border-left: 3px solid rgb(var(--color-foreground));
+    background-color: rgba(var(--color-foreground), 0.02);
+    font-size: 0.875rem;
+  }
+
+  .product-ingredients__notice p {
+    margin: 0;
+  }
+</style>
+
+{% schema %}
+{
+  "name": "t:sections.ingredients.name",
+  "tag": "section",
+  "class": "section",
+  "limit": 1,
+  "enabled_on": {
+    "templates": ["product"]
+  },
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "t:sections.ingredients.settings.heading.label",
+      "default": "Ingredients"
+    },
+    {
+      "type": "text",
+      "id": "description",
+      "label": "t:sections.ingredients.settings.description.label"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_allergen_notice",
+      "label": "t:sections.ingredients.settings.show_allergen_notice.label",
+      "default": true
+    },
+    {
+      "type": "textarea",
+      "id": "allergen_notice",
+      "label": "t:sections.ingredients.settings.allergen_notice.label",
+      "default": "This product contains ingredients marked as allergens. Please check with your healthcare provider if you have any food allergies."
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "label": "t:sections.all.padding.padding_top",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 36
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "label": "t:sections.all.padding.padding_bottom",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 36
+    }
+  ],
+  "presets": [
+    {
+      "name": "t:sections.ingredients.presets.name"
+    }
+  ]
+}
+{% endschema %}

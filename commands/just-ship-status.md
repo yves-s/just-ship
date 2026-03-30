@@ -9,7 +9,7 @@ Read-only Uebersicht ueber den lokalen Zustand des Repos. Keine Aktionen, nur An
 
 ## WICHTIGSTE REGEL
 
-**Dieser Command aendert NICHTS.** Kein Commit, kein Push, kein Status-Update, kein Branch-Wechsel. Reine Informationsanzeige.
+**Dieser Command zeigt den Zustand und bietet Aufräumen an.** Kein Commit, kein Push, kein Status-Update, kein Branch-Wechsel — ausser der User stimmt dem Aufräumen zu.
 
 ## Konfiguration
 
@@ -113,7 +113,27 @@ Empfehlungen:
 
 Falls keine Empfehlungen: Abschnitt weglassen.
 
-### 5. Sonderfall: Keine Branches
+### 5. Aufräumen anbieten
+
+Falls Empfehlungen vorhanden sind, frage den User:
+
+```
+Soll ich aufräumen? (Stale Branches löschen, verwaiste Worktrees entfernen)
+```
+
+**Falls der User zustimmt** ("ja", "passt", "mach", "aufräumen", "clean up"):
+- `[gone]`-Branches loeschen: `git branch -D {branch}`
+- Verwaiste Worktrees entfernen: `git worktree remove {path} --force`
+- Branches die >50 Commits hinter main sind: loeschen falls kein offener PR existiert
+- Ausgabe pro Aktion: `✓ {branch} gelöscht` / `✓ {worktree} aufgeräumt`
+- Am Ende: `Aufgeräumt. {N} Branches gelöscht, {M} Worktrees entfernt.`
+
+**Falls der User ablehnt** ("nein", "nö", "lass"):
+- Nichts tun, Session beenden.
+
+**WICHTIG:** Branches mit offenen PRs oder mit Board-Status `in_progress`/`in_review` werden NIEMALS automatisch gelöscht — auch nicht wenn >50 Commits behind.
+
+### 6. Sonderfall: Keine Branches
 
 Falls keine Feature/Fix/Chore-Branches existieren (nur `main`):
 ```
@@ -126,7 +146,7 @@ Worktrees: keine aktiven
 
 ## Hinweise
 
-- Dieser Command ist **rein informativ** — er aendert nichts am Repo, Board oder Git-Status
+- Dieser Command ist informativ mit optionalem Aufräumen — er aendert nur etwas wenn der User explizit zustimmt
 - Board-Abfrage nur wenn `pipeline.workspace_id` in `project.json` existiert
 - Ticket-Nummern immer mit `T-` Prefix anzeigen, NIEMALS mit `#`
 - Falls Board-API nicht erreichbar: Board-Spalte mit `?` fuellen und Hinweis ausgeben

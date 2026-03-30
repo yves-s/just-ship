@@ -164,7 +164,7 @@ SOFORT WEITER ZU SCHRITT 3c.
 
 ### 3c. Dev-Server stoppen (falls laufend)
 
-**PID-Tracking:** `/review` speichert die Dev-Server-PID in `.claude/.dev-server-pid`.
+**PID-Tracking:** `/just-ship-review` speichert die Dev-Server-PID in `.claude/.dev-server-pid`.
 
 ```bash
 if [ -f ".claude/.dev-server-pid" ]; then

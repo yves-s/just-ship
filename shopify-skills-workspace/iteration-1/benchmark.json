@@ -1,0 +1,49 @@
+{
+  "skill_name": "shopify-skills",
+  "iteration": 1,
+  "configurations": {
+    "with_skill": {
+      "pass_rate": {
+        "mean": 0.962,
+        "per_eval": {
+          "eval-1-trust-badges": { "passed": 8, "total": 8, "rate": 1.0 },
+          "eval-2-cart-drawer": { "passed": 9, "total": 9, "rate": 1.0 },
+          "eval-3-ingredients": { "passed": 9, "total": 9, "rate": 1.0 }
+        }
+      },
+      "timing": {
+        "mean_tokens": 25438,
+        "mean_duration_seconds": 49.5,
+        "per_eval": {
+          "eval-1-trust-badges": { "tokens": 23776, "duration_seconds": 39.8 },
+          "eval-2-cart-drawer": { "tokens": 24847, "duration_seconds": 52.9 },
+          "eval-3-ingredients": { "tokens": 27690, "duration_seconds": 55.7 }
+        }
+      }
+    },
+    "without_skill": {
+      "pass_rate": {
+        "mean": 0.692,
+        "per_eval": {
+          "eval-1-trust-badges": { "passed": 8, "total": 8, "rate": 1.0 },
+          "eval-2-cart-drawer": { "passed": 3, "total": 9, "rate": 0.333 },
+          "eval-3-ingredients": { "passed": 7, "total": 9, "rate": 0.778 }
+        }
+      },
+      "timing": {
+        "mean_tokens": 21596,
+        "mean_duration_seconds": 51.0,
+        "per_eval": {
+          "eval-1-trust-badges": { "tokens": 20806, "duration_seconds": 38.7 },
+          "eval-2-cart-drawer": { "tokens": 22682, "duration_seconds": 70.7 },
+          "eval-3-ingredients": { "tokens": 21301, "duration_seconds": 43.7 }
+        }
+      }
+    }
+  },
+  "delta": {
+    "pass_rate": "+27.0pp (0.692 → 0.962)",
+    "tokens": "+18% overhead (21596 → 25438 mean)",
+    "duration": "-3% faster (51.0s → 49.5s mean)"
+  }
+}
