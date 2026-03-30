@@ -37,6 +37,8 @@ services:
       - "8000"
     volumes:
       - bugsink_data:/data
+    env_file:
+      - /home/claude-dev/.env
     environment:
       - BUGSINK_SECRET_KEY=${BUGSINK_SECRET_KEY:-changeme-generate-a-real-key}
       - BUGSINK_DB_DIR=/data
