@@ -1110,6 +1110,16 @@ VPS (Ubuntu 22.04)
 | `POLL_INTERVAL` | Polling interval in seconds (default: 60) |
 | `MAX_FAILURES` | Consecutive failures before worker stops (default: 5) |
 | `LOG_DIR` | Log directory (default: `~/pipeline-logs`) |
+| `BUGSINK_DSN` | Bugsink error tracking DSN (auto-configured in Docker) |
+
+### Monitoring
+
+VPS deployments include built-in monitoring via two lightweight containers (~286 MB total):
+
+- **Bugsink** (`/errors/`) — Error tracking with stack traces. The pipeline-server and worker use `@sentry/node` SDK pointed at the Bugsink DSN. Sentry-compatible, so switching to GlitchTip or Sentry Cloud later only requires changing the DSN.
+- **Dozzle** (`/logs/`) — Live Docker container log viewer. Reads the Docker socket (read-only), zero code changes required.
+
+Both UIs are protected by Caddy basicauth and only accessible through the reverse proxy.
 
 ### Multi-Project Support
 

@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Added
+- Bugsink + Dozzle monitoring for VPS deployments — error tracking via `@sentry/node` SDK and live container log viewer, both behind Caddy basicauth at `/errors/` and `/logs/`
+- `BUGSINK_DSN` environment variable auto-configured in Docker pipeline-server container
 - Spike T-472: Monitoring solution research — evaluated 10+ tools, recommends Bugsink + Dozzle for VPS error logging and live log visibility
 - `/just-ship-review` command — checkout branch, install deps, build, start dev server for local testing. Supports `/review T-{N}` direct access and interactive branch selection without arguments
 - `/ship T-{N}` argument support — ship a specific ticket's branch without checking it out first

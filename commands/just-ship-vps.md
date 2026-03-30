@@ -329,6 +329,20 @@ Mit HTTPS (falls User eine Domain angegeben hat): Zuerst Caddyfile erstellen, da
 ssh root@<IP> "cat > /home/claude-dev/just-ship/vps/Caddyfile << 'CADDYEOF'
 <domain> {
     reverse_proxy pipeline-server:3001
+
+    handle_path /errors/* {
+        basicauth {
+            {$MONITORING_USER:admin} {$MONITORING_HASH}
+        }
+        reverse_proxy bugsink:8000
+    }
+
+    handle_path /logs/* {
+        basicauth {
+            {$MONITORING_USER:admin} {$MONITORING_HASH}
+        }
+        reverse_proxy dozzle:8080
+    }
 }
 CADDYEOF
 chown claude-dev:claude-dev /home/claude-dev/just-ship/vps/Caddyfile"
@@ -473,3 +487,57 @@ Falls bereits gesetzt (bestehendes Setup): Diesen Schritt ueberspringen.
 - **Port 3001 nicht erreichbar:** Firewall pruefen, `ufw allow 3001/tcp` oder Hostinger Firewall-Settings
 - **HTTPS-Zertifikat fehlschlaegt:** DNS A-Record pruefen (kann bis zu 24h dauern), Port 80+443 muessen offen sein
 - **Health-Check fehlschlaegt:** Container-Logs pruefen, Port-Mapping verifizieren
+
+---
+
+## Monitoring
+
+Der VPS laeuft mit zwei integrierten Monitoring-Diensten, die ueber Caddy erreichbar sind:
+
+### Dienste
+
+| URL | Dienst | Funktion |
+|---|---|---|
+| `https://<domain>/errors/` | Bugsink | Error Tracking UI (Sentry-kompatibel) |
+| `https://<domain>/logs/` | Dozzle | Live Container Log Viewer |
+
+Beide Endpunkte sind durch Caddy Basicauth geschuetzt.
+
+### Erstzugang
+
+Bugsink erstellt beim ersten Start automatisch einen Admin-User:
+- **User:** Wert von `BUGSINK_ADMIN_EMAIL` (Default: `admin@localhost`)
+- **Passwort:** Wert von `BUGSINK_ADMIN_PASSWORD` (Default: `admin`)
+
+**Wichtig:** Default-Credentials sofort aendern oder via Env-Vars ueberschreiben.
+
+### Umgebungsvariablen
+
+Folgende Variablen in `/home/claude-dev/.env` auf dem VPS setzen:
+
+```
+# Bugsink
+BUGSINK_SECRET_KEY=<langer-zufaelliger-string>
+BUGSINK_BASE_URL=https://<domain>/errors
+BUGSINK_ADMIN_EMAIL=admin@example.com
+BUGSINK_ADMIN_PASSWORD=<sicheres-passwort>
+
+# Caddy Basicauth fuer /errors/ und /logs/
+MONITORING_USER=admin
+MONITORING_HASH=<caddy-hash>
+```
+
+### Passwort-Hash generieren
+
+Caddy erwartet einen bcrypt-Hash fuer Basicauth. Hash generieren mit:
+
+```bash
+caddy hash-password --plaintext 'dein-passwort'
+```
+
+Den ausgegebenen Hash als `MONITORING_HASH` in `/home/claude-dev/.env` eintragen.
+
+### Sentry DSN
+
+Der `pipeline-server` Container hat `BUGSINK_DSN=http://bugsink:8000/sentry/1/` gesetzt.
+Das Sentry SDK verbindet sich automatisch — keine weitere Konfiguration noetig.
