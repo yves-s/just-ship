@@ -1,0 +1,185 @@
+<section class="trust-badges">
+  <div class="trust-badges__container page-width">
+    {%- if section.settings.heading != blank -%}
+      <h2 class="trust-badges__heading">{{ section.settings.heading }}</h2>
+    {%- endif -%}
+
+    {%- if section.blocks.size > 0 -%}
+      <div class="trust-badges__row">
+        {%- for block in section.blocks -%}
+          <div class="trust-badges__item" {{ block.shopify_attributes }}>
+            {%- if block.settings.icon != blank -%}
+              <div class="trust-badges__icon">
+                <img
+                  src="{{ block.settings.icon | image_url: width: 128 }}"
+                  alt="{{ block.settings.label | escape }}"
+                  width="64"
+                  height="64"
+                  loading="lazy"
+                >
+              </div>
+            {%- endif -%}
+            {%- if block.settings.label != blank -%}
+              <p class="trust-badges__label">{{ block.settings.label }}</p>
+            {%- endif -%}
+          </div>
+        {%- endfor -%}
+      </div>
+    {%- endif -%}
+  </div>
+</section>
+
+<style>
+  .trust-badges {
+    padding: {{ section.settings.padding_top }}px 0 {{ section.settings.padding_bottom }}px;
+    background-color: {{ section.settings.background_color }};
+  }
+
+  .trust-badges__container {
+    max-width: 120rem;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+  }
+
+  .trust-badges__heading {
+    text-align: center;
+    margin: 0 0 2rem;
+    font-size: 1.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: {{ section.settings.text_color }};
+  }
+
+  .trust-badges__row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2rem;
+    align-items: flex-start;
+  }
+
+  .trust-badges__item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    flex: 0 1 10rem;
+    gap: 0.8rem;
+  }
+
+  .trust-badges__icon img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+
+  .trust-badges__label {
+    margin: 0;
+    font-size: 1.3rem;
+    line-height: 1.4;
+    color: {{ section.settings.text_color }};
+  }
+
+  @media screen and (max-width: 749px) {
+    .trust-badges__row {
+      gap: 1.5rem;
+    }
+
+    .trust-badges__item {
+      flex: 0 1 8rem;
+    }
+  }
+</style>
+
+{% schema %}
+{
+  "name": "Trust Badges",
+  "tag": "section",
+  "class": "trust-badges-section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Why Shop With Us"
+    },
+    {
+      "type": "color",
+      "id": "background_color",
+      "label": "Background color",
+      "default": "#f8f8f8"
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "label": "Text color",
+      "default": "#333333"
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "label": "Padding top",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 40
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "label": "Padding bottom",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 40
+    }
+  ],
+  "blocks": [
+    {
+      "type": "badge",
+      "name": "Badge",
+      "settings": [
+        {
+          "type": "image_picker",
+          "id": "icon",
+          "label": "Icon image"
+        },
+        {
+          "type": "text",
+          "id": "label",
+          "label": "Label",
+          "default": "Trust Badge"
+        }
+      ]
+    }
+  ],
+  "max_blocks": 5,
+  "presets": [
+    {
+      "name": "Trust Badges",
+      "blocks": [
+        {
+          "type": "badge",
+          "settings": {
+            "label": "Free Shipping"
+          }
+        },
+        {
+          "type": "badge",
+          "settings": {
+            "label": "Secure Payment"
+          }
+        },
+        {
+          "type": "badge",
+          "settings": {
+            "label": "30-Day Returns"
+          }
+        }
+      ]
+    }
+  ]
+}
+{% endschema %}

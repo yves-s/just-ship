@@ -1,0 +1,15 @@
+{
+  "eval_id": 1,
+  "eval_name": "trust-badges-section",
+  "configuration": "with_skill",
+  "expectations": [
+    { "text": "Uses {% schema %} as last tag in file", "passed": true, "evidence": "{% schema %} is on line 94, last tag before {% endschema %} on line 185" },
+    { "text": "Schema has blocks (not just settings)", "passed": true, "evidence": "blocks array with type 'badge' at line 139" },
+    { "text": "{{ block.shopify_attributes }} on block wrapper", "passed": true, "evidence": "Line 10: {{ block.shopify_attributes }}" },
+    { "text": "Uses {%- -%} whitespace control", "passed": true, "evidence": "Consistently used throughout: lines 3, 7, 9, 11, 21, 22, 26" },
+    { "text": "Has presets in schema", "passed": true, "evidence": "Presets with 3 default badges at line 159" },
+    { "text": "image_picker accessed via | image_url", "passed": true, "evidence": "Line 14: block.settings.icon | image_url: width: 128" },
+    { "text": "Nil-guards on optional fields", "passed": true, "evidence": "Lines 3, 7, 11, 22 use != blank checks" },
+    { "text": "No {% include %} used", "passed": true, "evidence": "No include tags found in output" }
+  ]
+}

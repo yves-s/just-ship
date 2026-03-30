@@ -1,0 +1,16 @@
+{
+  "eval_id": 3,
+  "eval_name": "ingredients-metaobjects",
+  "configuration": "with_skill",
+  "expectations": [
+    { "text": "Accesses product.metafields.custom.ingredients.value", "passed": true, "evidence": "Line 8: assign ingredients = product.metafields.custom.ingredients.value" },
+    { "text": "Iterates with {% for %}", "passed": true, "evidence": "Line 24: for ingredient in ingredients" },
+    { "text": "Uses .value on metaobject fields", "passed": true, "evidence": "ingredient.name.value (line 46), ingredient.is_allergen.value (line 25), ingredient.description.value (line 54), ingredient.icon.value (line 31)" },
+    { "text": "Nil-guard on the metafield", "passed": true, "evidence": "Line 10: if ingredients.size > 0" },
+    { "text": "Uses | image_url for file_reference icon", "passed": true, "evidence": "Line 35: icon | image_url: width: 64" },
+    { "text": "Conditional allergen styling", "passed": true, "evidence": "Line 30: conditional --allergen class; lines 47-51: allergen badge; lines 62-66: allergen notice" },
+    { "text": "Uses localization (| t)", "passed": true, "evidence": "Lines 14, 48-49 use | t for translations; schema uses t: prefix for labels" },
+    { "text": "Schema restricted to product template", "passed": true, "evidence": "Line 178: enabled_on templates: ['product']" },
+    { "text": "Uses CSS custom properties (not hardcoded colors)", "passed": true, "evidence": "Uses rgba(var(--color-foreground), ...) throughout" }
+  ]
+}

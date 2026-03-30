@@ -130,7 +130,7 @@ just-ship/                         # Framework repository
 |   +-- ticket.md                  # Write a ticket (/ticket)
 |   +-- develop.md                 # Implement next ticket (/develop)
 |   +-- ship.md                    # Commit, push, PR, merge, done (/ship, /ship T-{N})
-|   +-- review.md                  # Checkout, build, dev-server, test (/review, /review T-{N})
+|   +-- just-ship-review.md         # Checkout, build, dev-server, test (/just-ship-review, /just-ship-review T-{N})
 |   +-- just-ship-status.md         # Show branches, PRs, board, worktrees (/just-ship-status)
 |   +-- setup-just-ship.md          # Auto-detect stack, configure project
 |   +-- just-ship-update.md          # Sync templates after framework update
@@ -298,7 +298,7 @@ Commands are markdown files in `commands/` with frontmatter metadata. They provi
 | `/ticket` | Write a structured ticket (bug, feature, improvement, spike) | No -- may ask user for input |
 | `/develop` | Pick next ticket, implement end-to-end, create PR | Yes -- fully autonomous |
 | `/ship` | Commit, push, PR, squash merge, delete branch, update board status. Supports `/ship T-{N}` | Yes -- zero questions |
-| `/review` | Checkout branch, install deps, build, start dev server for local testing | No -- interactive |
+| `/just-ship-review` | Checkout branch, install deps, build, start dev server for local testing | No -- interactive |
 
 ### Utility Commands
 
