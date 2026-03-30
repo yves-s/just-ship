@@ -3,6 +3,16 @@
 ## [Unreleased]
 
 ### Added
+- `/review` command — checkout branch, install deps, build, start dev server for local testing. Supports `/review T-{N}` direct access and interactive branch selection without arguments
+- `/ship T-{N}` argument support — ship a specific ticket's branch without checking it out first
+- `/ship` dev-server cleanup — kills background dev server (PID-tracked) before merging
+- `/ship` stale-branch hints — warns about `[gone]` branches and branches >50 commits behind main after shipping
+- `build.dev`, `build.dev_port`, `build.install` fields in `project.json` for dev-server and dependency configuration
+
+### Changed
+- `/status` command rewritten — now shows all branches, PRs, board status, worktrees, and cleanup recommendations (replaces legacy single-ticket Supabase view)
+
+### Added
 - VPS Update-Agent (`just-ship-updater.sh`) — host-level systemd service that orchestrates zero-downtime updates
 - Drain mechanism (`pipeline/lib/drain.ts`) — graceful drain state machine (normal → draining → drained) for zero-downtime container replacement
 - `/api/update` endpoint — receives update triggers from the Board, writes trigger file for Update-Agent

@@ -129,9 +129,9 @@ just-ship/                         # Framework repository
 +-- commands/                      # Slash commands
 |   +-- ticket.md                  # Write a ticket (/ticket)
 |   +-- develop.md                 # Implement next ticket (/develop)
-|   +-- ship.md                    # Commit + push + PR (/ship)
-|   +-- ship.md                    # Commit, push, PR, merge, done (/ship)
-|   +-- status.md                  # Show current status (/status)
+|   +-- ship.md                    # Commit, push, PR, merge, done (/ship, /ship T-{N})
+|   +-- review.md                  # Checkout, build, dev-server, test (/review, /review T-{N})
+|   +-- status.md                  # Show branches, PRs, board, worktrees (/status)
 |   +-- setup-just-ship.md          # Auto-detect stack, configure project
 |   +-- just-ship-update.md          # Sync templates after framework update
 +-- skills/                        # Framework skills (copied to projects)
@@ -297,14 +297,14 @@ Commands are markdown files in `commands/` with frontmatter metadata. They provi
 |---------|---------|------------|
 | `/ticket` | Write a structured ticket (bug, feature, improvement, spike) | No -- may ask user for input |
 | `/develop` | Pick next ticket, implement end-to-end, create PR | Yes -- fully autonomous |
-| `/ship` | Commit, push, create PR, update board status | Yes -- zero questions |
-| `/ship` | Commit, push, PR, squash merge, delete branch, update board status | Yes -- zero questions |
+| `/ship` | Commit, push, PR, squash merge, delete branch, update board status. Supports `/ship T-{N}` | Yes -- zero questions |
+| `/review` | Checkout branch, install deps, build, start dev server for local testing | No -- interactive |
 
 ### Utility Commands
 
 | Command | Purpose |
 |---------|---------|
-| `/status` | Show current ticket, branch, and change summary |
+| `/status` | Show all branches, PRs, board status, worktrees, and cleanup recommendations |
 | `/setup-just-ship` | Auto-detect stack, fill `project.json`, connect Just Ship Board |
 | `/just-ship-update` | Sync `CLAUDE.md` and `project.json` after framework update (auto-run by `just-ship update`) |
 
@@ -319,8 +319,9 @@ The following phrases automatically trigger `/ship`:
 ```
 /ticket ---- writes ticket to Supabase ---------------------+
                                                             |
-/develop -- picks ticket -- implements -- /ship ---+        |
+/develop -- picks ticket -- implements -- PR ------+        |
                                                    |        |
+           /review -- checkout -- dev-server       |        |
            "passt" or /ship -----------------------+        |
                                                    v        |
                                           squash merge      |

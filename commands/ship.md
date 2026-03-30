@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Alles abschliessen — commit, push, PR, merge, zurück auf main. Vollständig autonom, NULL Rückfragen.
+description: Alles abschliessen — commit, push, PR, merge, zurück auf main. Vollständig autonom, NULL Rückfragen. Unterstützt /ship T-{N} für direkten Branch-Zugriff.
 ---
 
 # /ship — ALLES abschliessen, ein Befehl
@@ -40,6 +40,27 @@ Lies `project.json`. Bestimme den Pipeline-Modus:
 - "passt", "done", "sieht gut aus", "klappt", "fertig", "ship it", "mach zu"
 
 ## Ablauf — ALLE Schritte ohne Pause durchführen
+
+### 0. Branch auflösen (falls Argument übergeben)
+
+Falls `/ship` mit Argument aufgerufen wird (z.B. `/ship T-385`):
+
+1. Ticket-Nummer aus Argument extrahieren (Pattern: `T-{N}` oder `{N}`)
+2. Zugehörigen Branch finden:
+   ```bash
+   git branch --list "*T-${N}*" "*/${N}-*" | head -1 | xargs
+   ```
+3. Branch auschecken:
+   ```bash
+   git checkout {branch}
+   ```
+4. Weiter mit Schritt 1
+
+Falls kein Branch gefunden: Fehlermeldung "Kein Branch für T-{N} gefunden."
+
+Falls `/ship` ohne Argument: wie bisher den aktuellen Branch verwenden. Fehler wenn auf `main`.
+
+SOFORT WEITER ZU SCHRITT 1.
 
 ### 1. Commit (falls nötig)
 
@@ -139,6 +160,28 @@ fi
 
 Falls keine URL gefunden: still überspringen, kein Fehler. Das Script exits immer mit Code 0.
 
+SOFORT WEITER ZU SCHRITT 3c.
+
+### 3c. Dev-Server stoppen (falls laufend)
+
+**PID-Tracking:** `/review` speichert die Dev-Server-PID in `.claude/.dev-server-pid`.
+
+```bash
+if [ -f ".claude/.dev-server-pid" ]; then
+  PID=$(cat .claude/.dev-server-pid)
+  kill $PID 2>/dev/null || true
+  rm -f .claude/.dev-server-pid
+fi
+```
+
+Falls PID-Datei nicht existiert aber `build.dev_port` in `project.json` konfiguriert:
+```bash
+DEV_PORT=$(node -e "process.stdout.write(String(require('./project.json').build?.dev_port || ''))")
+if [ -n "$DEV_PORT" ]; then
+  lsof -ti :$DEV_PORT | xargs kill 2>/dev/null || true
+fi
+```
+
 SOFORT WEITER ZU SCHRITT 4.
 
 ### 4. Merge
@@ -153,6 +196,11 @@ SOFORT WEITER ZU SCHRITT 5.
 
 ```bash
 git checkout main && git pull origin main
+```
+
+```bash
+# Lokalen Branch aufräumen (Remote wird von --delete-branch gelöscht)
+git branch -d {branch} 2>/dev/null || true
 ```
 
 SOFORT WEITER ZU SCHRITT 5a.
@@ -223,6 +271,27 @@ SOFORT WEITER ZU SCHRITT 7.
   Worktree: .worktrees/T-{N} → aufgeräumt (falls vorhanden)
   Board: done (falls konfiguriert)
 ```
+
+Prüfe ob andere Branches aufgeräumt werden sollten:
+```bash
+git fetch --prune
+STALE=$(git branch -v | grep '\[gone\]' | awk '{print $1}')
+BEHIND=$(git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads | grep -v 'main' | while read branch track; do
+  COUNT=$(git rev-list --count "$branch..main" 2>/dev/null || echo 0)
+  if [ "$COUNT" -gt 50 ]; then
+    echo "$branch — $COUNT Commits hinter main"
+  fi
+done)
+```
+
+Falls stale oder weit hinter main (>50 Commits):
+```
+Hinweis: Folgende Branches könnten aufgeräumt werden:
+  {branch-name} — Remote gelöscht
+  {branch-name} — 73 Commits hinter main
+```
+
+Nur als Hinweis — nicht automatisch löschen.
 
 ## Fehlerbehandlung
 
