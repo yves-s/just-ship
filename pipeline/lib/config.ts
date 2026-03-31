@@ -23,7 +23,15 @@ export interface ProjectConfig {
   name: string;
   description: string;
   conventions: { branch_prefix: string };
-  pipeline: PipelineConfig & { skipAgents?: string[]; maxAutonomousComplexity?: string };
+  pipeline: PipelineConfig & {
+    skipAgents?: string[];
+    maxAutonomousComplexity?: string;
+    timeouts?: {
+      haiku?: number;
+      sonnet?: number;
+      opus?: number;
+    };
+  };
   maxWorkers: number;
   qa: QaConfig;
   stack: {
@@ -88,7 +96,7 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
       name: "project",
       description: "",
       conventions: { branch_prefix: "feature/" },
-      pipeline: { ...buildPipelineConfig({}), skipAgents: [] },
+      pipeline: { ...buildPipelineConfig({}), skipAgents: [], timeouts: undefined },
       maxWorkers: 1,
       qa: {
         maxFixIterations: 3,
@@ -229,6 +237,7 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
       ...pipeline,
       skipAgents: (rawPipeline.skip_agents as string[]) ?? [],
       maxAutonomousComplexity: (rawPipeline.max_autonomous_complexity as string) ?? "medium",
+      timeouts: rawPipeline.timeouts as { haiku?: number; sonnet?: number; opus?: number } | undefined,
     },
     maxWorkers: Number(rawPipeline.max_workers ?? 1),
     qa,

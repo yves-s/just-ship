@@ -11,6 +11,7 @@ import type { QaContext } from "./lib/qa-runner.ts";
 import { generateChangeSummary } from "./lib/change-summary.ts";
 import { loadSkills, type AgentRole } from "./lib/load-skills.ts";
 import { Sentry } from "./lib/sentry.ts";
+import { updateCheckpoint, clearCheckpoint, type PipelineCheckpoint } from "./lib/checkpoint.ts";
 
 // --- Stderr-capturing spawn wrapper for Claude Code subprocesses ---
 function makeSpawn(logPrefix: string) {
@@ -240,6 +241,13 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
   }) : null;
   const hooks = eventHooks?.hooks ?? {};
 
+  const checkpointConfig = hasPipeline ? {
+    apiUrl: config.pipeline.apiUrl,
+    apiKey: config.pipeline.apiKey,
+    ticketNumber: ticket.ticketId,
+  } : null;
+  let currentCheckpoint: PipelineCheckpoint | null = null;
+
   // --- Triage: analyze ticket quality before orchestrator ---
   let ticketDescription = ticket.description;
   let triageResult: TriageResult | undefined;
@@ -248,6 +256,20 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
     triageResult = await runTriage(workDir, ticket, triagePrompt, eventConfig, hasPipeline, opts.env);
     ticketDescription = triageResult.description;
     Sentry.addBreadcrumb({ category: "pipeline", message: "triage_done", data: { verdict: triageResult?.verdict, qaTier: triageResult?.qaTier } });
+  }
+
+  if (checkpointConfig) {
+    currentCheckpoint = {
+      phase: "triage",
+      completed_agents: [],
+      pending_agents: [],
+      branch_name: branchName,
+      worktree_path: workDir !== projectDir ? workDir : undefined,
+      started_at: new Date().toISOString(),
+      last_updated: new Date().toISOString(),
+      attempt: 1,
+    };
+    await updateCheckpoint(checkpointConfig, null, currentCheckpoint);
   }
 
   // --- Build prompt ---
@@ -322,6 +344,10 @@ Branch ist bereits erstellt: ${branchName}`;
     console.error(`[Pipeline]   timeout: ${timeoutMs / 60_000} min`);
 
     Sentry.addBreadcrumb({ category: "pipeline", message: "orchestrator_start", data: { ticketId: ticket.ticketId, branch: branchName } });
+
+    if (checkpointConfig) {
+      await updateCheckpoint(checkpointConfig, currentCheckpoint, { phase: "planning" });
+    }
 
     for await (const message of query({
       prompt,
@@ -412,6 +438,10 @@ Branch ist bereits erstellt: ${branchName}`;
 
     if (hasPipeline) await postPipelineEvent(eventConfig, "completed", "orchestrator");
 
+    if (checkpointConfig) {
+      await updateCheckpoint(checkpointConfig, currentCheckpoint, { phase: "agents_done" });
+    }
+
     // --- Generate and send change summary to ticket ---
     if (hasPipeline) {
       try {
@@ -450,6 +480,10 @@ Branch ist bereits erstellt: ${branchName}`;
 
   // --- Phase 3: QA with Fix Loops ---
   if (exitCode === 0 && !timedOut) {
+    if (checkpointConfig) {
+      await updateCheckpoint(checkpointConfig, currentCheckpoint, { phase: "qa" });
+    }
+
     if (hasPipeline) await postPipelineEvent(eventConfig, "agent_started", "qa");
 
     const qaContext: QaContext = {
@@ -516,6 +550,11 @@ Branch ist bereits erstellt: ${branchName}`;
     if (totals.inputTokens > 0) {
       await postPipelineSummary(eventConfig, totals);
     }
+  }
+
+  // Clear checkpoint on successful completion
+  if (checkpointConfig && exitCode === 0) {
+    await clearCheckpoint(checkpointConfig);
   }
 
   return {

@@ -39,7 +39,8 @@
   "pipeline": {
     "workspace_id": "",
     "project_id": "",
-    "skip_agents": []
+    "skip_agents": [],
+    "timeouts": {}
   },
   "conventions": {
     "commit_format": "conventional",
