@@ -127,13 +127,30 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
     const wsId = rawPipeline.workspace_id as string;
     if (!globalConfig) {
       // In multi-project mode (VPS), credentials come from server-config.json, not ~/.just-ship/config.json
-      if (!process.env.SERVER_CONFIG_PATH) {
+      if (process.env.SERVER_CONFIG_PATH) {
+        // Read board_url and api_key from server-config.json
+        const serverConfigPath = process.env.SERVER_CONFIG_PATH;
+        try {
+          const serverConfig = JSON.parse(readFileSync(serverConfigPath, "utf-8"));
+          const boardUrl = serverConfig?.workspace?.board_url ?? "";
+          const apiKey = serverConfig?.workspace?.api_key ?? "";
+          pipeline = {
+            projectId: (rawPipeline.project_id as string) ?? "",
+            workspaceId: wsId,
+            apiUrl: boardUrl,
+            apiKey: apiKey,
+          };
+        } catch {
+          console.warn(`\u26a0 Could not read server-config.json at ${serverConfigPath}`);
+          pipeline = buildPipelineConfig(rawPipeline, null);
+        }
+      } else {
         console.warn(
           `\u26a0 workspace_id '${wsId}' configured but ~/.just-ship/config.json not found.\n` +
           `  Run 'just-ship connect' to set up the connection.`
         );
+        pipeline = buildPipelineConfig(rawPipeline, null);
       }
-      pipeline = buildPipelineConfig(rawPipeline, null);
     } else {
       const ws = globalConfig.workspaces[wsId];
       if (!ws) {
