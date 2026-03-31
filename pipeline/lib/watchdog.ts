@@ -48,3 +48,38 @@ export function saveWorktreeWIP(workDir: string, ticketNumber: number | string):
     return false;
   }
 }
+
+/**
+ * Send an agent_failed event to the Board API.
+ * Best-effort — never blocks or throws.
+ */
+export async function sendAgentFailedEvent(
+  apiUrl: string,
+  apiKey: string,
+  ticketNumber: number | string,
+  reason: "timeout" | "crashed" | "manual_stop",
+  worktreeHadChanges: boolean,
+): Promise<void> {
+  try {
+    await fetch(`${apiUrl}/api/events`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Pipeline-Key": apiKey,
+      },
+      body: JSON.stringify({
+        ticket_number: Number(ticketNumber),
+        agent_type: "orchestrator",
+        event_type: "agent_failed",
+        metadata: {
+          reason,
+          recovery_mode: worktreeHadChanges ? "resume" : "restart",
+          worktree_had_changes: worktreeHadChanges,
+        },
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch {
+    // Best-effort — don't fail the pipeline on event delivery failure
+  }
+}

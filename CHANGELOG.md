@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Added
+- `/recover T-{N}` command for recovering stuck pipeline tickets (resume partial work or restart clean)
+- Automatic stuck-ticket detection rule at session start (`.claude/rules/detect-stuck-tickets.md`)
+- `agent_failed` pipeline event type for crash visibility on the Board
+- `pipeline_status: crashed` state for watchdog timeouts with partial work saved
 - `shopify-storefront-api` skill — GraphQL Storefront API queries, pagination, caching, rate limits
 - `shopify-hydrogen` skill — React Router v7, Hydrogen components, SSR/streaming, Oxygen deployment
 - `shopify-admin-api` skill — Admin API mutations, webhooks, bulk operations, data migration

@@ -204,7 +204,13 @@ The Board should handle this event by:
 |---|---|
 | `commands/develop.md` | Already supports being called with a ticket number; resume mode calls it directly |
 | `pipeline/lib/event-hooks.ts` | `postPipelineEvent()` already accepts arbitrary event type strings |
-| `pipeline/server.ts` | Zombie detection already handles stale `running`; P1 checkpoint resume extends this |
+
+### Also Modified (discovered during implementation)
+
+| File | Changes |
+|---|---|
+| `pipeline/server.ts` | Send `agent_failed` event on crash, handle `crashed` pipeline_status in zombie detection |
+| `pipeline/worker.ts` | Refactored watchdog catch block: send `agent_failed`, set `pipeline_status: crashed` when WIP saved |
 
 ---
 

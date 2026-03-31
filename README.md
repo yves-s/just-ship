@@ -76,6 +76,7 @@ just-ship self-update
 | `/ship` | Commit + push + PR + squash merge + board status "done". Supports `/ship T-{N}` | Yes |
 | `/spike-review` | Review completed spike, summarize findings, create follow-up tickets. Supports `--auto` | Both |
 | `/just-ship-review` | Checkout branch, install deps, build, start dev server for local testing | No |
+| `/recover` | Recover stuck pipeline ticket — resume from partial work or restart clean. Supports `/recover T-{N}` | Yes |
 | `/just-ship-status` | Show all branches, PRs, board status, worktrees, and cleanup recommendations | -- |
 | `/setup-just-ship` | Auto-detect stack, configure project, connect Dev Board, install Sidekick | Interactive |
 | `/just-ship-update` | Sync project files after framework update (auto-run by `just-ship update`) | Interactive |
