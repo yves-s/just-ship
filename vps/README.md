@@ -15,9 +15,9 @@ Board: "Develop" button click
 Caddy (HTTPS, Let's Encrypt)
     │
     ▼
-Docker: pipeline-server (Node.js)
+Docker: pipeline-server (Node.js, pre-built GHCR image)
     │
-    │  Auth → project lookup → git pull → pipeline
+    │  Auth → project lookup → pipeline
     │
     ▼
 GitHub PR → ticket status "in_review"
@@ -29,7 +29,7 @@ Use the `/just-ship-vps` command in Claude Code. It handles everything:
 
 1. Installs Docker on the VPS
 2. Creates the `claude-dev` user
-3. Clones just-ship and builds the Docker image
+3. Pulls the pre-built Docker image from GHCR
 4. Configures Caddy for HTTPS
 5. Starts the pipeline server
 
@@ -49,9 +49,9 @@ After VPS setup, connect individual projects. The command copies local env vars,
 
 | File | Purpose |
 |------|---------|
-| `Dockerfile` | Docker image: Node.js 20, git, gh, Claude Code, pipeline SDK |
+| `Dockerfile` | Docker image: Node.js 20, git, gh, Claude Code, pipeline SDK, framework files |
 | `entrypoint.sh` | Container startup: configures git identity and gh auth |
-| `docker-compose.yml` | Caddy (HTTPS) + pipeline-server + Bugsink + Dozzle containers |
+| `docker-compose.yml` | Caddy (HTTPS) + pipeline-server (GHCR image) + Bugsink + Dozzle containers |
 | `just-ship-updater.sh` | Update-Agent: watches for triggers, orchestrates zero-downtime updates |
 | `just-ship-updater.service` | systemd unit for Update-Agent (runs on host, outside Docker) |
 | `install-updater.sh` | Installs Update-Agent on a VPS host |
@@ -149,11 +149,11 @@ Der VPS laeuft standardmaessig ohne HTTPS auf `http://IP:3001`. Das funktioniert
 
 Updates are orchestrated by the Board via the Update-Agent (see design spec: `docs/superpowers/specs/2026-03-30-vps-update-process-design.md`).
 
-**Automatic:** Push to `main` → Board triggers canary rollout → Update-Agent handles git pull, docker build, drain, switch, health-check, and project updates.
+**Automatic:** Push to `main` → GitHub Actions builds image → pushes to GHCR → Board triggers canary rollout → Update-Agent handles docker pull, drain, switch, health-check, and project updates.
 
 **Manual (emergency):**
 ```bash
-ssh root@<IP> "cd /home/claude-dev/just-ship && git pull && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml build --no-cache && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d"
+ssh root@<IP> "docker pull ghcr.io/yves-s/just-ship/pipeline:latest && cd /home/claude-dev/just-ship && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d pipeline-server"
 ```
 
 ### Update-Agent
@@ -163,4 +163,4 @@ The Update-Agent runs as a systemd service on the host (outside Docker). Install
 sudo bash vps/install-updater.sh
 ```
 
-It watches `/home/claude-dev/.just-ship/triggers/update-trigger.json` for update signals from the pipeline-server container and orchestrates: git checkout → docker build → drain → switch → health-check → rollback on failure.
+It watches `/home/claude-dev/.just-ship/triggers/update-trigger.json` for update signals from the pipeline-server container and orchestrates: docker pull → drain → switch → health-check → rollback on failure. No git operations needed — images are pre-built in CI.

@@ -2,18 +2,18 @@
 # just-ship-updater — Host-level Update Agent
 # Runs as systemd service OUTSIDE Docker. Watches for update triggers
 # written by the pipeline-server container, then orchestrates:
-# git pull → docker build → drain → switch → health-check → project updates
+# docker pull → drain → switch → health-check → project updates
 #
 # Trigger file: /home/claude-dev/.just-ship/triggers/update-trigger.json
 
 set -euo pipefail
 
-JUST_SHIP_DIR="/home/claude-dev/just-ship"
+IMAGE_NAME="ghcr.io/yves-s/just-ship/pipeline"
 TRIGGER_DIR="/home/claude-dev/.just-ship/triggers"
 TRIGGER_FILE="$TRIGGER_DIR/update-trigger.json"
 CONFIG_FILE="/home/claude-dev/.just-ship/server-config.json"
 PROJECTS_DIR="/home/claude-dev/projects"
-COMPOSE_FILE="$JUST_SHIP_DIR/vps/docker-compose.yml"
+COMPOSE_FILE="/home/claude-dev/just-ship/vps/docker-compose.yml"
 LOCK_FILE="/tmp/just-ship-update.lock"
 POLL_INTERVAL=5
 HEALTH_CHECK_PORT=3001
@@ -80,6 +80,11 @@ get_drain_state() {
   curl -sf "http://localhost:${HEALTH_CHECK_PORT}/health" 2>/dev/null | jq -r '.drain.state // "unknown"'
 }
 
+# Get current running image tag
+get_current_image() {
+  docker inspect vps-pipeline-server-1 --format='{{.Config.Image}}' 2>/dev/null || echo ""
+}
+
 # Process a single update trigger
 process_update() {
   local trigger_content="$1"
@@ -99,42 +104,36 @@ process_update() {
     return 1
   fi
 
-  # 2. Tag old image for rollback
-  local current_sha
-  current_sha=$(git -C "$JUST_SHIP_DIR" rev-parse --short HEAD)
-  log "Current version: $current_sha"
-  docker tag just-ship-pipeline:latest "just-ship-pipeline:${current_sha}" 2>/dev/null || true
+  # 2. Record previous image for rollback
+  local previous_image
+  previous_image=$(get_current_image)
+  log "Current image: ${previous_image:-none}"
 
-  # 3. Fetch target version (exact SHA)
-  log "Fetching version $target_version..."
-  if ! git -C "$JUST_SHIP_DIR" fetch origin; then
-    log_error "git fetch failed"
+  # 3. Resolve target image tag
+  local target_tag
+  if [ "$target_version" = "latest" ]; then
+    target_tag="latest"
+  else
+    target_tag="$target_version"
+  fi
+  local target_image="${IMAGE_NAME}:${target_tag}"
+
+  # 4. Pull new image (old container still running)
+  log "Pulling image ${target_image}..."
+  if ! docker pull "$target_image"; then
+    log_error "docker pull failed"
     callback_result "$rollout_id" "failed" \
-      "$(jq -n --arg s "failed" --arg e "git fetch failed" --arg pv "$current_sha" \
+      "$(jq -n --arg s "failed" --arg e "docker pull failed" --arg pv "$previous_image" \
         '{status: $s, error: $e, previous_version: $pv}')"
+    flock -u 200
     return 1
   fi
 
-  if ! git -C "$JUST_SHIP_DIR" checkout "$target_version"; then
-    log_error "git checkout $target_version failed"
-    callback_result "$rollout_id" "failed" \
-      "$(jq -n --arg s "failed" --arg e "git checkout failed" --arg pv "$current_sha" \
-        '{status: $s, error: $e, previous_version: $pv}')"
-    return 1
-  fi
-
-  # 4. Build new image (old container still running)
-  log "Building new image..."
-  if ! CLAUDE_UID=$(id -u claude-dev 2>/dev/null || echo 1001) \
-       CLAUDE_GID=$(id -g claude-dev 2>/dev/null || echo 1001) \
-       docker compose -f "$COMPOSE_FILE" build pipeline-server; then
-    log_error "Docker build failed — rolling back checkout"
-    git -C "$JUST_SHIP_DIR" checkout "$current_sha"
-    callback_result "$rollout_id" "failed" \
-      "$(jq -n --arg s "failed" --arg e "docker build failed" --arg pv "$current_sha" \
-        '{status: $s, error: $e, previous_version: $pv}')"
-    return 1
-  fi
+  # Extract short SHA from image labels for version reporting
+  local new_version
+  new_version=$(docker inspect "$target_image" --format='{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null | head -c 7)
+  [ -z "$new_version" ] && new_version="$target_tag"
+  log "New version: $new_version"
 
   # 5. Drain: block new runs, wait for running ones
   log "Draining pipeline server..."
@@ -175,6 +174,7 @@ process_update() {
   log "Switching to new image..."
   CLAUDE_UID=$(id -u claude-dev 2>/dev/null || echo 1001) \
   CLAUDE_GID=$(id -g claude-dev 2>/dev/null || echo 1001) \
+  PIPELINE_IMAGE_TAG="$target_tag" \
   docker compose -f "$COMPOSE_FILE" up -d pipeline-server
 
   # 7. Health-check (5 attempts with backoff)
@@ -203,7 +203,8 @@ process_update() {
       local proj_start=$SECONDS
 
       log "Updating project: $slug"
-      if bash "$JUST_SHIP_DIR/setup.sh" --update --project "$project_dir" 2>&1; then
+      # Run setup.sh from inside the new container to update project framework files
+      if docker exec vps-pipeline-server-1 bash -c "cd '$project_dir' && bash /app/setup.sh --update" 2>&1; then
         local duration=$(( SECONDS - proj_start ))
         project_results=$(echo "$project_results" | jq \
           --arg s "$slug" --argjson d "$((duration * 1000))" \
@@ -222,53 +223,56 @@ process_update() {
     local callback_payload
     callback_payload=$(jq -n \
       --arg s "success" \
-      --arg v "$target_version" \
-      --arg pv "$current_sha" \
+      --arg v "$new_version" \
+      --arg pv "$previous_image" \
       --argjson pr "$project_results" \
       '{status: $s, current_version: $v, previous_version: $pv, project_results: $pr}')
 
     callback_result "$rollout_id" "success" "$callback_payload"
-    log "Update complete: $current_sha → $target_version"
+    log "Update complete: $previous_image → ${IMAGE_NAME}:${target_tag} ($new_version)"
 
-    CALLBACK_CONFIRMED=true
-
-  # 8b. Unhealthy → rollback
+  # 8b. Unhealthy → rollback to previous image
   else
-    log_error "Health checks failed — rolling back to $current_sha"
-    git -C "$JUST_SHIP_DIR" checkout "$current_sha"
-    CLAUDE_UID=$(id -u claude-dev 2>/dev/null || echo 1001) \
-    CLAUDE_GID=$(id -g claude-dev 2>/dev/null || echo 1001) \
-    docker compose -f "$COMPOSE_FILE" up -d pipeline-server
+    log_error "Health checks failed — rolling back to $previous_image"
+
+    if [ -n "$previous_image" ]; then
+      CLAUDE_UID=$(id -u claude-dev 2>/dev/null || echo 1001) \
+      CLAUDE_GID=$(id -g claude-dev 2>/dev/null || echo 1001) \
+      PIPELINE_IMAGE_TAG="${previous_image##*:}" \
+      docker compose -f "$COMPOSE_FILE" up -d pipeline-server
+    else
+      # No previous image — just restart with latest
+      CLAUDE_UID=$(id -u claude-dev 2>/dev/null || echo 1001) \
+      CLAUDE_GID=$(id -g claude-dev 2>/dev/null || echo 1001) \
+      docker compose -f "$COMPOSE_FILE" up -d pipeline-server
+    fi
 
     # Wait for rollback to be healthy
     sleep 10
 
     callback_result "$rollout_id" "failed" \
       "$(jq -n --arg s "rolled_back" --arg e "Health check failed after switch" \
-        --arg pv "$current_sha" \
+        --arg pv "$previous_image" \
         '{status: $s, error: $e, previous_version: $pv}')"
 
     log "Rollback complete"
-    CALLBACK_CONFIRMED=true
   fi
 
-  # 9. Self-update: reload updater if changed
-  if [ "${CALLBACK_CONFIRMED:-false}" = true ]; then
-    local installed_updater="/usr/local/bin/just-ship-updater.sh"
-    local new_updater="$JUST_SHIP_DIR/vps/just-ship-updater.sh"
+  # 9. Self-update: check if updater script changed in new image
+  local installed_updater="/usr/local/bin/just-ship-updater.sh"
+  local container_updater_hash
+  container_updater_hash=$(docker exec vps-pipeline-server-1 md5sum /app/vps/just-ship-updater.sh 2>/dev/null | cut -d' ' -f1 || echo "")
 
-    if [ -f "$new_updater" ] && [ -f "$installed_updater" ]; then
-      local installed_hash new_hash
-      installed_hash=$(md5sum "$installed_updater" | cut -d' ' -f1)
-      new_hash=$(md5sum "$new_updater" | cut -d' ' -f1)
+  if [ -n "$container_updater_hash" ] && [ -f "$installed_updater" ]; then
+    local installed_hash
+    installed_hash=$(md5sum "$installed_updater" | cut -d' ' -f1)
 
-      if [ "$installed_hash" != "$new_hash" ]; then
-        log "Updater script changed — self-updating and restarting service"
-        cp "$new_updater" "$installed_updater"
-        chmod +x "$installed_updater"
-        # systemctl restart sends SIGTERM — script exits here
-        systemctl restart just-ship-updater
-      fi
+    if [ "$installed_hash" != "$container_updater_hash" ]; then
+      log "Updater script changed — self-updating and restarting service"
+      docker cp vps-pipeline-server-1:/app/vps/just-ship-updater.sh "$installed_updater"
+      chmod +x "$installed_updater"
+      # systemctl restart sends SIGTERM — script exits here
+      systemctl restart just-ship-updater
     fi
   fi
 
