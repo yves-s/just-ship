@@ -115,7 +115,7 @@ VPS ist bereits eingerichtet und laeuft!
 
 Was moechtest du tun?
 1. **Weiteres Projekt verbinden** — ein neues Repo auf dem VPS einrichten
-2. **VPS updaten** — just-ship + Docker Image neu bauen
+2. **VPS updaten** — neues Image von GHCR pullen
 3. **VPS-Status + Logs anzeigen** — Container-Status und aktuelle Logs
 ```
 
@@ -123,7 +123,7 @@ Warte auf die Antwort des Users und fuehre die gewaehlte Option aus:
 - **Option 1:** Frage nach dem Projekt (Name/Pfad) und fuehre Phase 2 aus.
 - **Option 2:** Fuehre das Update aus:
   ```bash
-  ssh root@<VPS_HOST> "cd /home/claude-dev/just-ship && git pull && docker compose -f vps/docker-compose.yml build --no-cache pipeline-server && docker compose -f vps/docker-compose.yml up -d pipeline-server"
+  ssh root@<VPS_HOST> "docker pull ghcr.io/yves-s/just-ship/pipeline:latest && cd /home/claude-dev/just-ship && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d pipeline-server"
   ```
   Dann Health-Check und Ergebnis melden.
 - **Option 3:** Zeige Logs und Container-Status:
@@ -218,12 +218,12 @@ Docker:
 ssh root@<IP> "curl -fsSL https://get.docker.com | sh"
 ```
 
-Node.js 20 installieren (wird von setup.sh benoetigt):
+Node.js 20 installieren (wird fuer project.json parsing und connect-project.sh benoetigt):
 ```bash
 ssh root@<IP> "curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs"
 ```
 
-gh CLI auf dem Host installieren (wird fuer setup.sh und claude-dev User gebraucht):
+gh CLI auf dem Host installieren (wird fuer Repo-Cloning und claude-dev User gebraucht):
 ```bash
 ssh root@<IP> "curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null && ARCH=\$(dpkg --print-architecture) && echo \"deb [arch=\${ARCH} signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main\" > /etc/apt/sources.list.d/github-cli.list && apt-get update -qq && apt-get install -y gh -qq"
 ```
@@ -264,6 +264,9 @@ ssh root@<IP> "mkdir -p /home/claude-dev/projects /home/claude-dev/.just-ship &&
 ```
 
 ### 1.6 Just-Ship Framework klonen
+
+Das Repo wird fuer `docker-compose.yml`, `connect-project.sh` und den Updater-Service benoetigt.
+Der Pipeline-Server selbst kommt als fertiges Image von GHCR — kein Build auf dem VPS.
 
 ```bash
 ssh root@<IP> "su - claude-dev -c 'git clone https://github.com/yves-s/just-ship.git /home/claude-dev/just-ship 2>/dev/null || (cd /home/claude-dev/just-ship && git pull)'"
@@ -342,12 +345,14 @@ chmod 600 /home/claude-dev/.just-ship/server-config.json"
 
 Die Workspace-Felder werden in Phase 2 befuellt.
 
-### 1.9 Docker Image bauen und starten
+### 1.9 Docker Image pullen und starten
+
+Das Pipeline-Server-Image wird als fertiges Image von GHCR gepullt — kein Build auf dem VPS.
 
 Ohne HTTPS (Default — startet pipeline-server, bugsink und dozzle, aber NICHT caddy):
 
 ```bash
-ssh root@<IP> "cd /home/claude-dev/just-ship && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml build pipeline-server && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d pipeline-server bugsink dozzle"
+ssh root@<IP> "docker pull ghcr.io/yves-s/just-ship/pipeline:latest && cd /home/claude-dev/just-ship && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d pipeline-server bugsink dozzle"
 ```
 
 **Hinweis:** Ohne HTTPS/Caddy sind Bugsink und Dozzle nur intern erreichbar (Docker-Netzwerk). Fuer direkten Zugriff temporaer Ports oeffnen: `docker compose -f vps/docker-compose.yml exec -d` oder SSH-Tunnel: `ssh -L 8000:localhost:8000 root@<IP>`.
@@ -376,7 +381,7 @@ ssh root@<IP> "cat > /home/claude-dev/just-ship/vps/Caddyfile << 'CADDYEOF'
 CADDYEOF
 chown claude-dev:claude-dev /home/claude-dev/just-ship/vps/Caddyfile"
 
-ssh root@<IP> "cd /home/claude-dev/just-ship && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml build pipeline-server && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d"
+ssh root@<IP> "docker pull ghcr.io/yves-s/just-ship/pipeline:latest && cd /home/claude-dev/just-ship && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d"
 ```
 
 **Caddy-Basicauth-Hash generieren und .env patchen** (nach dem ersten `docker compose up`, damit der Caddy-Container verfuegbar ist):
@@ -420,7 +425,7 @@ ssh root@<IP> "docker inspect <container-name> --format '{{.State.Status}} exit=
 
 Falls Container restartet ohne Logs — Entrypoint crasht. Mit ueberschriebenem Entrypoint testen:
 ```bash
-ssh root@<IP> "docker run --rm --env-file /home/claude-dev/.env -e SERVER_CONFIG_PATH=/home/claude-dev/.just-ship/server-config.json -v /home/claude-dev/.just-ship:/home/claude-dev/.just-ship:ro --entrypoint sh <image-name> -c 'cd /app && node --import tsx pipeline/server.ts 2>&1'"
+ssh root@<IP> "docker run --rm --env-file /home/claude-dev/.env -e SERVER_CONFIG_PATH=/home/claude-dev/.just-ship/server-config.json -v /home/claude-dev/.just-ship:/home/claude-dev/.just-ship:ro --entrypoint sh ghcr.io/yves-s/just-ship/pipeline:latest -c 'cd /app && node --import tsx pipeline/server.ts 2>&1'"
 ```
 
 ### 1.11 Ergebnis melden
@@ -535,7 +540,7 @@ Falls bereits gesetzt (bestehendes Setup): Diesen Schritt ueberspringen.
 - **gh auth: missing scope 'read:org':** User muss neuen Token mit read:org erstellen, oder GH_TOKEN env var als Fallback nutzen
 - **setup.sh: gh NOT FOUND:** gh CLI nicht auf dem Host installiert (Phase 1.3 nochmal pruefen)
 - **setup.sh haengt oder bricht ab:** `GH_TOKEN` env var muss gesetzt sein (Phase 2.4)
-- **Docker Build fehlschlaegt:** Logs zeigen, meist fehlende Dependencies oder Netzwerk
+- **Docker Pull fehlschlaegt:** Netzwerk pruefen, `docker login ghcr.io` falls Image privat
 - **Container restartet ohne Logs:** Entrypoint crasht — mit `--entrypoint sh` debuggen (Phase 1.10)
 - **Port 3001 nicht erreichbar:** Firewall pruefen, `ufw allow 3001/tcp` oder Hostinger Firewall-Settings
 - **HTTPS-Zertifikat fehlschlaegt:** DNS A-Record pruefen (kann bis zu 24h dauern), Port 80+443 muessen offen sein
