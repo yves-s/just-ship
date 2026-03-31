@@ -180,6 +180,21 @@ Shipped with the pipeline:
 | **data-engineer** | Database migration and RLS patterns |
 | **webapp-testing** | Testing patterns including Playwright |
 
+### Shopify Domain Skills
+
+Loaded automatically when `stack.platform: "shopify"` is set in `project.json`. Can also be loaded explicitly via `skills.domain`.
+
+| Skill | Variant | Purpose |
+|-------|---------|---------|
+| **shopify-liquid** | liquid | Liquid syntax, sections, snippets, schema patterns |
+| **shopify-theme** | liquid | Theme architecture, JSON templates, asset pipeline, i18n |
+| **shopify-metafields** | both | Metafield types, reference resolution, metaobjects |
+| **shopify-storefront-api** | hydrogen | GraphQL Storefront API, pagination, caching, rate limits |
+| **shopify-hydrogen** | hydrogen | React Router, Hydrogen components, SSR/streaming, Oxygen |
+| **shopify-admin-api** | both | Admin API mutations, webhooks, bulk operations |
+| **shopify-checkout** | both | Checkout UI Extensions, Shopify Functions (Plus only) |
+| **shopify-apps** | both | App CLI, App Bridge, Polaris, session tokens, billing |
+
 ### Superpowers Plugin
 
 Process skills for TDD, debugging, code review, and planning -- provided by the [superpowers](https://github.com/obra/superpowers-marketplace) plugin. Installed automatically during setup.

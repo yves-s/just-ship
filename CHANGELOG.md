@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Added
+- `shopify-storefront-api` skill — GraphQL Storefront API queries, pagination, caching, rate limits
+- `shopify-hydrogen` skill — React Router v7, Hydrogen components, SSR/streaming, Oxygen deployment
+- `shopify-admin-api` skill — Admin API mutations, webhooks, bulk operations, data migration
+- `shopify-checkout` skill — Checkout UI Extensions, Shopify Functions, Cart Transform (Shopify Plus)
+- `shopify-apps` skill — App CLI, App Bridge v4, Polaris, session tokens, billing API
 - Pipeline checkpoint persistence (`pipeline/lib/checkpoint.ts`) — writes phase-level checkpoints to ticket for crash recovery
 - Budget ceiling enforcement (`pipeline/lib/budget.ts`) — blocks pipeline launch when workspace monthly budget exceeded (HTTP 402)
 - Cost aggregation views (`ticket_costs`, `project_costs`) in Pipeline-DB for budget tracking
