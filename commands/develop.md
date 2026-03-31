@@ -425,21 +425,37 @@ Der PR bleibt offen bis der User ihn freigibt (via `/ship` oder "passt").
 
 ### 9f. Preview URL (Vercel oder Shopify)
 
-**Immer ausführen** — die Scripts erkennen automatisch ob ein Deployment existiert und returnen leer wenn nicht. Kein Config-Gate nötig.
+**Nur ausführen wenn `hosting.provider` gesetzt ist.** Die Scripts prüfen selbst ob ein Hosting-Provider konfiguriert ist und exiten graceful wenn nicht. Bei nicht gesetztem `hosting`-Feld wird dieser gesamte Schritt übersprungen — kein API-Call, kein Warten.
 
 **WICHTIG:** Die Preview-URL MUSS eine Deployment-URL sein (z.B. `https://<project>-<hash>.vercel.app` oder `https://<store>.myshopify.com/?preview_theme_id=...`). NIEMALS einen GitHub-Link, PR-URL oder Repository-URL als `preview_url` setzen. Das `preview_url`-Feld ist ausschließlich für die live deployete Vorschau.
 
 ```bash
-HOSTING=$(node -e "
+# Read hosting provider from project.json (supports object and legacy string format)
+HOSTING_PROVIDER=$(node -e "
   const c = require('./project.json');
-  const h = c.hosting || (c.stack?.framework === 'shopify' ? 'shopify' : '');
-  process.stdout.write(h);
+  const h = c.hosting;
+  if (typeof h === 'object' && h !== null) {
+    process.stdout.write(h.provider || '');
+  } else if (typeof h === 'string') {
+    process.stdout.write(h);
+  }
 ")
 
-if [ "$HOSTING" = "shopify" ]; then
+# Also check stack.framework for legacy Shopify detection
+if [ -z "$HOSTING_PROVIDER" ]; then
+  HOSTING_PROVIDER=$(node -e "
+    const c = require('./project.json');
+    if (c.stack?.framework === 'shopify') process.stdout.write('shopify');
+  ")
+fi
+
+if [ "$HOSTING_PROVIDER" = "shopify" ]; then
   PREVIEW_URL=$(bash .claude/scripts/shopify-preview.sh push "T-${N}" "${TITLE}")
-else
+elif [ "$HOSTING_PROVIDER" = "vercel" ]; then
   PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)
+else
+  # No hosting provider configured — skip preview URL entirely
+  PREVIEW_URL=""
 fi
 ```
 

@@ -129,13 +129,14 @@ fi
 
 SOFORT WEITER ZU SCHRITT 3b.
 
-### 3b. Vercel Preview URL
+### 3b. Preview URL (Vercel)
 
-**Immer ausführen** — das Script erkennt automatisch ob ein Vercel-Deployment existiert und returned leer wenn nicht. Kein Config-Gate nötig.
+**Nur ausführen wenn `hosting.provider` gesetzt ist.** Das Script prüft selbst ob Vercel als Hosting-Provider konfiguriert ist und exitet graceful wenn nicht. Bei nicht gesetztem `hosting`-Feld wird dieser gesamte Schritt übersprungen — kein API-Call, kein Warten.
 
 **WICHTIG:** Die Preview-URL MUSS eine Vercel-Deployment-URL sein (z.B. `https://<project>-<hash>.vercel.app`). NIEMALS einen GitHub-Link, PR-URL oder Repository-URL als `preview_url` setzen. Das `preview_url`-Feld ist ausschließlich für die live deployete Vorschau.
 
 ```bash
+# get-preview-url.sh checks hosting.provider internally and exits if not "vercel"
 PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)
 ```
 

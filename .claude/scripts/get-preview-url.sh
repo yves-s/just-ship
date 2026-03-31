@@ -7,7 +7,29 @@
 # Prints the URL to stdout if found, exits silently otherwise.
 # Designed for graceful failure — never blocks the pipeline.
 #
+# IMPORTANT: Only runs if hosting.provider is set to "vercel" in project.json.
+# Without this, exits immediately (no API calls, no waiting).
+#
 # Returns: 0 always (never fails, silent on timeout or no Vercel deployment)
+
+# Check hosting provider from project.json — exit early if not vercel
+HOSTING_PROVIDER=$(node -e "
+  try {
+    const c = require('./project.json');
+    const h = c.hosting;
+    // Support both object format {provider: 'vercel'} and legacy string format 'vercel'
+    if (typeof h === 'object' && h !== null) {
+      process.stdout.write(h.provider || '');
+    } else if (typeof h === 'string') {
+      process.stdout.write(h);
+    }
+  } catch (e) {}
+" 2>/dev/null)
+
+# If hosting provider is not vercel, exit silently (graceful no-op)
+if [ "$HOSTING_PROVIDER" != "vercel" ]; then
+  exit 0
+fi
 
 MAX_WAIT="${1:-30}"
 SHA=$(git rev-parse HEAD 2>/dev/null)
