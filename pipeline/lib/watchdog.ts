@@ -1,3 +1,4 @@
+// Watchdog Module v1.0
 import { execSync } from "node:child_process";
 
 const WATCHDOG_GRACE_MS = 5 * 60_000;
