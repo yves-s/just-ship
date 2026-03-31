@@ -170,15 +170,36 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
   }
 
   const rawQa = rawPipeline.qa ?? {};
-  // Infer preview provider from pipeline.hosting if not explicitly set in qa config
-  const hosting = rawPipeline.hosting as string | undefined;
-  const inferredProvider = hosting === "vercel" ? "vercel" : "none";
+
+  // Read hosting config from root of project.json (new format)
+  // Supports both object format {provider, project_id, team_id} and legacy string format
+  const rawHosting = raw.hosting;
+  let hostingProvider: "vercel" | "none" = "none";
+  let vercelProjectId = "";
+  let vercelTeamId = "";
+
+  if (typeof rawHosting === "object" && rawHosting !== null) {
+    // New object format: { provider: "vercel", project_id: "prj_xxx", team_id: "team_xxx" }
+    const h = rawHosting as { provider?: string; project_id?: string; team_id?: string };
+    if (h.provider === "vercel") {
+      hostingProvider = "vercel";
+      vercelProjectId = h.project_id ?? "";
+      vercelTeamId = h.team_id ?? "";
+    }
+  } else if (typeof rawHosting === "string" && rawHosting === "vercel") {
+    // Legacy string format: "vercel" (backwards compatibility)
+    hostingProvider = "vercel";
+    // Fall back to qa config for project_id/team_id in legacy mode
+    vercelProjectId = (rawQa.vercel_project_id as string) ?? "";
+    vercelTeamId = (rawQa.vercel_team_id as string) ?? "";
+  }
+
   const qa: QaConfig = {
     maxFixIterations: Number(rawQa.max_fix_iterations ?? 3),
     playwrightTimeoutMs: Number(rawQa.playwright_timeout_ms ?? 60000),
-    previewProvider: (rawQa.preview_provider as "vercel" | "none") ?? inferredProvider,
-    vercelProjectId: (rawQa.vercel_project_id as string) ?? "",
-    vercelTeamId: (rawQa.vercel_team_id as string) ?? "",
+    previewProvider: (rawQa.preview_provider as "vercel" | "none") ?? hostingProvider,
+    vercelProjectId: vercelProjectId || ((rawQa.vercel_project_id as string) ?? ""),
+    vercelTeamId: vercelTeamId || ((rawQa.vercel_team_id as string) ?? ""),
     vercelPreviewPollIntervalMs: Number(rawQa.vercel_preview_poll_interval_ms ?? 10000),
     vercelPreviewMaxWaitMs: Number(rawQa.vercel_preview_max_wait_ms ?? 300000),
   };
