@@ -15,6 +15,8 @@ import {
   loadProjectEnv,
   type ServerConfig,
 } from "./lib/server-config.ts";
+import { checkBudget } from "./lib/budget.ts";
+import type { PipelineCheckpoint } from "./lib/checkpoint.ts";
 
 // --- Mode detection ---
 const SERVER_CONFIG_PATH = process.env.SERVER_CONFIG_PATH;
@@ -259,6 +261,8 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
     return;
   }
 
+  const checkpoint = ticket?.pipeline_checkpoint as PipelineCheckpoint | null;
+
   // 3. Check pipeline_status
   const pipelineStatus = ticket.pipeline_status as string | null;
   if (pipelineStatus === "done") {
@@ -306,6 +310,49 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
       message: `Ticket complexity '${ticketComplexity}' exceeds max autonomous level '${maxComplexity}'`,
     });
     return;
+  }
+
+  // Budget gate — block launch if workspace budget exceeded
+  const { apiUrl: budgetApiUrl, apiKey: budgetApiKey } = getApiCredentials();
+  const workspaceId = serverConfig?.workspace?.workspace_id ?? config.pipeline.workspaceId;
+  if (workspaceId) {
+    const budgetResult = await checkBudget({ apiUrl: budgetApiUrl, apiKey: budgetApiKey }, workspaceId);
+
+    if (!budgetResult.allowed) {
+      log(`Budget exceeded for workspace: ${budgetResult.reason}`);
+      try {
+        await fetch(`${budgetApiUrl}/api/events`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Pipeline-Key": budgetApiKey },
+          body: JSON.stringify({
+            ticket_number: ticketNumber,
+            agent_type: "orchestrator",
+            event_type: "budget_exceeded",
+            metadata: { cost: budgetResult.currentCost, ceiling: budgetResult.ceiling },
+          }),
+          signal: AbortSignal.timeout(8000),
+        });
+      } catch { /* best-effort */ }
+      sendJson(res, 402, { status: "budget_exceeded", ticket_number: ticketNumber, message: budgetResult.reason });
+      return;
+    }
+
+    if (budgetResult.thresholdReached) {
+      log(`Budget threshold reached: $${budgetResult.currentCost?.toFixed(2)} / $${budgetResult.ceiling?.toFixed(2)}`);
+      try {
+        await fetch(`${budgetApiUrl}/api/events`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Pipeline-Key": budgetApiKey },
+          body: JSON.stringify({
+            ticket_number: ticketNumber,
+            agent_type: "orchestrator",
+            event_type: "budget_threshold",
+            metadata: { cost: budgetResult.currentCost, ceiling: budgetResult.ceiling },
+          }),
+          signal: AbortSignal.timeout(8000),
+        });
+      } catch { /* best-effort */ }
+    }
   }
 
   // 4. Reserve ticket in-memory before async PATCH to close concurrent-request race window
@@ -364,9 +411,23 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
         // Multi-project mode: no worktree, work directly in project dir (CLI-mode git checkout)
         workDir = undefined;
       } else {
-        const slot = await worktreeManager!.allocate(branchName);
-        slotId = slot.slotId;
-        workDir = slot.workDir;
+        // Checkpoint-based worktree recovery
+        let worktreeResult;
+        if (checkpoint?.branch_name && worktreeManager) {
+          try {
+            worktreeResult = await worktreeManager.reattach(checkpoint.branch_name);
+            log(`Reattached worktree for checkpoint branch ${checkpoint.branch_name}`);
+          } catch {
+            log(`Could not reattach checkpoint worktree, allocating new`);
+            worktreeResult = await worktreeManager.allocate(branchName);
+          }
+        } else if (worktreeManager) {
+          worktreeResult = await worktreeManager.allocate(branchName);
+        }
+        if (worktreeResult) {
+          slotId = worktreeResult.slotId;
+          workDir = worktreeResult.workDir;
+        }
       }
 
       const result = await withWatchdog(

@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Added
+- Pipeline checkpoint persistence (`pipeline/lib/checkpoint.ts`) — writes phase-level checkpoints to ticket for crash recovery
+- Budget ceiling enforcement (`pipeline/lib/budget.ts`) — blocks pipeline launch when workspace monthly budget exceeded (HTTP 402)
+- Cost aggregation views (`ticket_costs`, `project_costs`) in Pipeline-DB for budget tracking
+- `workspaces.budget_ceiling_usd` and `budget_alert_threshold` fields
+- `tickets.pipeline_checkpoint` JSONB field for crash recovery state
+- `pipeline.timeouts` config in project.json for per-model agent timeout configuration
+- Checkpoint-based worktree recovery — server reattaches crashed pipeline's worktree via checkpoint branch_name
+
+### Changed
+- Pipeline server emits `budget_exceeded` (402) and `budget_threshold` events before launch
+- `executePipeline()` writes checkpoints at triage, planning, agents_done, qa phases; clears on success
+
 ### Fixed
 - Pipeline events, token tracking, and change summaries now work in VPS multi-project mode — `loadProjectConfig()` reads `board_url` and `api_key` from `server-config.json` when `SERVER_CONFIG_PATH` is set
 
