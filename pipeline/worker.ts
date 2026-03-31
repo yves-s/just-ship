@@ -5,7 +5,7 @@ import { mkdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { executePipeline } from "./run.ts";
 import { classifyError } from "./lib/error-handler.ts";
-import { withWatchdog, saveWorktreeWIP } from "./lib/watchdog.ts";
+import { withWatchdog, saveWorktreeWIP, sendAgentFailedEvent } from "./lib/watchdog.ts";
 import { WorktreeManager } from "./lib/worktree-manager.ts";
 import { loadProjectConfig } from "./lib/config.ts";
 import { generateChangeSummary } from "./lib/change-summary.ts";
@@ -325,20 +325,24 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
     const errorObj = error instanceof Error ? error : new Error(String(error));
     const isWatchdog = errorObj.message.startsWith("Watchdog timeout:");
 
+    // --- Watchdog timeout: abort subprocess, save WIP, send agent_failed ---
+    let watchdogHadWip = false;
     if (isWatchdog) {
-      // Abort only this run's subprocess, not the entire worker
       runAbortController.abort();
-      // Wait briefly for subprocess to terminate
       await sleep(5000);
-      // Try to save WIP
       if (slotId !== undefined) {
         const worktreeDir = worktreeManager.getSlotDir(slotId);
         if (worktreeDir) {
-          saveWorktreeWIP(worktreeDir, ticket.number);
+          watchdogHadWip = saveWorktreeWIP(worktreeDir, ticket.number);
         }
+      }
+      // Send agent_failed event via Board API
+      if (config.pipeline.apiUrl && config.pipeline.apiKey) {
+        await sendAgentFailedEvent(config.pipeline.apiUrl, config.pipeline.apiKey, ticket.number, "timeout", watchdogHadWip);
       }
     }
 
+    // --- Error classification and ticket status update ---
     const classification = classifyError({
       error: errorObj,
       ticketId: String(ticket.number),
@@ -350,7 +354,17 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
 
     log(`Pipeline failed: T-${ticket.number} (${errorObj.message}) [${classification.action}]`);
     Sentry.captureException(error);
-    await failTicket(ticket.number, `Pipeline error: ${errorObj.message}`);
+
+    if (watchdogHadWip) {
+      // Partial work saved — set crashed so recovery can resume instead of restart
+      await supabasePatch(`/rest/v1/tickets?number=eq.${ticket.number}`, {
+        pipeline_status: "crashed",
+        summary: `Watchdog timeout with partial work saved. Use /recover T-${ticket.number} to resume.`,
+      });
+      log(`T-${ticket.number}: watchdog timeout, WIP saved, set pipeline_status=crashed`);
+    } else {
+      await failTicket(ticket.number, `Pipeline error: ${errorObj.message}`);
+    }
 
     // Auto-heal: worker only logs the classification for now.
     // Full auto-heal (ticket creation + fix) runs via server.ts which has Board REST API access.

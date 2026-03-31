@@ -8,7 +8,7 @@ import { classifyError, executeAutoHeal } from "./lib/error-handler.ts";
 import { executePipeline, resumePipeline } from "./run.ts";
 import { WorktreeManager } from "./lib/worktree-manager.ts";
 import { DrainManager } from "./lib/drain.ts";
-import { withWatchdog, getWatchdogTimeoutMs } from "./lib/watchdog.ts";
+import { withWatchdog, getWatchdogTimeoutMs, sendAgentFailedEvent } from "./lib/watchdog.ts";
 import {
   loadServerConfig,
   findProjectByProjectId,
@@ -290,6 +290,12 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
     log(`Zombie detected: T-${ticketNumber} has pipeline_status=running but is not in runningTickets — resetting`);
   }
 
+  if (pipelineStatus === "crashed") {
+    // Crashed = watchdog timeout with partial work saved. Allow re-launch.
+    // The pipeline will create a new worktree (or reattach via checkpoint in P1).
+    log(`Crashed ticket: T-${ticketNumber} has pipeline_status=crashed — allowing re-launch`);
+  }
+
   if (pipelineStatus === "paused") {
     // Paused tickets can be retried (resume or restart)
     // If server has the session in memory, it's truly paused
@@ -490,6 +496,9 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
       const reason = errorObj.message;
       log(`Pipeline crashed: T-${ticketNumber} -- ${reason} [${classification.action}]`);
       Sentry.captureException(error);
+      // Send agent_failed event for Board visibility
+      const creds = getApiCredentials();
+      await sendAgentFailedEvent(creds.apiUrl, creds.apiKey, ticketNumber, "crashed", false);
       await patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Server error: ${reason}` });
       recordRun({ ticketNumber, status: "failed", error: reason, at: new Date().toISOString(), durationMs: Date.now() - startTime });
 
