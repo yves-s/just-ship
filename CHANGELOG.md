@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Changed
+- VPS deploys now use pre-built Docker images from GHCR instead of git-pull + build on server
+- `docker-compose.yml` references `ghcr.io/yves-s/just-ship/pipeline` image instead of local build context
+- VPS Updater (`just-ship-updater.sh`) uses `docker pull` instead of `git fetch` + `docker build`
+- Rollback on failed health-check pulls previous image tag instead of git checkout + rebuild
+- Self-update mechanism extracts new updater script from container image via `docker cp`
+- Project updates run `setup.sh --update` from inside the container (framework files bundled in image)
+
+### Added
+- GitHub Actions workflow (`.github/workflows/build-pipeline.yml`) to build and push pipeline Docker image to GHCR on push to main
+- `.dockerignore` to keep Docker image lean
+- `PIPELINE_IMAGE_TAG` environment variable for docker-compose image tag override
+
 ### Added
 - `shopify-storefront-api` skill — GraphQL Storefront API queries, pagination, caching, rate limits
 - `shopify-hydrogen` skill — React Router v7, Hydrogen components, SSR/streaming, Oxygen deployment

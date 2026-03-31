@@ -13,9 +13,7 @@ services:
       - pipeline-server
 
   pipeline-server:
-    build:
-      context: ..
-      dockerfile: vps/Dockerfile
+    image: ghcr.io/yves-s/just-ship/pipeline:${PIPELINE_IMAGE_TAG:-latest}
     restart: unless-stopped
     user: "${CLAUDE_UID:-1001}:${CLAUDE_GID:-1001}"
     expose:

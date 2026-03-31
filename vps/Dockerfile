@@ -22,6 +22,14 @@ RUN cd /app/pipeline && npm install
 
 COPY pipeline/ /app/pipeline/
 
+# Framework files — needed for setup.sh --update on project repos
+COPY agents/ /app/agents/
+COPY commands/ /app/commands/
+COPY skills/ /app/skills/
+COPY templates/ /app/templates/
+COPY setup.sh /app/setup.sh
+COPY vps/ /app/vps/
+
 WORKDIR /app
 
 # Symlink node_modules so tsx/sdk are resolvable from /app

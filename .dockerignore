@@ -1,0 +1,11 @@
+.git
+.github
+.worktrees
+node_modules
+docs
+*.md
+!templates/*.md
+!agents/*.md
+!commands/*.md
+!skills/*.md
+!pipeline/*.md

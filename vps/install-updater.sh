@@ -25,7 +25,7 @@ if ! id -u claude-dev &>/dev/null; then
 fi
 
 # Check dependencies
-for cmd in docker jq curl git; do
+for cmd in docker jq curl; do
   if ! command -v "$cmd" &>/dev/null; then
     echo "ERROR: $cmd is required but not installed" >&2
     exit 1
