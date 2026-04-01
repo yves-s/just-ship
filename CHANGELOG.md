@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- P2 Project Intake MVP implementation plan (`docs/superpowers/plans/2026-04-01-p2-project-intake.md`)
+
 ### Changed
 - VPS deploys now use pre-built Docker images from GHCR instead of git-pull + build on server
 - `docker-compose.yml` references `ghcr.io/yves-s/just-ship/pipeline` image instead of local build context
