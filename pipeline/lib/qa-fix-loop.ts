@@ -66,10 +66,16 @@ function buildFixPrompt(
     .map((c) => `- **${c.name}**: ${c.details}`)
     .join("\n");
 
+  // Add Shopify-specific fix guidance if shopify-qa check failed
+  const shopifyFailures = failedBlocking.filter(c => c.name === "shopify-qa");
+  const shopifyGuidance = shopifyFailures.length > 0
+    ? `\n\n## Shopify-Specific Guidance\nFix these Shopify QA issues:\n${shopifyFailures.map(c => c.details).join("\n")}\n- Use CSS custom properties instead of hardcoded color values\n- Ensure changes propagate to all affected sections/snippets\n- Use section settings instead of hardcoded values where appropriate`
+    : "";
+
   return `The QA checks for ticket T-${ticketId} have failed. Fix the issues and push.
 
 ## Failed Checks
-${failureList}
+${failureList}${shopifyGuidance}
 
 ## Instructions
 1. Read the relevant source files

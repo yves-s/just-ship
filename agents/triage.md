@@ -46,7 +46,8 @@ Antworte AUSSCHLIESSLICH mit einem JSON-Block:
   "analysis": "1-3 Sätze zur Bewertung",
   "qa_tier": "light",
   "qa_pages": [],
-  "qa_flows": []
+  "qa_flows": [],
+  "scaffold_type": null
 }
 ```
 
@@ -59,9 +60,14 @@ Oder bei Anreicherung mit full QA:
   "enriched_body": "Der verbesserte Ticket-Body (kompletter Markdown-Text)",
   "qa_tier": "full",
   "qa_pages": ["/dashboard", "/settings"],
-  "qa_flows": ["Settings-Button klicken → Modal öffnet sich"]
+  "qa_flows": ["Settings-Button klicken → Modal öffnet sich"],
+  "scaffold_type": null
 }
 ```
+
+## Scaffold-Erkennung
+
+Wenn das Ticket eine **neue Shopify App** beschreibt (Tags: `app-scaffold`, Keywords im Titel/Body: "neue App erstellen", "create app", "app scaffolding"), setze `scaffold_type` auf `"shopify-app"`. Andernfalls `null`.
 
 ## QA-Tiering
 

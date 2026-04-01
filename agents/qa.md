@@ -66,6 +66,17 @@ Führe den Test-Command aus `project.json` aus.
 - Secrets: PASS/FAIL
 ```
 
+## Shopify-spezifische Prüfung
+
+Wenn das Projekt eine Shopify-Plattform ist (erkennbar an Liquid-Dateien, section schemas, shopify.store in project.json):
+
+1. **Konsistenz-Check:** Wurde die Änderung in ALLEN betroffenen Sections/Snippets durchgeführt? Prüfe die Dateiliste aus der Triage-Enrichment.
+2. **Settings vs. Hardcoded:** Werden neue Werte über Section Settings / CSS Custom Properties gesteuert, oder sind sie hardcoded?
+3. **Breakpoint-Coverage:** Funktioniert die Änderung auf Mobile (375px), Tablet (768px), Desktop (1440px)?
+4. **Online Store 2.0:** Werden JSON Templates statt .liquid Templates verwendet?
+
+Wenn ein Shopify QA Report vorliegt, prüfe die Findings und verifiziere ob die gemeldeten Issues tatsächlich Probleme sind oder False Positives.
+
 ## Prinzipien
 
 - **Teste Verhalten**, nicht Implementierung

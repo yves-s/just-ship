@@ -124,7 +124,22 @@ RETURNING number, title, status;
 
 Warte auf die Bestätigung, dass das Update erfolgreich war, bevor du weitermachst.
 
-**3b) Feature-Branch in Worktree erstellen (parallelsicher):**
+**3b) Shopify Environment Check (nur wenn stack.platform === "shopify"):**
+
+```bash
+PLATFORM=$(node -e "process.stdout.write(require('./project.json').stack?.platform || '')" 2>/dev/null)
+if [ "$PLATFORM" = "shopify" ]; then
+  bash .claude/scripts/shopify-env-check.sh
+  if [ $? -ne 0 ]; then
+    echo "ERROR: Shopify environment check failed. Fix the issues above before continuing." >&2
+    exit 1
+  fi
+fi
+```
+
+Falls Exit-Code 1: STOP und User über fehlende Requirements informieren. Nicht fortfahren.
+
+**3c) Feature-Branch in Worktree erstellen (parallelsicher):**
 
 Prüfe zuerst ob das aktuelle Verzeichnis bereits ein Worktree ist:
 ```bash
@@ -150,11 +165,11 @@ git checkout main && git pull origin main
 git checkout -b {abgeleiteter-prefix}/{ticket-nummer}-{kurzbeschreibung}
 ```
 
-**3c) Active-Ticket für Shell-Hooks setzen** (damit SubagentStop-Events den Board erreichen):
+**3d) Active-Ticket für Shell-Hooks setzen** (damit SubagentStop-Events den Board erreichen):
 
 Nutze das **Write-Tool** (nicht Bash `echo >`) um die Datei `.claude/.active-ticket` mit dem Inhalt `{N}` zu schreiben. Das Write-Tool ist per `Write(**)` erlaubt und löst keine Permission-Prompt aus.
 
-**3d) Pipeline-Event senden** (Board zeigt aktiven Orchestrator):
+**3e) Pipeline-Event senden** (Board zeigt aktiven Orchestrator):
 ```bash
 bash .claude/scripts/send-event.sh {N} orchestrator agent_started
 ```
@@ -450,7 +465,7 @@ if [ -z "$HOSTING_PROVIDER" ]; then
 fi
 
 if [ "$HOSTING_PROVIDER" = "shopify" ]; then
-  PREVIEW_URL=$(bash .claude/scripts/shopify-preview.sh push "T-${N}" "${TITLE}")
+  PREVIEW_URL=$(bash .claude/scripts/shopify-dev.sh start "T-${N}" "${TITLE}")
 elif [ "$HOSTING_PROVIDER" = "vercel" ]; then
   PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)
 else
