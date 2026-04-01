@@ -91,6 +91,7 @@ just-ship self-update
 |-------|-------|------|
 | **Orchestrator** | Opus | Plans, delegates, ships -- drives the entire flow |
 | **Triage** | Haiku | Analyzes ticket quality, enriches unclear descriptions before execution |
+| **Triage Enrichment** | Sonnet | Phase 2: enriches tickets with codebase context, affected files, and Shopify-specific checks |
 | **Backend** | Sonnet | API endpoints, shared hooks, business logic |
 | **Frontend** | Sonnet | UI components and pages (design-aware) |
 | **Data Engineer** | Haiku | DB migrations, RLS policies, TypeScript types |
@@ -195,6 +196,7 @@ Loaded automatically when `stack.platform: "shopify"` is set in `project.json`. 
 | **shopify-admin-api** | both | Admin API mutations, webhooks, bulk operations |
 | **shopify-checkout** | both | Checkout UI Extensions, Shopify Functions (Plus only) |
 | **shopify-apps** | both | App CLI, App Bridge, Polaris, session tokens, billing |
+| **shopify-app-scaffold** | both | Opinionated cleanup after `shopify app create`, removes demo code |
 
 ### Superpowers Plugin
 

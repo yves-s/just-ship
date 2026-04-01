@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Added
+- Triage Enrichment Phase 2 (`agents/triage-enrichment.md`) — Sonnet with tools enriches tickets with affected files, missing ACs, and Shopify-specific checks
+- Board Comment API helper (`post-comment.sh`) — non-blocking comment posting for triage, preview, and QA results
+- Shopify Environment Check (`shopify-env-check.sh`) — validates CLI, Node, Git, Auth, and project config with 24h cache
+- Hybrid Shopify dev/push script (`shopify-dev.sh`) — `theme dev` locally, `theme push` on VPS, with mode detection and PID management
+- Shopify App Scaffold skill (`shopify-app-scaffold.md`) — opinionated cleanup rules after `shopify app create`
+- Shopify QA static analysis (`shopify-qa.sh`) — checks hardcoded values, propagation, section schema, breakpoints, OS 2.0 compliance
+- Shopify-specific QA instructions in QA agent for consistency, settings, and breakpoint checks
+- `scaffold_type` field in Triage output for app scaffolding detection
+- `shopifyEnabled` flag in QaConfig for auto-detection of Shopify projects
+- Shopify QA step integrated into QA runner pipeline (before agent review)
+- Shopify-specific fix guidance in QA fix loop
+
 ### Changed
 - VPS deploys now use pre-built Docker images from GHCR instead of git-pull + build on server
 - `docker-compose.yml` references `ghcr.io/yves-s/just-ship/pipeline` image instead of local build context

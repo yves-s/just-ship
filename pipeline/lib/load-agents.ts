@@ -86,3 +86,14 @@ export function loadTriagePrompt(projectDir: string): string | null {
     return null;
   }
 }
+
+export function loadEnrichmentPrompt(projectDir: string): string | null {
+  const enrichmentPath = resolve(projectDir, ".claude", "agents", "triage-enrichment.md");
+  try {
+    const content = readFileSync(enrichmentPath, "utf-8");
+    const { body } = parseFrontmatter(content);
+    return body.trim();
+  } catch {
+    return null;
+  }
+}

@@ -4,7 +4,7 @@ import { execSync, spawn } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { loadProjectConfig, parseCliArgs, type TicketArgs } from "./lib/config.ts";
-import { loadAgents, loadOrchestratorPrompt, loadTriagePrompt } from "./lib/load-agents.ts";
+import { loadAgents, loadOrchestratorPrompt, loadTriagePrompt, loadEnrichmentPrompt } from "./lib/load-agents.ts";
 import { createEventHooks, postPipelineEvent, postPipelineSummary, type EventConfig } from "./lib/event-hooks.ts";
 import { runQaWithFixLoop } from "./lib/qa-fix-loop.ts";
 import type { QaContext } from "./lib/qa-runner.ts";
@@ -55,6 +55,26 @@ interface TriageResult {
   qaTier: "full" | "light" | "skip";
   qaPages: string[];
   qaFlows: string[];
+  scaffoldType?: string;
+  enrichedDescription?: string;
+  affectedFiles?: string[];
+  addedACs?: string[];
+}
+
+function formatEnrichmentComment(triage: TriageResult): string {
+  const lines = ["**Triage Enrichment**\n"];
+  if (triage.affectedFiles?.length) {
+    lines.push("**Betroffene Dateien:**");
+    triage.affectedFiles.forEach(f => lines.push(`- ${f}`));
+    lines.push("");
+  }
+  if (triage.addedACs?.length) {
+    lines.push("**Ergaenzte Acceptance Criteria:**");
+    triage.addedACs.forEach(ac => lines.push(`- [ ] ${ac}`));
+    lines.push("");
+  }
+  lines.push(`**QA-Tier:** ${triage.qaTier}`);
+  return lines.join("\n");
 }
 
 async function runTriage(
@@ -122,6 +142,7 @@ Labels: ${ticket.labels}`;
       result.qaTier = parsed.qa_tier ?? "light";
       result.qaPages = Array.isArray(parsed.qa_pages) ? parsed.qa_pages : [];
       result.qaFlows = Array.isArray(parsed.qa_flows) ? parsed.qa_flows : [];
+      result.scaffoldType = parsed.scaffold_type || undefined;
 
       if (parsed.verdict === "enriched" && parsed.enriched_body) {
         result.description = parsed.enriched_body;
@@ -256,6 +277,98 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
     triageResult = await runTriage(workDir, ticket, triagePrompt, eventConfig, hasPipeline, opts.env);
     ticketDescription = triageResult.description;
     Sentry.addBreadcrumb({ category: "pipeline", message: "triage_done", data: { verdict: triageResult?.verdict, qaTier: triageResult?.qaTier } });
+  }
+
+  // --- Phase 2: Enrichment (Sonnet with tools) ---
+  const needsEnrichment =
+    triageResult?.verdict !== "sufficient" ||
+    config.stack?.platform === "shopify";
+
+  if (needsEnrichment && triageResult) {
+    try {
+      const enrichmentPrompt = loadEnrichmentPrompt(workDir);
+      if (enrichmentPrompt) {
+        const enrichmentInput = JSON.stringify({
+          title: ticket.title,
+          body: ticketDescription,
+          phase1: { verdict: triageResult.verdict, qa_tier: triageResult.qaTier, analysis: triageResult.analysis },
+          platform: config.stack?.platform || "",
+          variant: config.stack?.variant || "",
+        });
+
+        let enrichmentText = "";
+        const enrichController = new AbortController();
+        const enrichTimeout = setTimeout(() => enrichController.abort(), 60_000);
+
+        try {
+          for await (const message of query({
+            prompt: `${enrichmentPrompt}\n\n## Ticket\n\n${enrichmentInput}`,
+            options: {
+              cwd: workDir,
+              model: "sonnet",
+              permissionMode: "bypassPermissions",
+              allowDangerouslySkipPermissions: true,
+              allowedTools: ["Grep", "Glob", "Read"],
+              maxTurns: 3,
+              env: { ...process.env, ...(opts.env ?? {}) },
+              spawnClaudeCodeProcess: makeSpawn("[Enrichment]"),
+              abortController: enrichController,
+            },
+          })) {
+            if (message.type === "assistant") {
+              const msg = message as SDKMessage & { content?: Array<{ type: string; text?: string }> };
+              if (Array.isArray(msg.content)) {
+                for (const block of msg.content) {
+                  if (block.type === "text" && block.text) {
+                    enrichmentText += block.text;
+                  }
+                }
+              }
+            }
+          }
+        } finally {
+          clearTimeout(enrichTimeout);
+        }
+
+        const enrichJsonMatch = enrichmentText.match(/\{[\s\S]*\}/);
+        if (enrichJsonMatch) {
+          const enriched = JSON.parse(enrichJsonMatch[0]);
+          triageResult.enrichedDescription = enriched.enriched_description;
+          triageResult.affectedFiles = enriched.affected_files;
+          triageResult.addedACs = enriched.added_acceptance_criteria;
+          if (enriched.enriched_description) {
+            ticketDescription = enriched.enriched_description;
+          }
+          console.error(`[Enrichment] Done — ${triageResult.affectedFiles?.length ?? 0} files, ${triageResult.addedACs?.length ?? 0} ACs added`);
+        }
+
+        // Post enrichment as Board comment (non-blocking)
+        if (hasPipeline && triageResult.enrichedDescription) {
+          const commentBody = formatEnrichmentComment(triageResult);
+          try {
+            execSync(
+              `bash "${workDir}/.claude/scripts/post-comment.sh" "${ticket.ticketId}" "${commentBody.replace(/"/g, '\\"')}" "triage"`,
+              { timeout: 5_000, stdio: "ignore" }
+            );
+          } catch { /* non-blocking */ }
+        }
+      }
+    } catch (e) {
+      console.error(`[Enrichment] Skipped: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  // Shopify env check (VPS path — develop.md handles local path)
+  if (config.stack?.platform === "shopify") {
+    try {
+      execSync(`bash "${workDir}/.claude/scripts/shopify-env-check.sh"`, {
+        timeout: 30_000,
+        stdio: "pipe",
+      });
+      console.error("[Shopify] Environment check passed");
+    } catch (e) {
+      console.error(`[Shopify] Environment check failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   if (checkpointConfig) {
@@ -498,6 +611,8 @@ Branch ist bereits erstellt: ${branchName}`;
       buildCommand: config.stack.buildCommand,
       testCommand: config.stack.testCommand,
       env: opts.env,
+      enrichedACs: triageResult?.addedACs?.join("\n") || undefined,
+      triageFindings: triageResult?.affectedFiles || undefined,
     };
 
     // Run verify command if configured

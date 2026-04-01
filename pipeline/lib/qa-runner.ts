@@ -18,6 +18,19 @@ import { waitForVercelPreview } from "./vercel-preview.js";
 // Interfaces
 // ---------------------------------------------------------------------------
 
+export interface ShopifyQaFinding {
+  severity: "error" | "warning" | "info";
+  check: string;
+  file: string;
+  line: number;
+  message: string;
+}
+
+export interface ShopifyQaReport {
+  findings: ShopifyQaFinding[];
+  summary: { errors: number; warnings: number; info: number };
+}
+
 export interface QaContext {
   workDir: string;
   branchName: string;
@@ -32,6 +45,9 @@ export interface QaContext {
   env?: Record<string, string>;
   verifyOutput?: string;
   verifyFailed?: boolean;
+  enrichedACs?: string;
+  triageFindings?: string[];
+  shopifyQaReport?: ShopifyQaReport;
 }
 
 export interface QaCheckResult {
@@ -514,6 +530,50 @@ export async function runQa(ctx: QaContext): Promise<QaReport> {
 
   if (ctx.qaTier === "skip") {
     return report;
+  }
+
+  // --- Shopify static analysis (light + full, Shopify projects only) ---
+  if (ctx.qaConfig.shopifyEnabled) {
+    const qaScriptPath = join(ctx.workDir, ".claude/scripts/shopify-qa.sh");
+    if (existsSync(qaScriptPath)) {
+      try {
+        const shopifyOutput = execSync(`bash "${qaScriptPath}"`, {
+          cwd: ctx.workDir,
+          encoding: "utf-8",
+          timeout: 60_000,
+        });
+        const shopifyReport: ShopifyQaReport = JSON.parse(shopifyOutput);
+        ctx.shopifyQaReport = shopifyReport;
+        report.checks.push({
+          name: "shopify-qa",
+          passed: shopifyReport.summary.errors === 0,
+          details: shopifyReport.summary.errors > 0
+            ? `${shopifyReport.summary.errors} errors: ${shopifyReport.findings.filter(f => f.severity === "error").map(f => f.message).join("; ")}`
+            : `${shopifyReport.summary.warnings} warnings, ${shopifyReport.summary.info} info`,
+          blocking: shopifyReport.summary.errors > 0,
+        });
+      } catch (e) {
+        // If the script exits non-zero (errors found), try to parse stdout
+        const err = e as { stdout?: string; status?: number };
+        if (err.stdout) {
+          try {
+            const shopifyReport: ShopifyQaReport = JSON.parse(err.stdout);
+            ctx.shopifyQaReport = shopifyReport;
+            report.checks.push({
+              name: "shopify-qa",
+              passed: false,
+              details: `${shopifyReport.summary.errors} errors: ${shopifyReport.findings.filter(f => f.severity === "error").map(f => f.message).join("; ")}`,
+              blocking: true,
+            });
+            report.status = "failed";
+          } catch {
+            report.checks.push({ name: "shopify-qa", passed: true, details: "Script output not parseable", blocking: false });
+          }
+        } else {
+          report.checks.push({ name: "shopify-qa", passed: true, details: "Script failed to execute", blocking: false });
+        }
+      }
+    }
   }
 
   // --- Test check (light + full) ---

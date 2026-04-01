@@ -17,6 +17,7 @@ export interface QaConfig {
   vercelTeamId: string;
   vercelPreviewPollIntervalMs: number;
   vercelPreviewMaxWaitMs: number;
+  shopifyEnabled?: boolean;
 }
 
 export interface ProjectConfig {
@@ -227,6 +228,7 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
     vercelTeamId: vercelTeamId || ((rawQa.vercel_team_id as string) ?? ""),
     vercelPreviewPollIntervalMs: Number(rawQa.vercel_preview_poll_interval_ms ?? 10000),
     vercelPreviewMaxWaitMs: Number(rawQa.vercel_preview_max_wait_ms ?? 300000),
+    shopifyEnabled: raw.stack?.platform === "shopify",
   };
 
   return {

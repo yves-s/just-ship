@@ -28,6 +28,7 @@ const SKILL_AGENT_MAP: Record<string, AgentRole[]> = {
   "shopify-admin-api":      ["backend", "data-engineer", "orchestrator"],
   "shopify-checkout":       ["frontend", "backend", "orchestrator"],
   "shopify-apps":           ["backend", "frontend", "orchestrator"],
+  "shopify-app-scaffold":   ["orchestrator", "frontend"],
 };
 
 /** Default skills per platform+variant when skills.domain is not set */
