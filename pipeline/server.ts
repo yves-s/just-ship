@@ -170,10 +170,19 @@ function sendJson(res: ServerResponse, status: number, data: Record<string, unkn
   res.end(JSON.stringify(data));
 }
 
-function readBody(req: IncomingMessage): Promise<string> {
+function readBody(req: IncomingMessage, maxBytes = 1_048_576): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    let totalSize = 0;
+    req.on("data", (chunk: Buffer) => {
+      totalSize += chunk.length;
+      if (totalSize > maxBytes) {
+        req.destroy();
+        reject(new Error("Request body too large"));
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
     req.on("error", reject);
   });
@@ -689,8 +698,12 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     try {
       const raw = await readBody(req);
       body = JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
+    } catch (err) {
+      if (err instanceof Error && err.message === "Request body too large") {
+        sendJson(res, 413, { status: "payload_too_large", message: "Request body too large" });
+      } else {
+        sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
+      }
       return;
     }
 
