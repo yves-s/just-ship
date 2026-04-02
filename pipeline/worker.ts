@@ -3,6 +3,7 @@ initSentry();
 import { resolve } from "node:path";
 import { mkdirSync } from "node:fs";
 import { execSync } from "node:child_process";
+import { sanitizeBranchName } from "./lib/sanitize.ts";
 import { executePipeline } from "./run.ts";
 import { classifyError } from "./lib/error-handler.ts";
 import { withWatchdog, saveWorktreeWIP, sendAgentFailedEvent } from "./lib/watchdog.ts";
@@ -246,6 +247,7 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
     .replace(/-+/g, "-")
     .slice(0, 40);
   const branchName = `${config.conventions.branch_prefix}${ticket.number}-${branchSlug}`;
+  sanitizeBranchName(branchName);
 
   let slotId: number | undefined;
   const runAbortController = new AbortController();

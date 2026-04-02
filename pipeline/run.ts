@@ -12,6 +12,7 @@ import { generateChangeSummary } from "./lib/change-summary.ts";
 import { loadSkills, type AgentRole } from "./lib/load-skills.ts";
 import { Sentry } from "./lib/sentry.ts";
 import { updateCheckpoint, clearCheckpoint, type PipelineCheckpoint } from "./lib/checkpoint.ts";
+import { sanitizeBranchName } from "./lib/sanitize.ts";
 
 // --- Stderr-capturing spawn wrapper for Claude Code subprocesses ---
 function makeSpawn(logPrefix: string) {
@@ -188,6 +189,9 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
     branchName = `${config.conventions.branch_prefix}${ticket.ticketId}-${branchSlug}`;
   }
 
+  // Validate branch name before any shell interpolation
+  sanitizeBranchName(branchName);
+
   // workDir: use provided worktree directory, or fall back to projectDir (CLI mode)
   const workDir = opts.workDir ?? projectDir;
 
@@ -200,9 +204,9 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
     } catch { /* continue */ }
 
     try {
-      execSync(`git checkout -b ${branchName}`, { cwd: projectDir, stdio: "pipe" });
+      execSync(`git checkout -b "${branchName}"`, { cwd: projectDir, stdio: "pipe" });
     } catch {
-      execSync(`git checkout ${branchName}`, { cwd: projectDir, stdio: "pipe" });
+      execSync(`git checkout "${branchName}"`, { cwd: projectDir, stdio: "pipe" });
     }
   }
 
@@ -347,8 +351,12 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
           const commentBody = formatEnrichmentComment(triageResult);
           try {
             execSync(
-              `bash "${workDir}/.claude/scripts/post-comment.sh" "${ticket.ticketId}" "${commentBody.replace(/"/g, '\\"')}" "triage"`,
-              { timeout: 5_000, stdio: "ignore" }
+              `bash "${workDir}/.claude/scripts/post-comment.sh" "${ticket.ticketId}" "" "triage"`,
+              {
+                timeout: 5_000,
+                stdio: "ignore",
+                env: { ...process.env, COMMENT_BODY: commentBody },
+              }
             );
           } catch { /* non-blocking */ }
         }
@@ -711,13 +719,16 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
     branchName = `${config.conventions.branch_prefix}${ticket.ticketId}-${branchSlug}`;
   }
 
+  // Validate branch name before any shell interpolation
+  sanitizeBranchName(branchName);
+
   // workDir: use provided worktree directory, or fall back to projectDir (CLI mode)
   const workDir = opts.workDir ?? projectDir;
 
   if (!opts.workDir) {
     // CLI mode — no worktree manager, do git checkout as before
     try {
-      execSync(`git checkout ${branchName}`, { cwd: projectDir, stdio: "pipe" });
+      execSync(`git checkout "${branchName}"`, { cwd: projectDir, stdio: "pipe" });
     } catch { /* branch may already be checked out */ }
   }
 

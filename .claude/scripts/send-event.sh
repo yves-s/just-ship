@@ -32,8 +32,17 @@ API_KEY=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs
 
 [ -z "$API_URL" ] || [ -z "$API_KEY" ] && exit 0
 
+# Build JSON payload safely via env vars (prevents shell injection)
+PAYLOAD=$(JS_TN="$TICKET_NUMBER" JS_AT="$AGENT_TYPE" JS_ET="$EVENT_TYPE" JS_MD="$METADATA" node -e "
+  const obj = { ticket_number: Number(process.env.JS_TN), agent_type: process.env.JS_AT, event_type: process.env.JS_ET };
+  try { obj.metadata = JSON.parse(process.env.JS_MD); } catch { obj.metadata = {}; }
+  process.stdout.write(JSON.stringify(obj));
+" 2>/dev/null || true)
+
+[ -z "$PAYLOAD" ] && exit 0
+
 curl -s --max-time 3 -X POST "${API_URL}/api/events" \
   -H "Content-Type: application/json" \
   -H "X-Pipeline-Key: ${API_KEY}" \
-  -d "{\"ticket_number\": ${TICKET_NUMBER}, \"agent_type\": \"${AGENT_TYPE}\", \"event_type\": \"${EVENT_TYPE}\", \"metadata\": ${METADATA}}" \
+  -d "$PAYLOAD" \
   >/dev/null 2>&1

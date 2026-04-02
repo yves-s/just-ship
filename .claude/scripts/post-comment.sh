@@ -10,7 +10,7 @@ set -euo pipefail
 trap 'exit 0' ERR
 
 TICKET_NUMBER="${1:-}"
-BODY="${2:-}"
+BODY="${2:-${COMMENT_BODY:-}}"
 TYPE="${3:-}"
 
 [ -z "$TICKET_NUMBER" ] || [ -z "$BODY" ] && exit 0
