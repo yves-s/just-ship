@@ -735,8 +735,12 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     try {
       const raw = await readBody(req);
       body = JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
+    } catch (err) {
+      if (err instanceof Error && err.message === "Request body too large") {
+        sendJson(res, 413, { status: "payload_too_large", message: "Request body too large" });
+      } else {
+        sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
+      }
       return;
     }
 
@@ -774,8 +778,12 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     try {
       const raw = await readBody(req);
       body = JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
+    } catch (err) {
+      if (err instanceof Error && err.message === "Request body too large") {
+        sendJson(res, 413, { status: "payload_too_large", message: "Request body too large" });
+      } else {
+        sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
+      }
       return;
     }
 
@@ -955,8 +963,12 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     try {
       const raw = await readBody(req);
       body = JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
+    } catch (err) {
+      if (err instanceof Error && err.message === "Request body too large") {
+        sendJson(res, 413, { status: "payload_too_large", message: "Request body too large" });
+      } else {
+        sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
+      }
       return;
     }
 
@@ -984,8 +996,12 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     try {
       const raw = await readBody(req);
       body = JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
+    } catch (err) {
+      if (err instanceof Error && err.message === "Request body too large") {
+        sendJson(res, 413, { status: "payload_too_large", message: "Request body too large" });
+      } else {
+        sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
+      }
       return;
     }
 
