@@ -198,6 +198,7 @@ export const updateIntakeSchema = z.object({
     features: z.array(z.string()),
     deliverables: z.array(z.string()),
   }).nullable().optional(),
+  proposal_status: z.enum(['draft', 'sent', 'viewed', 'accepted']).optional(),
   proposal_urgency: z.object({
     discount_percent: z.number().min(0).max(100),
     deadline_days: z.number().positive(),
@@ -212,7 +213,7 @@ export const updateIntakeSchema = z.object({
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/lib/types/intake.ts src/lib/constants/intake.ts src/lib/validations/intake.ts
+git add src/lib/types/intake.ts src/lib/types.ts src/lib/constants/intake.ts src/lib/validations/intake.ts
 git commit -m "feat: add proposal types, constants, and validation schemas"
 ```
 
@@ -1182,35 +1183,15 @@ git commit -m "feat: integrate proposal panel into intake detail view"
 
 ---
 
-## Task 10: Extend Admin PATCH to Support Proposal Status Transition
+## Task 10: Verify Admin PATCH Supports Proposal Fields
 
-**Files:**
-- Modify: `src/app/api/intakes/[id]/route.ts`
+The `updateIntakeSchema` (extended in Task 2) already includes `proposal_status`, `proposal_price`, `proposal_scope`, and `proposal_urgency`. The existing admin PATCH handler at `src/app/api/intakes/[id]/route.ts` passes validated data straight to supabase — no code change needed in the route file. The schema change in Task 2 is sufficient.
 
-- [ ] **Step 1: Handle proposal_status sent transition on link copy**
+- [ ] **Step 1: Verify the PATCH endpoint works**
 
-The admin PATCH endpoint needs to support updating `proposal_status` to `sent` when the link is copied. Since the validation schema already includes proposal fields, we need to add logic for the status transition.
+Run: `npm run build` to confirm TypeScript compiles without errors.
 
-In the PATCH handler of `src/app/api/intakes/[id]/route.ts`, in the update path (around lines 68-81), after the existing update logic, check if we need to transition proposal_status:
-
-The existing update already passes validated data through to supabase. The `updateIntakeSchema` now includes `proposal_price` and `proposal_urgency`. For the `draft` → `sent` transition, add a separate field or handle it in the ProposalPanel client-side by making a direct supabase call.
-
-Simpler approach: Add a dedicated mini-endpoint or extend the PATCH to accept `proposal_status`:
-
-In `src/lib/validations/intake.ts`, add `proposal_status` to the update schema:
-
-```typescript
-proposal_status: z.enum(['draft', 'sent', 'viewed', 'accepted']).optional(),
-```
-
-This allows the admin to manually set proposal status (e.g., `sent` on link copy).
-
-- [ ] **Step 2: Commit**
-
-```bash
-git add src/app/api/intakes/[id]/route.ts src/lib/validations/intake.ts
-git commit -m "feat: support proposal status updates in admin PATCH endpoint"
-```
+Test via curl or the admin UI: PATCH `/api/intakes/[id]` with `{ "proposal_status": "sent" }` should work.
 
 ---
 
