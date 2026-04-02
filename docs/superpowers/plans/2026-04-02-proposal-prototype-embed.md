@@ -108,7 +108,7 @@ Add these imports at the top:
 
 ```typescript
 import { Upload, Trash2, ExternalLink } from "lucide-react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient as createBrowserClient } from "@/lib/supabase/client";
 ```
 
 Add a ref and state after the existing state declarations:
@@ -125,12 +125,13 @@ Add the upload handler function after `handleCopyLink`:
 ```typescript
   async function handlePrototypeUpload(file: File) {
     if (!file.name.endsWith(".html")) return;
+    if (file.size > 5 * 1024 * 1024) {
+      console.error("Prototype file too large (max 5 MB)");
+      return;
+    }
     setUploadingPrototype(true);
     try {
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
+      const supabase = createBrowserClient();
       const path = `prototypes/${intakeId}/${file.name}`;
       const { error: uploadError } = await supabase.storage
         .from("intake-files")
@@ -201,6 +202,13 @@ Add the UI section after the "Angebotslink kopieren" button, still inside the `s
               type="button"
               className="flex w-full flex-col items-center gap-1.5 rounded-lg border-2 border-dashed px-4 py-4 text-center text-muted-foreground transition-colors hover:border-muted-foreground/50"
               onClick={() => prototypeInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const file = e.dataTransfer.files[0];
+                if (file) handlePrototypeUpload(file);
+              }}
               disabled={uploadingPrototype}
             >
               <Upload className="size-4" />
@@ -242,7 +250,7 @@ git commit -m "feat: add prototype upload UI to admin proposal panel"
 
 In `src/app/proposal/[token]/page.tsx`, extend the select string (currently at line 16-17) to include the prototype fields. Add `prototype_file_path` to the select:
 
-Find the select string and add `, prototype_file_path, prototype_filename` before the closing quote.
+Find the select string and add `, prototype_file_path` before the closing quote. (Only `prototype_file_path` is needed on the public page — `prototype_filename` is admin-only.)
 
 Then pass them to the client component. Add after `acceptedAt={intake.proposal_accepted_at}`:
 
@@ -330,7 +338,6 @@ Add the prototype section JSX. Place it **between** the Advantages section and t
                 className="h-full w-full"
                 sandbox="allow-scripts allow-same-origin"
                 title="Prototyp — Vollbild"
-                onClick={(e) => e.stopPropagation()}
               />
             </div>
           )}
