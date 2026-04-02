@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Security**: API keys no longer visible in Claude Code terminal output during `/develop` and `/ship` workflows
+- New `board-api.sh` wrapper script hides credentials by suppressing stderr during credential resolution
+- All Board API calls in commands now use `board-api.sh` instead of inline curl with exposed headers
+
 ### Added
 - P2 Client Reports implementation plan — Board-native with token-based client access (`docs/superpowers/plans/2026-04-03-p2-client-reports.md`)
 

@@ -11,13 +11,11 @@ Den fehlenden Schritt zwischen Board und `/ship` — Branch lokal auschecken, bu
 
 Lies `project.json` fuer Konventionen, Build-Commands und Pipeline-Config.
 
-**Pipeline (optional):** Falls `pipeline.workspace_id` gesetzt → Credentials aufloesen:
+**Pipeline (optional):** Falls `pipeline.workspace_id` gesetzt → `board-api.sh` verwenden:
 ```bash
-WS_ID=$(node -e "process.stdout.write(require('./project.json').pipeline?.workspace_id || '')")
-WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --id "$WS_ID")
-BOARD_URL=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).board_url)")
-API_KEY=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).api_key)")
+bash .claude/scripts/board-api.sh get "tickets/{N}"
 ```
+Credentials werden intern aufgelöst.
 
 Falls keine Pipeline konfiguriert: Pipeline-Schritte (Board-Status, Ticket-Info) ueberspringen.
 
@@ -40,7 +38,7 @@ Fuer jeden Branch:
 - **PR-Status:** `gh pr view {branch} --json state -q .state 2>/dev/null || echo "kein PR"`
 - **Board-Status (optional):** Falls Pipeline konfiguriert, Ticket-Nummer aus Branch-Name extrahieren (Pattern `T-{N}` oder `/{N}-`), dann:
   ```bash
-  curl -s -H "X-Pipeline-Key: {api_key}" "{board_url}/api/tickets/{N}" | node -e "
+  bash .claude/scripts/board-api.sh get "tickets/{N}" | node -e "
     const t = JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));
     process.stdout.write(t.data?.status || t.status || 'unbekannt');
   "
@@ -246,4 +244,4 @@ Der User beschreibt was gefixt werden soll. Dann:
 - NICHT `git add -A` oder `git add .`
 - NICHT `--force` push
 - NICHT mergen ohne "passt" — das macht `/ship`
-- NICHT `cat ~/.just-ship/config.json` — IMMER `write-config.sh read-workspace --id` verwenden
+- NICHT `cat ~/.just-ship/config.json` — IMMER `board-api.sh` verwenden

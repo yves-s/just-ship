@@ -24,11 +24,11 @@ Falls du den Drang hast eine Frage zu stellen: **UNTERDRÜCKE IHN** und mach ein
 
 Lies `project.json`. Bestimme den Pipeline-Modus:
 
-1. **Board API** (bevorzugt): Falls `pipeline.workspace_id` gesetzt → Credentials auflösen:
+1. **Board API** (bevorzugt): Falls `pipeline.workspace_id` gesetzt → `board-api.sh` verwenden:
    ```bash
-   WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --id <workspace_id>)
+   bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"status": "done"}'
    ```
-   Aus dem JSON-Output `board_url` und `api_key` verwenden. `pipeline.project_id` aus `project.json`.
+   Credentials werden intern aufgelöst. `pipeline.project_id` aus `project.json`.
 2. **Legacy Supabase MCP**: Falls nur `project_id` gesetzt (ohne `workspace_id`), und `project_id` hat keine Bindestriche → `execute_sql` verwenden, Warnung ausgeben: "Kein Board API konfiguriert. Nutze Legacy Supabase MCP. Fuehre /setup-just-ship aus um zu upgraden."
 3. **Standalone**: Falls weder `workspace_id` noch `project_id` konfiguriert → Pipeline-Schritte überspringen
 
@@ -113,10 +113,7 @@ REVIEW_URL=$(gh pr view --json url -q .url 2>/dev/null || echo "")
 **Board API (bevorzugt):**
 ```bash
 if [ -n "$REVIEW_URL" ]; then
-  curl -s -X PATCH -H "X-Pipeline-Key: {api_key}" \
-    -H "Content-Type: application/json" \
-    -d '{"review_url": "'"$REVIEW_URL"'"}' \
-    "{board_url}/api/tickets/{N}"
+  bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"review_url": "'"$REVIEW_URL"'"}'
 fi
 ```
 
@@ -145,10 +142,7 @@ Falls eine URL gefunden wurde (`$PREVIEW_URL` nicht leer):
 **Board API:**
 ```bash
 if [ -n "$PREVIEW_URL" ]; then
-  curl -s -X PATCH -H "X-Pipeline-Key: {api_key}" \
-    -H "Content-Type: application/json" \
-    -d '{"preview_url": "'"$PREVIEW_URL"'"}' \
-    "{board_url}/api/tickets/{N}"
+  bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"preview_url": "'"$PREVIEW_URL"'"}'
 fi
 ```
 
@@ -249,10 +243,7 @@ SOFORT WEITER ZU SCHRITT 6.
 
 **Board API (bevorzugt):** Via Bash curl:
 ```bash
-curl -s -X PATCH -H "X-Pipeline-Key: {api_key}" \
-  -H "Content-Type: application/json" \
-  -d '{"status": "done", "summary": "{pr_summary}"}' \
-  "{board_url}/api/tickets/{N}"
+bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"status": "done", "summary": "{pr_summary}"}'
 ```
 Hinweis: `summary` wird mitgesendet damit das Board eine Zusammenfassung des abgeschlossenen Tickets anzeigt.
 

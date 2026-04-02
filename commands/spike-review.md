@@ -11,13 +11,12 @@ Reviewe ein abgeschlossenes Spike-Ticket: Spike-Dokument finden, Zusammenfassung
 
 Lies `project.json` fuer Pipeline-Config.
 
-**Pipeline (optional):** Falls `pipeline.workspace_id` gesetzt → Credentials aufloesen:
+**Pipeline (optional):** Falls `pipeline.workspace_id` gesetzt → `board-api.sh` verwenden:
 ```bash
-WS_ID=$(node -e "process.stdout.write(require('./project.json').pipeline?.workspace_id || '')")
-WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --id "$WS_ID")
-BOARD_URL=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).board_url)")
-API_KEY=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).api_key)")
+bash .claude/scripts/board-api.sh get "tickets/{N}"
+bash .claude/scripts/board-api.sh post tickets '{"title": "...", "body": "..."}'
 ```
+Credentials werden intern aufgelöst.
 
 Falls keine Pipeline konfiguriert: Ticket-Status-Updates und Ticket-Erstellung ueberspringen, nur Zusammenfassung anzeigen.
 
@@ -64,7 +63,7 @@ Falls Pipeline konfiguriert — Ticket-Daten laden:
 
 **Board API (bevorzugt):**
 ```bash
-curl -s -H "X-Pipeline-Key: {api_key}" "{board_url}/api/tickets/{N}"
+bash .claude/scripts/board-api.sh get "tickets/{N}"
 ```
 
 **Legacy Supabase MCP (Fallback):**
@@ -204,18 +203,15 @@ Falls Pipeline konfiguriert — Tickets via Board API oder Supabase erstellen:
 
 **Board API (bevorzugt):**
 ```bash
-curl -s -X POST -H "X-Pipeline-Key: {api_key}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "{ticket_title}",
-    "body": "{ticket_body_markdown}",
-    "priority": "medium",
-    "tags": ["spike-followup"],
-    "status": "backlog",
-    "project_id": "{pipeline.project_id}",
-    "parent_ticket_id": "{spike_ticket_id}"
-  }' \
-  "{board_url}/api/tickets"
+bash .claude/scripts/board-api.sh post tickets '{
+  "title": "{ticket_title}",
+  "body": "{ticket_body_markdown}",
+  "priority": "medium",
+  "tags": ["spike-followup"],
+  "status": "backlog",
+  "project_id": "{pipeline.project_id}",
+  "parent_ticket_id": "{spike_ticket_id}"
+}'
 ```
 
 **Legacy Supabase MCP (Fallback):**
@@ -244,10 +240,7 @@ Falls Pipeline konfiguriert:
 
 **Board API (bevorzugt):**
 ```bash
-curl -s -X PATCH -H "X-Pipeline-Key: {api_key}" \
-  -H "Content-Type: application/json" \
-  -d '{"status": "done"}' \
-  "{board_url}/api/tickets/{N}"
+bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"status": "done"}'
 ```
 
 **Legacy Supabase MCP (Fallback):**
@@ -287,5 +280,5 @@ Spike-Review abgeschlossen:
 
 - NICHT den Skill `finishing-a-development-branch` aufrufen
 - NICHT Code implementieren — dieses Command erstellt nur Tickets
-- NICHT `cat ~/.just-ship/config.json` — IMMER `write-config.sh read-workspace --id` verwenden
+- NICHT `cat ~/.just-ship/config.json` — IMMER `board-api.sh` verwenden
 - NICHT automatisch `/develop` starten nach dem Review
