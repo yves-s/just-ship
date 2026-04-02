@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Added
+- P2 Notification System implementation plan (`docs/superpowers/plans/2026-04-02-p2-notification-system.md`)
+- P2 HTML Reports implementation plan (`docs/superpowers/plans/2026-04-02-p2-html-reports.md`)
 - Triage Enrichment Phase 2 (`agents/triage-enrichment.md`) — Sonnet with tools enriches tickets with affected files, missing ACs, and Shopify-specific checks
 - Board Comment API helper (`post-comment.sh`) — non-blocking comment posting for triage, preview, and QA results
 - Shopify Environment Check (`shopify-env-check.sh`) — validates CLI, Node, Git, Auth, and project config with 24h cache
