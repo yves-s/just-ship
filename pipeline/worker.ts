@@ -189,6 +189,18 @@ process.on("SIGTERM", () => {
   Sentry.close(2000);
 });
 
+process.on("unhandledRejection", (reason) => {
+  log(`Unhandled rejection: ${reason}`);
+  Sentry.captureException(reason instanceof Error ? reason : new Error(String(reason)));
+});
+
+process.on("uncaughtException", (err) => {
+  log(`Uncaught exception: ${err.message}`);
+  Sentry.captureException(err);
+  // Give Sentry time to flush, then exit
+  setTimeout(() => process.exit(1), 2000);
+});
+
 // --- Main loop ---
 log("==========================================");
 log("  Just Ship Pipeline Worker (SDK)");
