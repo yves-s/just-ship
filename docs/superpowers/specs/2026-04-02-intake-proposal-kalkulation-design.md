@@ -27,7 +27,7 @@ Neue Spalten auf `project_intakes`:
 | Spalte | Typ | Zweck |
 |---|---|---|
 | `proposal_token` | `TEXT UNIQUE` | Separater Token für Angebotsseite (Base64-URL-safe, 32 Bytes) |
-| `proposal_status` | `TEXT` | `draft` → `sent` → `viewed` → `accepted` → `expired` |
+| `proposal_status` | `TEXT` | `draft` → `sent` → `viewed` → `accepted` |
 | `proposal_price` | `NUMERIC` | Wertbasierter Angebotspreis in EUR |
 | `proposal_comparison` | `JSONB` | AI-generierte Vergleichspreise |
 | `proposal_scope` | `JSONB` | AI-generierte Scope-Zusammenfassung |
@@ -83,25 +83,28 @@ Neue Spalten auf `project_intakes`:
 ## Kalkulations-Flow
 
 ### Trigger
-Automatisch nach der AI-Analyse, wenn der Intake-Status auf `ready` wechselt.
+Automatisch wenn der Intake-Status auf `ready` wechselt (= Client hat 100% der Fragen beantwortet). Zu diesem Zeitpunkt liegen vor: die initiale AI-Analyse (`ai_analysis`), alle beantworteten Fragen (`intake_items`), und eventuelle Datei-Uploads (`intake_files`).
+
+**Nicht** bei der initialen Analyse — die läuft früh im Lifecycle und generiert erst die Fragen. Die Kalkulation braucht die vollständigen Antworten für eine sinnvolle Preisschätzung.
 
 ### Ablauf
-1. Bestehende AI-Analyse läuft (existiert) → `ai_analysis` wird geschrieben
-2. Kalkulations-AI wird getriggert mit:
-   - `ai_analysis` (Projekttyp, Komplexität, Features)
+1. Client beantwortet letzte Frage → `completion_percent` erreicht 100% → Status wechselt auf `ready`
+2. Status-Wechsel triggert Kalkulations-Call (im `PATCH /api/intake/[token]` Handler, wenn Status auf `ready` wechselt)
+3. Kalkulations-AI wird aufgerufen mit:
+   - `ai_analysis` (Projekttyp, Komplexität, Features — bereits vorhanden)
    - Alle `intake_items` mit Antworten
    - `intake_files` Kontext (falls vorhanden)
    - Pricing-Knowledge-Base als System-Context
-3. AI generiert: `proposal_price`, `proposal_comparison`, `proposal_scope`, `proposal_advantages`
-4. Ergebnis wird in die Intake-Zeile geschrieben
-5. `proposal_status` = `draft`, `proposal_token` wird generiert
+4. AI generiert: `proposal_price`, `proposal_comparison`, `proposal_scope`, `proposal_advantages`
+5. Ergebnis wird in die Intake-Zeile geschrieben
+6. `proposal_status` = `draft`, `proposal_token` wird generiert
 
 ### Kalkulations-Endpoint
-Kein separater Endpoint — erweitert den bestehenden `/api/intake/[token]/analyze` als zweiter Schritt nach der Analyse.
+Kein separater Endpoint. Die Kalkulation wird inline im bestehenden `PATCH /api/intake/[token]` getriggert, wenn der Status auf `ready` wechselt. Alternativ kann sie über einen neuen Button im Admin-View manuell re-getriggert werden (z.B. nach Scope-Änderungen).
 
 ### AI-Kalkulation
 - Modell: Claude Sonnet 4 (wie bestehende Analyse)
-- Input: Intake-Daten + AI-Analyse + Pricing-Knowledge-Base
+- Input: Intake-Daten + AI-Analyse + vollständige Antworten + Pricing-Knowledge-Base
 - Output: Strukturierte JSON-Antwort mit allen Proposal-Feldern
 - Wertbasiert: Preis basiert auf Kundennutzen, nicht auf Stunden/Aufwand
 
@@ -147,7 +150,7 @@ Neuer Bereich im bestehenden Intake-Detail:
 | `GET` | `/api/proposal/[token]` | Public — liefert Proposal-Daten, setzt `viewed_at` | Token-basiert |
 | `POST` | `/api/proposal/[token]/accept` | Public — setzt Status `accepted`, speichert Timestamp | Token-basiert |
 
-Kein neuer Auth-Mechanismus — Proposal-Routes nutzen Token-basierte Auth wie die bestehenden Intake-Routes.
+Kein neuer Auth-Mechanismus — Proposal-Routes nutzen Token-basierte Auth wie die bestehenden Intake-Routes. Public Routes verwenden `createServiceClient()` (Service Role) um RLS zu bypassen, genau wie die bestehenden Public-Intake-Routes.
 
 ---
 
@@ -174,10 +177,11 @@ Kein neuer Auth-Mechanismus — Proposal-Routes nutzen Token-basierte Auth wie d
 - Mobile-responsive
 
 ### Interaktion
-- Erster Aufruf setzt `proposal_viewed_at` + Status `viewed`
+- "Link kopieren" im Admin-View setzt Status von `draft` → `sent`
+- Erster Aufruf der Proposal-Seite setzt `proposal_viewed_at` + Status `viewed`
 - "Angebot annehmen" Button → `POST /api/proposal/[token]/accept`
 - Nach Annahme: Bestätigungsanzeige, Status `accepted`
-- Admin bekommt Notification (Mechanismus TBD — zunächst Status-Update im Board)
+- v1: Keine aktive Notification — Admin sieht Status-Update im Board (Proposal-Status Badge wechselt)
 
 ---
 
@@ -188,14 +192,14 @@ Client füllt Intake aus
         ↓
 AI analysiert (existiert)
         ↓
-AI kalkuliert (NEU) — automatisch, selber Call
+AI kalkuliert (NEU) — automatisch bei Status "ready"
   → proposal_price, comparison, scope, advantages
   → proposal_token generiert, status = "draft"
         ↓
 Admin sieht Ergebnis im Intake-Detail
   → Preis anpassen (optional)
   → Urgency-Trigger konfigurieren (optional)
-  → Link kopieren
+  → Link kopieren → status = "sent"
         ↓
 Admin schickt Link manuell (Email, Chat, etc.)
         ↓
@@ -204,7 +208,7 @@ Kunde öffnet /proposal/[token]
         ↓
 Kunde klickt "Angebot annehmen"
   → status = "accepted", accepted_at gesetzt
-  → Admin bekommt Notification
+  → Admin sieht Status-Update im Board
         ↓
 Admin entscheidet wann es losgeht
 ```
@@ -235,6 +239,7 @@ Admin entscheidet wann es losgeht
 
 ### Geändert
 - `src/lib/types/intake.ts` — Neue Felder im IntakeType
-- `src/lib/intake/analyze.ts` — Kalkulation als zweiter Schritt
-- `src/components/intake/intake-detail.tsx` (o.ä.) — Kalkulations-Panel im Admin-View
+- `src/app/api/intake/[token]/route.ts` — Kalkulation triggern bei Status-Wechsel auf `ready`
+- `src/components/intake/intake-detail-view.tsx` — Kalkulations-Panel im Admin-View
+- `src/lib/validations/intake.ts` — Schema erweitern um Proposal-Felder
 - `src/app/api/intakes/[id]/route.ts` — PATCH erweitert um Proposal-Felder
