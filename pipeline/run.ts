@@ -958,7 +958,13 @@ const isMain = process.argv[1]?.endsWith("run.ts");
 if (isMain) {
   (async () => {
     const projectDir = process.cwd();
-    const ticket = parseCliArgs(process.argv.slice(2));
+    let ticket: TicketArgs;
+    try {
+      ticket = parseCliArgs(process.argv.slice(2));
+    } catch (e) {
+      console.error(e instanceof Error ? e.message : String(e));
+      process.exit(1);
+    }
     const config = loadProjectConfig(projectDir);
 
     // --- Banner ---

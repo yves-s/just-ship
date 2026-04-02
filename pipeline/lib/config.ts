@@ -258,8 +258,7 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
 export function parseCliArgs(args: string[]): TicketArgs {
   const [ticketId, title, description, labels] = args;
   if (!ticketId || !title) {
-    console.error("Usage: run.ts <TICKET_ID> <TITLE> [DESCRIPTION] [LABELS]");
-    process.exit(1);
+    throw new Error("Usage: run.ts <TICKET_ID> <TITLE> [DESCRIPTION] [LABELS]");
   }
   return {
     ticketId,
