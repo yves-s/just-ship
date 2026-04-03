@@ -10,6 +10,14 @@
 set -uo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+
+# Load .env if present (for SHOPIFY_CLI_THEME_TOKEN etc.)
+if [ -f "$PROJECT_ROOT/.env" ]; then
+  set -a
+  source "$PROJECT_ROOT/.env"
+  set +a
+fi
+
 CACHE_FILE="$PROJECT_ROOT/.claude/.env-check-passed"
 PID_FILE="$PROJECT_ROOT/.claude/.shopify-dev-pid"
 ERRORS=0

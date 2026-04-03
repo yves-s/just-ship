@@ -21,6 +21,15 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Load .env if present (for SHOPIFY_CLI_THEME_TOKEN etc.)
+if [ -f "$PROJECT_ROOT/.env" ]; then
+  set -a
+  source "$PROJECT_ROOT/.env"
+  set +a
+fi
+
 SUBCOMMAND="${1:-}"
 [ -z "$SUBCOMMAND" ] && { echo "Usage: shopify-dev.sh <start|stop|url>" >&2; exit 0; }
 shift
