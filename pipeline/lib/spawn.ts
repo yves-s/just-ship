@@ -7,9 +7,10 @@
  */
 
 import { spawn } from "node:child_process";
+import type { SpawnedProcess, SpawnOptions } from "@anthropic-ai/claude-agent-sdk";
 
-export function makeSpawn(logPrefix: string) {
-  return (spawnOptions: { command: string; args: string[]; cwd?: string; env?: NodeJS.ProcessEnv; signal?: AbortSignal }) => {
+export function makeSpawn(logPrefix: string): (options: SpawnOptions) => SpawnedProcess {
+  return (spawnOptions: SpawnOptions) => {
     const { command, args, cwd, env, signal } = spawnOptions;
     const child = spawn(command, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"], signal } as Parameters<typeof spawn>[2]);
     child.stderr?.on("data", (chunk: Buffer) => {
@@ -17,6 +18,6 @@ export function makeSpawn(logPrefix: string) {
         if (line.trim()) console.error(`${logPrefix} [stderr] ${line}`);
       }
     });
-    return child;
+    return child as unknown as SpawnedProcess;
   };
 }

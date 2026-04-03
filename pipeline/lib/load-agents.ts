@@ -83,6 +83,7 @@ export function loadTriagePrompt(projectDir: string): string | null {
     const { body } = parseFrontmatter(content);
     return body.trim();
   } catch {
+    // Optional: triage agent definition may not exist in all projects
     return null;
   }
 }
@@ -94,6 +95,7 @@ export function loadEnrichmentPrompt(projectDir: string): string | null {
     const { body } = parseFrontmatter(content);
     return body.trim();
   } catch {
+    // Optional: enrichment agent definition may not exist in all projects
     return null;
   }
 }

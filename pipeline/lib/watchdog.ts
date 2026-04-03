@@ -45,6 +45,7 @@ export function saveWorktreeWIP(workDir: string, ticketNumber: number | string):
     }
     return true;
   } catch {
+    console.warn(`[Watchdog] Failed to save WIP for T-${ticketNumber} — worktree may have been in a broken git state`);
     return false;
   }
 }

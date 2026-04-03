@@ -28,6 +28,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Type check pipeline
+        run: cd pipeline && npm ci && npm run typecheck
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:

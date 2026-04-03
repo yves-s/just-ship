@@ -102,9 +102,10 @@ else
   warn "User claude-dev existiert bereits"
 fi
 
-# claude-dev darf sudo für git (für hook-Calls falls nötig)
-# Kein sudo für alles — minimale Rechte
-usermod -aG sudo claude-dev 2>/dev/null || true
+# DEPRECATED: Use Docker-based setup instead (see vps/docker-compose.yml)
+# Restrict sudo to git only — no blanket sudo group membership
+echo "claude-dev ALL=(ALL) NOPASSWD: /usr/bin/git" > /etc/sudoers.d/claude-dev
+chmod 440 /etc/sudoers.d/claude-dev
 
 # Log-Verzeichnis
 LOG_DIR="/home/claude-dev/pipeline-logs"

@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
-import type { ProjectConfig } from "./config.js";
+import type { ProjectConfig } from "./config.ts";
 
 // SECURITY: Validate skill name to prevent path traversal
 function isValidSkillName(name: string): boolean {
