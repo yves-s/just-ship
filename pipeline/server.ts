@@ -119,10 +119,7 @@ function boardApiAdapter(projectCfg: ProjectConfig) {
         if (!res.ok) return null;
         const json = (await res.json()) as { data?: { number?: number } };
         return json.data?.number ?? null;
-      } catch {
-        // Best-effort: auto-heal ticket creation is non-critical
-        return null;
-      }
+      } catch { return null; }
     },
     patchTicket: (n: number, data: Record<string, unknown>) => patchTicket(n, data),
   };
@@ -142,7 +139,6 @@ async function fetchTicket(ticketNumber: number): Promise<Record<string, unknown
     const json = (await res.json()) as { data?: Record<string, unknown> };
     return json.data ?? null;
   } catch {
-    // Best-effort: ticket fetch failure handled by caller via null return
     return null;
   }
 }
@@ -161,7 +157,6 @@ async function patchTicket(ticketNumber: number, body: Record<string, unknown>):
     });
     return res.ok;
   } catch {
-    // Best-effort: ticket patch failure handled by caller via false return
     return false;
   }
 }
@@ -349,7 +344,7 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
           }),
           signal: AbortSignal.timeout(8000),
         });
-      } catch { /* Best-effort: budget_exceeded event delivery is non-critical */ }
+      } catch { /* best-effort */ }
       sendJson(res, 402, { status: "budget_exceeded", ticket_number: ticketNumber, message: budgetResult.reason });
       return;
     }
@@ -368,7 +363,7 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
           }),
           signal: AbortSignal.timeout(8000),
         });
-      } catch { /* Best-effort: budget_threshold event delivery is non-critical */ }
+      } catch { /* best-effort */ }
     }
   }
 
@@ -434,7 +429,6 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
             worktreeResult = await worktreeManager.reattach(checkpoint.branch_name);
             log(`Reattached worktree for checkpoint branch ${checkpoint.branch_name}`);
           } catch {
-            // Worktree reattach failed — fall through to allocate a fresh one
             log(`Could not reattach checkpoint worktree, allocating new`);
             worktreeResult = await worktreeManager.allocate(branchName);
           }

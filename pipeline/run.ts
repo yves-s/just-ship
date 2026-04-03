@@ -15,7 +15,6 @@ import { updateCheckpoint, clearCheckpoint, type PipelineCheckpoint } from "./li
 import { sanitizeBranchName } from "./lib/sanitize.ts";
 import { toBranchName } from "./lib/utils.ts";
 import { makeSpawn } from "./lib/spawn.ts";
-import { pickEnv } from "./lib/env.ts";
 
 // --- Exported pipeline function (used by worker.ts) ---
 export interface PipelineOptions {
@@ -108,7 +107,7 @@ Labels: ${ticket.labels}`;
         allowDangerouslySkipPermissions: true,
         allowedTools: [],
         maxTurns: 1,
-        env: { ...pickEnv(process.env), ...(env ?? {}) },
+        env: { ...process.env, ...(env ?? {}) },
         spawnClaudeCodeProcess: makeSpawn("[Triage]"),
       },
     })) {
@@ -299,7 +298,7 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
               allowDangerouslySkipPermissions: true,
               allowedTools: ["Grep", "Glob", "Read"],
               maxTurns: 3,
-              env: { ...pickEnv(process.env), ...(opts.env ?? {}) },
+              env: { ...process.env, ...(opts.env ?? {}) },
               spawnClaudeCodeProcess: makeSpawn("[Enrichment]"),
               abortController: enrichController,
             },
@@ -340,7 +339,7 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
               {
                 timeout: 5_000,
                 stdio: "ignore",
-                env: { ...pickEnv(process.env), COMMENT_BODY: commentBody },
+                env: { ...process.env, COMMENT_BODY: commentBody },
               }
             );
           } catch { /* non-blocking */ }
@@ -470,7 +469,7 @@ Branch ist bereits erstellt: ${branchName}`;
         persistSession: true,
         abortController: queryAbortController,
         env: {
-          ...pickEnv(process.env),
+          ...process.env,
           ...(opts.env ?? {}),
           TICKET_NUMBER: ticket.ticketId,
           BOARD_API_URL: config.pipeline.apiUrl,
@@ -808,7 +807,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
         resume: resumeSessionId,
         abortController: queryAbortController,
         env: {
-          ...pickEnv(process.env),
+          ...process.env,
           ...(opts.env ?? {}),
           TICKET_NUMBER: ticket.ticketId,
           BOARD_API_URL: config.pipeline.apiUrl,

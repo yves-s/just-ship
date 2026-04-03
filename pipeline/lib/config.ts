@@ -73,7 +73,6 @@ function loadGlobalConfig(): GlobalConfig | null {
   try {
     return JSON.parse(readFileSync(configPath, "utf-8"));
   } catch {
-    console.warn("[Config] Could not parse ~/.just-ship/config.json — continuing without global config");
     return null;
   }
 }

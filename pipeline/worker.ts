@@ -29,11 +29,6 @@ for (const key of required) {
 }
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
-// Service key is required because the worker performs privileged operations
-// (claim tickets, update status, reset stuck tickets) that bypass Row Level
-// Security.  RLS policies on public.tickets and public.projects restrict
-// anonymous/authenticated access; service_role retains full access.
-// See: migrations/004_enable_rls.sql
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
 const SUPABASE_PROJECT_ID = process.env.SUPABASE_PROJECT_ID!;
 const PROJECT_DIR = process.env.PROJECT_DIR!;
