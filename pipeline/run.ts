@@ -185,11 +185,12 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
     try {
       execSync("git checkout -f main", { cwd: projectDir, stdio: "pipe" });
       execSync("git pull origin main", { cwd: projectDir, stdio: "pipe" });
-    } catch { /* continue */ }
+    } catch { /* Best-effort: git checkout/pull may fail on dirty state — continue with branch creation */ }
 
     try {
       execSync(`git checkout -b "${branchName}"`, { cwd: projectDir, stdio: "pipe" });
     } catch {
+      // Branch already exists — switch to it instead
       execSync(`git checkout "${branchName}"`, { cwd: projectDir, stdio: "pipe" });
     }
   }
@@ -200,6 +201,7 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
     mkdirSync(claudeDir, { recursive: true });
     writeFileSync(join(claudeDir, ".active-ticket"), ticket.ticketId);
   } catch {
+    // Best-effort: .active-ticket enables event hooks but is not required for pipeline execution
     console.error(`[Pipeline] Warning: could not write .active-ticket`);
   }
 
@@ -342,7 +344,7 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
                 env: { ...process.env, COMMENT_BODY: commentBody },
               }
             );
-          } catch { /* non-blocking */ }
+          } catch { /* Best-effort: enrichment comment posting is non-critical */ }
         }
       }
     } catch (e) {
@@ -529,6 +531,7 @@ Branch ist bereits erstellt: ${branchName}`;
             signal: AbortSignal.timeout(8000),
           });
         } catch {
+          // Best-effort: question storage enables human-in-the-loop UI but pipeline can pause without it
           console.error("[Pipeline] Warning: could not store question in ticket");
         }
       }
@@ -682,7 +685,6 @@ export interface ResumeOptions {
   ticket: TicketArgs;
   sessionId: string;
   answer: string;
-  env?: Record<string, string>;
   abortSignal?: AbortSignal;
   timeoutMs?: number;
 }
@@ -710,7 +712,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
     // CLI mode — no worktree manager, do git checkout as before
     try {
       execSync(`git checkout "${branchName}"`, { cwd: projectDir, stdio: "pipe" });
-    } catch { /* branch may already be checked out */ }
+    } catch { /* Best-effort: branch may already be checked out in CLI resume mode */ }
   }
 
   // --- Write .active-ticket so Claude Code hooks can send events ---
@@ -719,6 +721,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
     mkdirSync(claudeDir, { recursive: true });
     writeFileSync(join(claudeDir, ".active-ticket"), ticket.ticketId);
   } catch {
+    // Best-effort: .active-ticket enables event hooks but is not required for pipeline execution
     console.error(`[Pipeline] Warning: could not write .active-ticket`);
   }
 
@@ -865,6 +868,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
             signal: AbortSignal.timeout(8000),
           });
         } catch {
+          // Best-effort: question storage enables human-in-the-loop UI but pipeline can pause without it
           console.error("[Pipeline] Warning: could not store question in ticket");
         }
       }

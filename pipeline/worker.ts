@@ -58,6 +58,7 @@ async function supabaseGet<T>(path: string): Promise<T | null> {
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {
+    // Best-effort: Supabase GET failure handled by caller via null return
     return null;
   }
 }
@@ -78,6 +79,7 @@ async function supabasePatch<T>(path: string, body: Record<string, unknown>): Pr
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {
+    // Best-effort: Supabase PATCH failure handled by caller via null return
     return null;
   }
 }

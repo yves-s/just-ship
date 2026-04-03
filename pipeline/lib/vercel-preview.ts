@@ -5,13 +5,23 @@
  * branch reaches READY state. Used by the QA pipeline to obtain a testable URL.
  */
 
-import type { QaConfig } from "./config.ts";
-import { sleep } from "./utils.ts";
+// Defined locally until config.ts is updated with QA support
+export interface QaConfig {
+  maxFixIterations: number;
+  playwrightTimeoutMs: number;
+  previewProvider: "vercel" | "none";
+  vercelProjectId: string;
+  vercelTeamId: string;
+  vercelPreviewPollIntervalMs: number;
+  vercelPreviewMaxWaitMs: number;
+}
 
 interface VercelDeploymentMeta {
   githubCommitRef?: string;
   [key: string]: unknown;
 }
+
+import { sleep } from "./utils.ts";
 
 interface VercelDeployment {
   uid: string;
@@ -23,6 +33,8 @@ interface VercelDeployment {
 interface VercelDeploymentsResponse {
   deployments: VercelDeployment[];
 }
+
+// sleep() imported from ./utils.ts
 
 /**
  * Wait for a Vercel preview deployment matching the given branch to become READY.

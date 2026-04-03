@@ -7,7 +7,7 @@
 
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { execSync } from "node:child_process";
-import { runQa, postQaReport, type QaContext, type QaReport } from "./qa-runner.ts";
+import { runQa, postQaReport, type QaContext, type QaReport } from "./qa-runner.js";
 import { makeSpawn } from "./spawn.ts";
 import { sleep } from "./utils.ts";
 
@@ -32,6 +32,7 @@ function getLastCommitMessage(workDir: string): string {
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
   } catch {
+    // Best-effort: commit message is for logging only — fix loop continues regardless
     return "(could not read last commit)";
   }
 }

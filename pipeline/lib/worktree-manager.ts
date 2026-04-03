@@ -133,6 +133,7 @@ export class WorktreeManager {
         .filter((d) => d.isDirectory())
         .map((d) => d.name);
     } catch {
+      console.warn("[WorktreeManager] Could not read worktree base directory during prune");
       return;
     }
 
@@ -146,7 +147,7 @@ export class WorktreeManager {
           const paused = await isTicketPaused(branchName);
           if (paused) continue; // Skip -- ticket is paused, keep worktree
         } catch {
-          // If the check fails, be conservative and keep it
+          // Pause check failed (e.g. Supabase timeout) — conservatively keep the worktree
           continue;
         }
       }
@@ -280,6 +281,7 @@ export class WorktreeManager {
         .filter((d) => d.isDirectory())
         .map((d) => d.name);
     } catch {
+      console.warn("[WorktreeManager] Could not read worktree base directory during parked scan");
       return null;
     }
 

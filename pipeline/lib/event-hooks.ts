@@ -1,5 +1,5 @@
 import type { HookCallback, SubagentStartHookInput, SubagentStopHookInput, PostToolUseHookInput, HookCallbackMatcher, HookEvent } from "@anthropic-ai/claude-agent-sdk";
-import { estimateCost, parseTokenUsage } from "./cost.ts";
+import { estimateCost, parseTokenUsage } from "./cost.js";
 
 export interface EventConfig {
   apiUrl: string;
@@ -116,7 +116,7 @@ export function createEventHooks(
     const hookInput = input as PostToolUseHookInput;
     const toolInput = (hookInput.tool_input ?? {}) as Record<string, unknown>;
     await postEvent(config, {
-      agent_type: (hookInput as unknown as Record<string, unknown>).agent_type as string ?? "orchestrator",
+      agent_type: hookInput.agent_type ?? "orchestrator",
       event_type: "tool_use",
       metadata: {
         tool_name: hookInput.tool_name ?? "unknown",

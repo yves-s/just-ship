@@ -11,8 +11,8 @@ import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { join, basename } from "node:path";
 import { tmpdir } from "node:os";
-import type { QaConfig } from "./config.ts";
-import { waitForVercelPreview } from "./vercel-preview.ts";
+import type { QaConfig } from "./config.js";
+import { waitForVercelPreview } from "./vercel-preview.js";
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -146,6 +146,7 @@ export function runTestCheck(workDir: string, packageManager: string, overrideCm
   try {
     pkgJson = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
   } catch {
+    // Malformed package.json — skip test check gracefully
     return null;
   }
 
@@ -287,7 +288,7 @@ console.log('QA_RESULT:' + JSON.stringify(result));
     try {
       unlinkSync(scriptPath);
     } catch {
-      // ignore cleanup errors
+      // Best-effort: temp file cleanup failure is non-critical
     }
   }
 }
@@ -484,7 +485,7 @@ export function postQaReport(
     try {
       unlinkSync(tmpFile);
     } catch {
-      // ignore cleanup errors
+      // Best-effort: temp file cleanup failure is non-critical
     }
   }
 
@@ -597,6 +598,7 @@ export async function runQa(ctx: QaContext): Promise<QaReport> {
             });
             report.status = "failed";
           } catch {
+            // Shopify QA script produced non-JSON output — treat as non-blocking pass
             report.checks.push({ name: "shopify-qa", passed: true, details: "Script output not parseable", blocking: false });
           }
         } else {

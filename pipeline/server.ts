@@ -119,7 +119,10 @@ function boardApiAdapter(projectCfg: ProjectConfig) {
         if (!res.ok) return null;
         const json = (await res.json()) as { data?: { number?: number } };
         return json.data?.number ?? null;
-      } catch { return null; }
+      } catch {
+        // Best-effort: auto-heal ticket creation is non-critical
+        return null;
+      }
     },
     patchTicket: (n: number, data: Record<string, unknown>) => patchTicket(n, data),
   };
@@ -139,6 +142,7 @@ async function fetchTicket(ticketNumber: number): Promise<Record<string, unknown
     const json = (await res.json()) as { data?: Record<string, unknown> };
     return json.data ?? null;
   } catch {
+    // Best-effort: ticket fetch failure handled by caller via null return
     return null;
   }
 }
@@ -157,6 +161,7 @@ async function patchTicket(ticketNumber: number, body: Record<string, unknown>):
     });
     return res.ok;
   } catch {
+    // Best-effort: ticket patch failure handled by caller via false return
     return false;
   }
 }
@@ -344,7 +349,7 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
           }),
           signal: AbortSignal.timeout(8000),
         });
-      } catch { /* best-effort */ }
+      } catch { /* Best-effort: budget_exceeded event delivery is non-critical */ }
       sendJson(res, 402, { status: "budget_exceeded", ticket_number: ticketNumber, message: budgetResult.reason });
       return;
     }
@@ -363,7 +368,7 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
           }),
           signal: AbortSignal.timeout(8000),
         });
-      } catch { /* best-effort */ }
+      } catch { /* Best-effort: budget_threshold event delivery is non-critical */ }
     }
   }
 
@@ -429,6 +434,7 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
             worktreeResult = await worktreeManager.reattach(checkpoint.branch_name);
             log(`Reattached worktree for checkpoint branch ${checkpoint.branch_name}`);
           } catch {
+            // Worktree reattach failed — fall through to allocate a fresh one
             log(`Could not reattach checkpoint worktree, allocating new`);
             worktreeResult = await worktreeManager.allocate(branchName);
           }
@@ -614,7 +620,380 @@ async function handleShip(ticketNumber: number, res: ServerResponse, projectId?:
   })();
 }
 
-// --- Request handler ---
+// ---------------------------------------------------------------------------
+// Route helpers
+// ---------------------------------------------------------------------------
+
+/** Authenticate request via X-Pipeline-Key header. Returns true if valid. */
+function requirePipelineKey(req: IncomingMessage, res: ServerResponse): boolean {
+  const apiKey = req.headers["x-pipeline-key"] as string | undefined;
+  if (!apiKey || apiKey !== PIPELINE_SERVER_KEY) {
+    sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Pipeline-Key" });
+    return false;
+  }
+  return true;
+}
+
+/** Parse JSON body with size limit. Returns null and sends error response on failure. */
+async function parseJsonBody(req: IncomingMessage, res: ServerResponse): Promise<Record<string, unknown> | null> {
+  try {
+    const raw = await readBody(req);
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch (err) {
+    if (err instanceof Error && err.message === "Request body too large") {
+      sendJson(res, 413, { status: "payload_too_large", message: "Request body too large" });
+    } else {
+      sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
+    }
+    return null;
+  }
+}
+
+/** Extract and validate ticket_number from parsed body. Returns null and sends error on failure. */
+function requireTicketNumber(body: Record<string, unknown>, res: ServerResponse, errorDetail?: string): number | null {
+  const ticketNumber = body.ticket_number;
+  if (typeof ticketNumber !== "number" || !Number.isInteger(ticketNumber) || ticketNumber <= 0) {
+    sendJson(res, 400, {
+      status: "bad_request",
+      message: errorDetail ?? "Missing or invalid field: ticket_number (must be a positive integer)",
+    });
+    return null;
+  }
+  return ticketNumber;
+}
+
+// ---------------------------------------------------------------------------
+// Route handlers — each receives (req, res) and handles one endpoint
+// ---------------------------------------------------------------------------
+
+async function handleHealthRoute(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const lastCompleted = runHistory.filter(r => r.status === "completed").at(-1) ?? null;
+  const lastError = runHistory.filter(r => r.status === "failed").at(-1) ?? null;
+
+  sendJson(res, 200, {
+    status: drainManager.getState() === "drained" ? "draining" : "ok",
+    mode: isMultiProjectMode ? "multi-project" : "single",
+    running: pipelineState.running
+      ? {
+          ticket_number: pipelineState.running.ticketNumber,
+          project: pipelineState.running.projectSlug,
+          started_at: pipelineState.running.startedAt.toISOString(),
+          elapsed_seconds: Math.round((Date.now() - pipelineState.running.startedAt.getTime()) / 1000),
+        }
+      : null,
+    last_completed: lastCompleted,
+    last_error: lastError,
+    recent_runs: runHistory.slice(-5),
+    uptime_seconds: Math.round((Date.now() - serverStartedAt) / 1000),
+    drain: drainManager.getStatus(),
+  });
+}
+
+async function handleStatusRoute(_req: IncomingMessage, res: ServerResponse, ticketNum: number): Promise<void> {
+  if (isMultiProjectMode && pipelineState.running?.ticketNumber === ticketNum) {
+    sendJson(res, 200, {
+      ticket_number: ticketNum,
+      status: "running",
+      project: pipelineState.running.projectSlug,
+      started_at: pipelineState.running.startedAt.toISOString(),
+    });
+  } else if (runningTickets.has(ticketNum)) {
+    sendJson(res, 200, { ticket_number: ticketNum, status: "running" });
+  } else {
+    sendJson(res, 200, { ticket_number: ticketNum, status: "idle" });
+  }
+}
+
+async function handleLaunchRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+
+  const ticketNumber = requireTicketNumber(body, res);
+  if (ticketNumber === null) return;
+
+  const projectId = body.project_id as string | undefined;
+  await handleLaunch(ticketNumber, res, projectId);
+}
+
+async function handleEventsRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+
+  const eventType = body.event_type as string | undefined;
+
+  // Only handle "launch" events
+  if (eventType !== "launch") {
+    sendJson(res, 200, { status: "ignored", event_type: eventType ?? "unknown" });
+    return;
+  }
+
+  const ticketNumber = requireTicketNumber(body, res);
+  if (ticketNumber === null) return;
+
+  const projectId = body.project_id as string | undefined;
+  await handleLaunch(ticketNumber, res, projectId);
+}
+
+async function handleAnswerRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+
+  const ticketNumber = requireTicketNumber(body, res, "Missing or invalid field: ticket_number");
+  if (ticketNumber === null) return;
+
+  const answer = body.answer;
+  if (typeof answer !== "string" || !answer.trim()) {
+    sendJson(res, 400, { status: "bad_request", message: "Missing or invalid field: answer" });
+    return;
+  }
+
+  // Idempotency guard
+  if (runningTickets.has(ticketNumber)) {
+    sendJson(res, 409, { status: "conflict", message: "Ticket is already being processed" });
+    return;
+  }
+
+  // Fetch ticket to get session_id
+  const ticket = await fetchTicket(ticketNumber);
+  if (!ticket) {
+    sendJson(res, 404, { status: "not_found", message: "Ticket not found" });
+    return;
+  }
+
+  const sessionId = ticket.session_id as string | null;
+  if (!sessionId) {
+    sendJson(res, 400, { status: "bad_request", message: "Ticket has no session_id — cannot resume" });
+    return;
+  }
+
+  if (ticket.pipeline_status !== "paused") {
+    sendJson(res, 409, { status: "conflict", message: `Ticket pipeline_status is "${ticket.pipeline_status}", expected "paused"` });
+    return;
+  }
+
+  // Resolve project in multi-project mode
+  const answerProjectId = body.project_id as string | undefined;
+  let answerProjectDir = PROJECT_DIR;
+  let answerProjectConfig = config;
+  let answerProjectEnv: Record<string, string> = {};
+
+  if (isMultiProjectMode && answerProjectId) {
+    const match = findProjectByProjectId(serverConfig!, answerProjectId);
+    if (match) {
+      answerProjectDir = match.project.project_dir;
+      answerProjectEnv = loadProjectEnv(match.project.env_file);
+      answerProjectConfig = loadProjectConfig(answerProjectDir);
+    }
+  }
+
+  // Reserve and respond
+  runningTickets.add(ticketNumber);
+
+  await patchTicket(ticketNumber, {
+    pipeline_status: "running",
+  });
+
+  sendJson(res, 202, {
+    status: "resuming",
+    ticket_number: ticketNumber,
+    message: "Pipeline resuming with answer",
+  });
+
+  // Resume pipeline in background
+  const title = (ticket.title as string) ?? "Untitled";
+  const ticketBody = (ticket.body as string) ?? "No description provided";
+  const tags = Array.isArray(ticket.tags) ? (ticket.tags as string[]).join(",") : "";
+
+  log(`Pipeline resuming: T-${ticketNumber} -- answer received`);
+
+  const branchName = toBranchName(answerProjectConfig.conventions.branch_prefix, ticketNumber, title);
+
+  (async () => {
+    let slotId: number | undefined;
+    try {
+      let workDir: string | undefined;
+
+      if (isMultiProjectMode) {
+        // Multi-project mode: no worktree, work directly in project dir
+        workDir = undefined;
+      } else {
+        const slot = await worktreeManager!.reattach(branchName);
+        slotId = slot.slotId;
+        workDir = slot.workDir;
+      }
+
+      const result = await withWatchdog(
+        resumePipeline({
+          projectDir: answerProjectDir,
+          workDir,
+          branchName,
+          ticket: { ticketId: String(ticketNumber), title, description: ticketBody, labels: tags },
+          sessionId,
+          answer: answer.trim(),
+          env: Object.keys(answerProjectEnv).length > 0 ? answerProjectEnv : undefined,
+        }),
+        `T-${ticketNumber} resumePipeline`,
+      );
+
+      if (result.status === "paused") {
+        await patchTicket(ticketNumber, { pipeline_status: "paused", session_id: result.sessionId });
+        if (!isMultiProjectMode && slotId !== undefined) {
+          await worktreeManager!.park(slotId);
+          slotId = undefined;
+        }
+      } else if (result.status === "completed") {
+        await patchTicket(ticketNumber, { pipeline_status: "done", status: "in_review", branch: result.branch, session_id: null });
+      } else {
+        const reason = result.failureReason ?? `exited with code ${result.exitCode}`;
+        const classification = classifyError({
+          error: new Error(reason),
+          ticketId: String(ticketNumber),
+          exitCode: result.exitCode,
+          timedOut: false,
+          branch: branchName,
+          projectDir: answerProjectDir,
+        });
+        log(`Pipeline failed: T-${ticketNumber} (${reason}) [${classification.action}]`);
+        await patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Pipeline error: ${reason}`, session_id: null });
+
+        if (classification.action === "auto_heal") {
+          log(`Auto-healing: T-${ticketNumber} -- ${classification.reason}`);
+          const healResult = await executeAutoHeal(
+            { error: new Error(reason), ticketId: String(ticketNumber), exitCode: result.exitCode, timedOut: false, branch: branchName, projectDir: answerProjectDir },
+            classification,
+            boardApiAdapter(answerProjectConfig),
+          );
+          if (healResult.healed) log(`Auto-heal complete: ${healResult.summary}`);
+        }
+      }
+    } catch (error) {
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      const classification = classifyError({
+        error: errorObj,
+        ticketId: String(ticketNumber),
+        exitCode: 1,
+        timedOut: false,
+        branch: branchName,
+        projectDir: answerProjectDir,
+      });
+
+      const reason = errorObj.message;
+      log(`Pipeline resume crashed: T-${ticketNumber} -- ${reason} [${classification.action}]`);
+      await patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Resume error: ${reason}`, session_id: null });
+
+      if (classification.action === "auto_heal") {
+        log(`Auto-healing: T-${ticketNumber} -- ${classification.reason}`);
+        const healResult = await executeAutoHeal(
+          { error: errorObj, ticketId: String(ticketNumber), exitCode: 1, timedOut: false, branch: branchName, projectDir: answerProjectDir },
+          classification,
+          boardApiAdapter(answerProjectConfig),
+        );
+        if (healResult.healed) log(`Auto-heal complete: ${healResult.summary}`);
+      }
+    } finally {
+      if (!isMultiProjectMode && slotId !== undefined) await worktreeManager!.release(slotId);
+      runningTickets.delete(ticketNumber);
+    }
+  })();
+}
+
+async function handleShipRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+
+  const ticketNumber = requireTicketNumber(body, res, "Missing or invalid field: ticket_number");
+  if (ticketNumber === null) return;
+
+  const projectId = body.project_id as string | undefined;
+  await handleShip(ticketNumber, res, projectId);
+}
+
+async function handleUpdateRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const updateSecret = serverConfig?.server.update_secret;
+  const headerSecret = req.headers["x-update-secret"] as string | undefined;
+  if (!updateSecret || !headerSecret || headerSecret !== updateSecret) {
+    sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Update-Secret" });
+    return;
+  }
+
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+
+  const version = body.version as string | undefined;
+  const rolloutId = body.rollout_id as string | undefined;
+  if (!version || !rolloutId) {
+    sendJson(res, 400, { status: "bad_request", message: "Missing required fields: version, rollout_id" });
+    return;
+  }
+
+  // Write trigger file for the host-level Update-Agent
+  try {
+    mkdirSync(TRIGGER_DIR, { recursive: true });
+    const triggerPayload = {
+      schema_version: 1,
+      version,
+      rollout_id: rolloutId,
+      triggered_at: new Date().toISOString(),
+    };
+    writeFileSync(`${TRIGGER_DIR}/update-trigger.json`, JSON.stringify(triggerPayload, null, 2));
+    log(`Update trigger written: version=${version} rollout=${rolloutId}`);
+    sendJson(res, 202, { status: "accepted", message: "Update trigger written for Update-Agent" });
+  } catch (err: unknown) {
+    const reason = err instanceof Error ? err.message : "Unknown error";
+    log(`Failed to write update trigger: ${reason}`);
+    sendJson(res, 500, { status: "error", message: `Failed to write trigger file: ${reason}` });
+  }
+}
+
+async function handleDrainRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  const started = drainManager.startDrain({
+    onForceStop: async () => {
+      // Mark all running tickets as interrupted
+      for (const ticketNumber of runningTickets) {
+        log(`Force-drain: marking T-${ticketNumber} as interrupted_by_update`);
+        await patchTicket(ticketNumber, {
+          pipeline_status: "failed",
+          status: "ready_to_develop",
+          summary: "Pipeline interrupted by VPS update — will be re-queued",
+        });
+      }
+    },
+  });
+
+  if (started) {
+    log("Drain started — new runs will be rejected");
+    sendJson(res, 202, { status: "accepted", message: "Drain started", drain: drainManager.getStatus() });
+  } else {
+    sendJson(res, 409, {
+      status: "conflict",
+      message: `Server is already in state: ${drainManager.getState()}`,
+      drain: drainManager.getStatus(),
+    });
+  }
+}
+
+async function handleForceDrainRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  log("Force-drain requested");
+  await drainManager.forceDrain();
+  sendJson(res, 200, { status: "ok", message: "Force-drain completed", drain: drainManager.getStatus() });
+}
+
+// ---------------------------------------------------------------------------
+// Request router — CORS + method/path dispatch to route handlers
+// ---------------------------------------------------------------------------
+
 async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const method = req.method ?? "GET";
   const url = req.url ?? "/";
@@ -636,444 +1015,25 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   }
   if (allowedOrigin) res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
 
-  // GET /health — no auth
-  if (method === "GET" && url === "/health") {
-    const lastCompleted = runHistory.filter(r => r.status === "completed").at(-1) ?? null;
-    const lastError = runHistory.filter(r => r.status === "failed").at(-1) ?? null;
+  // --- GET routes ---
+  if (method === "GET") {
+    if (url === "/health") return handleHealthRoute(req, res);
 
-    sendJson(res, 200, {
-      status: drainManager.getState() === "drained" ? "draining" : "ok",
-      mode: isMultiProjectMode ? "multi-project" : "single",
-      running: pipelineState.running
-        ? {
-            ticket_number: pipelineState.running.ticketNumber,
-            project: pipelineState.running.projectSlug,
-            started_at: pipelineState.running.startedAt.toISOString(),
-            elapsed_seconds: Math.round((Date.now() - pipelineState.running.startedAt.getTime()) / 1000),
-          }
-        : null,
-      last_completed: lastCompleted,
-      last_error: lastError,
-      recent_runs: runHistory.slice(-5),
-      uptime_seconds: Math.round((Date.now() - serverStartedAt) / 1000),
-      drain: drainManager.getStatus(),
-    });
-    return;
+    const statusMatch = url.match(/^\/api\/status\/(\d+)$/);
+    if (statusMatch) return handleStatusRoute(req, res, Number(statusMatch[1]));
   }
 
-  // GET /api/status/:ticket
-  const statusMatch = method === "GET" && url.match(/^\/api\/status\/(\d+)$/);
-  if (statusMatch) {
-    const ticketNum = Number(statusMatch[1]);
-    if (isMultiProjectMode && pipelineState.running?.ticketNumber === ticketNum) {
-      sendJson(res, 200, {
-        ticket_number: ticketNum,
-        status: "running",
-        project: pipelineState.running.projectSlug,
-        started_at: pipelineState.running.startedAt.toISOString(),
-      });
-    } else if (runningTickets.has(ticketNum)) {
-      sendJson(res, 200, { ticket_number: ticketNum, status: "running" });
-    } else {
-      sendJson(res, 200, { ticket_number: ticketNum, status: "idle" });
+  // --- POST routes ---
+  if (method === "POST") {
+    switch (url) {
+      case "/api/launch":      return handleLaunchRoute(req, res);
+      case "/api/events":      return handleEventsRoute(req, res);
+      case "/api/answer":      return handleAnswerRoute(req, res);
+      case "/api/ship":        return handleShipRoute(req, res);
+      case "/api/update":      return handleUpdateRoute(req, res);
+      case "/api/drain":       return handleDrainRoute(req, res);
+      case "/api/force-drain": return handleForceDrainRoute(req, res);
     }
-    return;
-  }
-
-  // POST /api/launch
-  if (method === "POST" && url === "/api/launch") {
-    // Auth check
-    const apiKey = req.headers["x-pipeline-key"] as string | undefined;
-    if (!apiKey || apiKey !== PIPELINE_SERVER_KEY) {
-      sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Pipeline-Key" });
-      return;
-    }
-
-    // Parse body
-    let body: Record<string, unknown>;
-    try {
-      const raw = await readBody(req);
-      body = JSON.parse(raw) as Record<string, unknown>;
-    } catch (err) {
-      if (err instanceof Error && err.message === "Request body too large") {
-        sendJson(res, 413, { status: "payload_too_large", message: "Request body too large" });
-      } else {
-        sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
-      }
-      return;
-    }
-
-    const ticketNumber = body.ticket_number;
-    if (typeof ticketNumber !== "number" || !Number.isInteger(ticketNumber) || ticketNumber <= 0) {
-      sendJson(res, 400, {
-        status: "bad_request",
-        message: "Missing or invalid field: ticket_number (must be a positive integer)",
-      });
-      return;
-    }
-
-    const projectId = body.project_id as string | undefined;
-    await handleLaunch(ticketNumber, res, projectId);
-    return;
-  }
-
-  // POST /api/events (Board event format)
-  if (method === "POST" && url === "/api/events") {
-    // Auth check
-    const apiKey = req.headers["x-pipeline-key"] as string | undefined;
-    if (!apiKey || apiKey !== PIPELINE_SERVER_KEY) {
-      sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Pipeline-Key" });
-      return;
-    }
-
-    // Parse body
-    let body: Record<string, unknown>;
-    try {
-      const raw = await readBody(req);
-      body = JSON.parse(raw) as Record<string, unknown>;
-    } catch (err) {
-      if (err instanceof Error && err.message === "Request body too large") {
-        sendJson(res, 413, { status: "payload_too_large", message: "Request body too large" });
-      } else {
-        sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
-      }
-      return;
-    }
-
-    const eventType = body.event_type as string | undefined;
-
-    // Only handle "launch" events
-    if (eventType !== "launch") {
-      sendJson(res, 200, { status: "ignored", event_type: eventType ?? "unknown" });
-      return;
-    }
-
-    const ticketNumber = body.ticket_number;
-    if (typeof ticketNumber !== "number" || !Number.isInteger(ticketNumber) || ticketNumber <= 0) {
-      sendJson(res, 400, {
-        status: "bad_request",
-        message: "Missing or invalid field: ticket_number (must be a positive integer)",
-      });
-      return;
-    }
-
-    const projectId = body.project_id as string | undefined;
-    await handleLaunch(ticketNumber, res, projectId);
-    return;
-  }
-
-  // POST /api/answer — Resume paused pipeline with human answer
-  if (method === "POST" && url === "/api/answer") {
-    const apiKey = req.headers["x-pipeline-key"] as string | undefined;
-    if (!apiKey || apiKey !== PIPELINE_SERVER_KEY) {
-      sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Pipeline-Key" });
-      return;
-    }
-
-    let body: Record<string, unknown>;
-    try {
-      const raw = await readBody(req);
-      body = JSON.parse(raw) as Record<string, unknown>;
-    } catch (err) {
-      if (err instanceof Error && err.message === "Request body too large") {
-        sendJson(res, 413, { status: "payload_too_large", message: "Request body too large" });
-      } else {
-        sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
-      }
-      return;
-    }
-
-    const ticketNumber = body.ticket_number;
-    const answer = body.answer;
-    if (typeof ticketNumber !== "number" || !Number.isInteger(ticketNumber) || ticketNumber <= 0) {
-      sendJson(res, 400, { status: "bad_request", message: "Missing or invalid field: ticket_number" });
-      return;
-    }
-    if (typeof answer !== "string" || !answer.trim()) {
-      sendJson(res, 400, { status: "bad_request", message: "Missing or invalid field: answer" });
-      return;
-    }
-
-    // Idempotency guard
-    if (runningTickets.has(ticketNumber)) {
-      sendJson(res, 409, { status: "conflict", message: "Ticket is already being processed" });
-      return;
-    }
-
-    // Fetch ticket to get session_id
-    const ticket = await fetchTicket(ticketNumber);
-    if (!ticket) {
-      sendJson(res, 404, { status: "not_found", message: "Ticket not found" });
-      return;
-    }
-
-    const sessionId = ticket.session_id as string | null;
-    if (!sessionId) {
-      sendJson(res, 400, { status: "bad_request", message: "Ticket has no session_id — cannot resume" });
-      return;
-    }
-
-    if (ticket.pipeline_status !== "paused") {
-      sendJson(res, 409, { status: "conflict", message: `Ticket pipeline_status is "${ticket.pipeline_status}", expected "paused"` });
-      return;
-    }
-
-    // Resolve project in multi-project mode
-    const answerProjectId = body.project_id as string | undefined;
-    let answerProjectDir = PROJECT_DIR;
-    let answerProjectConfig = config;
-    let answerProjectEnv: Record<string, string> = {};
-
-    if (isMultiProjectMode && answerProjectId) {
-      const match = findProjectByProjectId(serverConfig!, answerProjectId);
-      if (match) {
-        answerProjectDir = match.project.project_dir;
-        answerProjectEnv = loadProjectEnv(match.project.env_file);
-        answerProjectConfig = loadProjectConfig(answerProjectDir);
-      }
-    }
-
-    // Reserve and respond
-    runningTickets.add(ticketNumber);
-
-    await patchTicket(ticketNumber, {
-      pipeline_status: "running",
-    });
-
-    sendJson(res, 202, {
-      status: "resuming",
-      ticket_number: ticketNumber,
-      message: "Pipeline resuming with answer",
-    });
-
-    // Resume pipeline in background
-    const title = (ticket.title as string) ?? "Untitled";
-    const ticketBody = (ticket.body as string) ?? "No description provided";
-    const tags = Array.isArray(ticket.tags) ? (ticket.tags as string[]).join(",") : "";
-
-    log(`Pipeline resuming: T-${ticketNumber} -- answer received`);
-
-    const branchName = toBranchName(answerProjectConfig.conventions.branch_prefix, ticketNumber, title);
-
-    (async () => {
-      let slotId: number | undefined;
-      try {
-        let workDir: string | undefined;
-
-        if (isMultiProjectMode) {
-          // Multi-project mode: no worktree, work directly in project dir
-          workDir = undefined;
-        } else {
-          const slot = await worktreeManager!.reattach(branchName);
-          slotId = slot.slotId;
-          workDir = slot.workDir;
-        }
-
-        const result = await withWatchdog(
-          resumePipeline({
-            projectDir: answerProjectDir,
-            workDir,
-            branchName,
-            ticket: { ticketId: String(ticketNumber), title, description: ticketBody, labels: tags },
-            sessionId,
-            answer: answer.trim(),
-            env: Object.keys(answerProjectEnv).length > 0 ? answerProjectEnv : undefined,
-          }),
-          `T-${ticketNumber} resumePipeline`,
-        );
-
-        if (result.status === "paused") {
-          await patchTicket(ticketNumber, { pipeline_status: "paused", session_id: result.sessionId });
-          if (!isMultiProjectMode && slotId !== undefined) {
-            await worktreeManager!.park(slotId);
-            slotId = undefined;
-          }
-        } else if (result.status === "completed") {
-          await patchTicket(ticketNumber, { pipeline_status: "done", status: "in_review", branch: result.branch, session_id: null });
-        } else {
-          const reason = result.failureReason ?? `exited with code ${result.exitCode}`;
-          const classification = classifyError({
-            error: new Error(reason),
-            ticketId: String(ticketNumber),
-            exitCode: result.exitCode,
-            timedOut: false,
-            branch: branchName,
-            projectDir: answerProjectDir,
-          });
-          log(`Pipeline failed: T-${ticketNumber} (${reason}) [${classification.action}]`);
-          await patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Pipeline error: ${reason}`, session_id: null });
-
-          if (classification.action === "auto_heal") {
-            log(`Auto-healing: T-${ticketNumber} -- ${classification.reason}`);
-            const healResult = await executeAutoHeal(
-              { error: new Error(reason), ticketId: String(ticketNumber), exitCode: result.exitCode, timedOut: false, branch: branchName, projectDir: answerProjectDir },
-              classification,
-              boardApiAdapter(answerProjectConfig),
-            );
-            if (healResult.healed) log(`Auto-heal complete: ${healResult.summary}`);
-          }
-        }
-      } catch (error) {
-        const errorObj = error instanceof Error ? error : new Error(String(error));
-        const classification = classifyError({
-          error: errorObj,
-          ticketId: String(ticketNumber),
-          exitCode: 1,
-          timedOut: false,
-          branch: branchName,
-          projectDir: answerProjectDir,
-        });
-
-        const reason = errorObj.message;
-        log(`Pipeline resume crashed: T-${ticketNumber} -- ${reason} [${classification.action}]`);
-        await patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Resume error: ${reason}`, session_id: null });
-
-        if (classification.action === "auto_heal") {
-          log(`Auto-healing: T-${ticketNumber} -- ${classification.reason}`);
-          const healResult = await executeAutoHeal(
-            { error: errorObj, ticketId: String(ticketNumber), exitCode: 1, timedOut: false, branch: branchName, projectDir: answerProjectDir },
-            classification,
-            boardApiAdapter(answerProjectConfig),
-          );
-          if (healResult.healed) log(`Auto-heal complete: ${healResult.summary}`);
-        }
-      } finally {
-        if (!isMultiProjectMode && slotId !== undefined) await worktreeManager!.release(slotId);
-        runningTickets.delete(ticketNumber);
-      }
-    })();
-
-    return;
-  }
-
-  // POST /api/ship
-  if (method === "POST" && url === "/api/ship") {
-    const apiKey = req.headers["x-pipeline-key"] as string | undefined;
-    if (!apiKey || apiKey !== PIPELINE_SERVER_KEY) {
-      sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Pipeline-Key" });
-      return;
-    }
-
-    let body: Record<string, unknown>;
-    try {
-      const raw = await readBody(req);
-      body = JSON.parse(raw) as Record<string, unknown>;
-    } catch (err) {
-      if (err instanceof Error && err.message === "Request body too large") {
-        sendJson(res, 413, { status: "payload_too_large", message: "Request body too large" });
-      } else {
-        sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
-      }
-      return;
-    }
-
-    const ticketNumber = body.ticket_number;
-    if (typeof ticketNumber !== "number" || !Number.isInteger(ticketNumber) || ticketNumber <= 0) {
-      sendJson(res, 400, { status: "bad_request", message: "Missing or invalid field: ticket_number" });
-      return;
-    }
-
-    const projectId = body.project_id as string | undefined;
-    await handleShip(ticketNumber, res, projectId);
-    return;
-  }
-
-  // POST /api/update — Receive update trigger from Board, write trigger file for Update-Agent
-  if (method === "POST" && url === "/api/update") {
-    const updateSecret = serverConfig?.server.update_secret;
-    const headerSecret = req.headers["x-update-secret"] as string | undefined;
-    if (!updateSecret || !headerSecret || headerSecret !== updateSecret) {
-      sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Update-Secret" });
-      return;
-    }
-
-    let body: Record<string, unknown>;
-    try {
-      const raw = await readBody(req);
-      body = JSON.parse(raw) as Record<string, unknown>;
-    } catch (err) {
-      if (err instanceof Error && err.message === "Request body too large") {
-        sendJson(res, 413, { status: "payload_too_large", message: "Request body too large" });
-      } else {
-        sendJson(res, 400, { status: "bad_request", message: "Invalid JSON body" });
-      }
-      return;
-    }
-
-    const version = body.version as string | undefined;
-    const rolloutId = body.rollout_id as string | undefined;
-    if (!version || !rolloutId) {
-      sendJson(res, 400, { status: "bad_request", message: "Missing required fields: version, rollout_id" });
-      return;
-    }
-
-    // Write trigger file for the host-level Update-Agent
-    try {
-      mkdirSync(TRIGGER_DIR, { recursive: true });
-      const triggerPayload = {
-        schema_version: 1,
-        version,
-        rollout_id: rolloutId,
-        triggered_at: new Date().toISOString(),
-      };
-      writeFileSync(`${TRIGGER_DIR}/update-trigger.json`, JSON.stringify(triggerPayload, null, 2));
-      log(`Update trigger written: version=${version} rollout=${rolloutId}`);
-      sendJson(res, 202, { status: "accepted", message: "Update trigger written for Update-Agent" });
-    } catch (err: unknown) {
-      const reason = err instanceof Error ? err.message : "Unknown error";
-      log(`Failed to write update trigger: ${reason}`);
-      sendJson(res, 500, { status: "error", message: `Failed to write trigger file: ${reason}` });
-    }
-    return;
-  }
-
-  // POST /api/drain — Start graceful drain (authenticated with X-Pipeline-Key)
-  if (method === "POST" && url === "/api/drain") {
-    const apiKey = req.headers["x-pipeline-key"] as string | undefined;
-    if (!apiKey || apiKey !== PIPELINE_SERVER_KEY) {
-      sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Pipeline-Key" });
-      return;
-    }
-
-    const started = drainManager.startDrain({
-      onForceStop: async () => {
-        // Mark all running tickets as interrupted
-        for (const ticketNumber of runningTickets) {
-          log(`Force-drain: marking T-${ticketNumber} as interrupted_by_update`);
-          await patchTicket(ticketNumber, {
-            pipeline_status: "failed",
-            status: "ready_to_develop",
-            summary: "Pipeline interrupted by VPS update — will be re-queued",
-          });
-        }
-      },
-    });
-
-    if (started) {
-      log("Drain started — new runs will be rejected");
-      sendJson(res, 202, { status: "accepted", message: "Drain started", drain: drainManager.getStatus() });
-    } else {
-      sendJson(res, 409, {
-        status: "conflict",
-        message: `Server is already in state: ${drainManager.getState()}`,
-        drain: drainManager.getStatus(),
-      });
-    }
-    return;
-  }
-
-  // POST /api/force-drain — Force immediate drain (authenticated with X-Pipeline-Key)
-  if (method === "POST" && url === "/api/force-drain") {
-    const apiKey = req.headers["x-pipeline-key"] as string | undefined;
-    if (!apiKey || apiKey !== PIPELINE_SERVER_KEY) {
-      sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Pipeline-Key" });
-      return;
-    }
-
-    log("Force-drain requested");
-    await drainManager.forceDrain();
-    sendJson(res, 200, { status: "ok", message: "Force-drain completed", drain: drainManager.getStatus() });
-    return;
   }
 
   // Fallback: 404
