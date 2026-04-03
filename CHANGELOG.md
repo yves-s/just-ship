@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- P2 Client Reports implementation plan — Board-native with token-based client access (`docs/superpowers/plans/2026-04-03-p2-client-reports.md`)
+
 ### Fixed
 - Shopify scripts now load `.env` file for `SHOPIFY_CLI_THEME_TOKEN` — previously the token was only read from shell environment, making `.env`-based setup non-functional
 
