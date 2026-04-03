@@ -242,6 +242,26 @@ Lies die aktuelle `project.json`. Befülle/aktualisiere folgende Felder basieren
 - `hosting: "shopify"`
 - `shopify.store`: Aus `shopify.theme.toml` ([environments.default].store) lesen, falls vorhanden. Sonst aus bestehendem `project.json`. Falls nicht vorhanden → User fragen: "Shopify Store URL? (z.B. `client-store.myshopify.com`)"
 
+**Shopify Token einrichten** (nur bei Shopify-Projekten, nach Store-URL):
+
+1. Prüfe ob `SHOPIFY_CLI_THEME_TOKEN` bereits in `.env` steht:
+   ```bash
+   grep -q 'SHOPIFY_CLI_THEME_TOKEN' .env 2>/dev/null && echo "EXISTS" || echo "MISSING"
+   ```
+2. Falls `MISSING` → User fragen:
+   ```
+   Shopify Theme Access Token? (findest du im Shopify Admin unter Apps → Theme Access)
+   Format: shptka_...
+   Leer lassen um zu überspringen.
+   ```
+3. Falls Token eingegeben:
+   - In `.env` schreiben (erstellen falls nicht vorhanden): `SHOPIFY_CLI_THEME_TOKEN=shptka_...`
+   - Prüfe ob `.env` in `.gitignore` steht. Falls nicht → `.env` zu `.gitignore` hinzufügen
+   - Token validieren: `shopify theme list --store "$STORE" --password "$TOKEN" 2>&1 | head -3`
+   - Bei Erfolg: `✓ Shopify Token validiert`
+   - Bei Fehler: `⚠ Token konnte nicht validiert werden — prüfe ob er korrekt ist. Du kannst ihn später in .env anpassen.`
+4. Falls übersprungen: `ℹ Kein Token hinterlegt. Du kannst später SHOPIFY_CLI_THEME_TOKEN=shptka_... in .env eintragen.`
+
 **Regeln:**
 - Nur Felder setzen die du sicher erkannt hast — nichts raten
 - Bestehende Werte beibehalten wenn sie sinnvoll sind

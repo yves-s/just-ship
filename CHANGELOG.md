@@ -2,7 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+- Shopify scripts now load `.env` file for `SHOPIFY_CLI_THEME_TOKEN` — previously the token was only read from shell environment, making `.env`-based setup non-functional
+
 ### Added
+- Shopify token setup step in `/setup-just-ship` — prompts for Theme Access token, writes to `.env`, validates against store, adds `.env` to `.gitignore`
+- `shopify theme check` (official Liquid linter) integrated into QA pipeline before custom `shopify-qa.sh` analysis
 - Triage Enrichment Phase 2 (`agents/triage-enrichment.md`) — Sonnet with tools enriches tickets with affected files, missing ACs, and Shopify-specific checks
 - Board Comment API helper (`post-comment.sh`) — non-blocking comment posting for triage, preview, and QA results
 - Shopify Environment Check (`shopify-env-check.sh`) — validates CLI, Node, Git, Auth, and project config with 24h cache
