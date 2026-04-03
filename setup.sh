@@ -77,6 +77,65 @@ get_framework_version() {
 
 FRAMEWORK_VERSION=$(get_framework_version)
 
+# --- Helper: print Just Ship ASCII banner in blue ---
+print_banner() {
+  local blue='\033[1;34m'
+  local reset='\033[0m'
+  echo ""
+  printf "${blue}     _ _   _ ____ _____   ____ _   _ ___ ____  ${reset}\n"
+  printf "${blue}    | | | | / ___|_   _| / ___| | | |_ _|  _ \\ ${reset}\n"
+  printf "${blue} _  | | | | \\___ \\ | |   \\___ \\ |_| || || |_) |${reset}\n"
+  printf "${blue}| |_| | |_| |___) || |    ___) |  _  || ||  __/ ${reset}\n"
+  printf "${blue} \\___/ \\___/|____/ |_|   |____/|_| |_|___|_|   ${reset}\n"
+  echo ""
+}
+
+# --- Helper: print changelog between two commits ---
+print_changelog() {
+  local from_hash="$1"
+  local to_hash="$2"
+
+  if [ -z "$from_hash" ] || [ "$from_hash" = "unknown" ] || [ "$from_hash" = "local" ]; then
+    return
+  fi
+
+  cd "$FRAMEWORK_DIR"
+
+  # Verify from_hash exists in git history
+  if ! git rev-parse "${from_hash}" &>/dev/null; then
+    cd "$PROJECT_DIR"
+    return
+  fi
+
+  # Collect feat: and fix: commits, strip conventional commit prefix
+  # e.g. "feat(T-521): add foo" → "add foo" | "fix: bar" → "bar"
+  local feats fixes
+  feats=$(git log "${from_hash}..${to_hash}" --grep="^feat" --format="%h %s" 2>/dev/null \
+    | sed 's/^\([a-f0-9]*\) feat\([^:]*\): /\1  /' \
+    | sed 's/^/  - /' || true)
+  fixes=$(git log "${from_hash}..${to_hash}" --grep="^fix" --format="%h %s" 2>/dev/null \
+    | sed 's/^\([a-f0-9]*\) fix\([^:]*\): /\1  /' \
+    | sed 's/^/  - /' || true)
+
+  cd "$PROJECT_DIR"
+
+  if [ -z "$feats" ] && [ -z "$fixes" ]; then
+    return
+  fi
+
+  echo ""
+  if [ -n "$feats" ]; then
+    echo "Features:"
+    echo "$feats"
+    echo ""
+  fi
+  if [ -n "$fixes" ]; then
+    echo "Fixes:"
+    echo "$fixes"
+    echo ""
+  fi
+}
+
 # --- Helper: background spinner for long-running commands ---
 spin() {
   local msg="$1"
@@ -225,13 +284,19 @@ if [ "$MODE" = "update" ]; then
   fi
 
   # Show current vs new version
+  INSTALLED_VERSION=""
   if [ -f "$VERSION_FILE" ]; then
-    echo "Installed: $(cat "$VERSION_FILE")"
+    INSTALLED_VERSION=$(cat "$VERSION_FILE")
+    echo "Installed: $INSTALLED_VERSION"
   else
     echo "Installed: unknown (no version file)"
   fi
   echo "Available: $FRAMEWORK_VERSION"
-  echo ""
+
+  # --- Changelog ---
+  INSTALLED_HASH=$(echo "$INSTALLED_VERSION" | cut -d' ' -f1 2>/dev/null || echo "")
+  AVAILABLE_HASH=$(echo "$FRAMEWORK_VERSION" | cut -d' ' -f1 2>/dev/null || echo "")
+  print_changelog "$INSTALLED_HASH" "$AVAILABLE_HASH"
 
   # --- Diff preview ---
   CHANGES=0
@@ -558,7 +623,7 @@ if [ "$MODE" = "update" ]; then
     fi
   fi
 
-  echo ""
+  print_banner
   exit 0
 fi
 
@@ -708,4 +773,4 @@ echo ""
 echo "Nächster Schritt:"
 echo "  Öffne Claude Code und führe /setup-just-ship aus"
 echo "  (erkennt Stack, füllt project.json, verbindet Board, installiert Sidekick)"
-echo ""
+print_banner
