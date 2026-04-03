@@ -450,6 +450,7 @@ if [ "$MODE" = "update" ]; then
     echo "  Installing pipeline dependencies..."
     (cd "$PROJECT_DIR/.pipeline" && npm install --production 2>/dev/null)
   fi
+  ensure_gitignore ".pipeline/node_modules" "Pipeline dependencies (auto-installed)"
   echo "  ✓ .pipeline/ (SDK pipeline)"
 
   echo "Updating settings..."
@@ -606,6 +607,7 @@ cp "$FRAMEWORK_DIR/pipeline/lib/"*.ts "$PROJECT_DIR/.pipeline/lib/"
 chmod +x "$PROJECT_DIR/.pipeline/"*.sh 2>/dev/null || true
 echo "  Installing pipeline dependencies..."
 (cd "$PROJECT_DIR/.pipeline" && npm install --production 2>/dev/null)
+ensure_gitignore ".pipeline/node_modules" "Pipeline dependencies (auto-installed)"
 echo "  ✓ .pipeline/ (SDK pipeline)"
 
 # --- Copy skills ---
