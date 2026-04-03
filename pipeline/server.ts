@@ -1,6 +1,5 @@
 import { initSentry, Sentry } from "./lib/sentry.ts";
 initSentry();
-import { timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { execSync } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -18,6 +17,7 @@ import {
 } from "./lib/server-config.ts";
 import { checkBudget } from "./lib/budget.ts";
 import type { PipelineCheckpoint } from "./lib/checkpoint.ts";
+import { toBranchName, log } from "./lib/utils.ts";
 
 // --- Mode detection ---
 const SERVER_CONFIG_PATH = process.env.SERVER_CONFIG_PATH;
@@ -57,17 +57,7 @@ if (isMultiProjectMode) {
 
 const PORT = Number(process.env.PORT ?? serverConfig?.server.port ?? "3001");
 
-// --- Logging (same style as worker.ts) ---
-function log(msg: string) {
-  const ts = new Date().toISOString().replace("T", " ").slice(0, 19);
-  console.log(`[${ts}] ${msg}`);
-}
-
-// --- Timing-safe comparison for auth tokens ---
-function secureCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
-}
+// log() imported from ./lib/utils.ts
 
 // --- In-memory running set (idempotency guard) ---
 const runningTickets = new Set<number>();
@@ -412,8 +402,7 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
 
   log(`Pipeline started: T-${ticketNumber} -- ${title}`);
 
-  const branchSlug = title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").slice(0, 40);
-  const branchName = `${projectConfig.conventions.branch_prefix}${ticketNumber}-${branchSlug}`;
+  const branchName = toBranchName(projectConfig.conventions.branch_prefix, ticketNumber, title);
 
   if (isMultiProjectMode) {
     pipelineState.running = {
@@ -647,20 +636,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   }
   if (allowedOrigin) res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
 
-  // GET /health — unauthenticated, minimal response for load balancer probes
+  // GET /health — no auth
   if (method === "GET" && url === "/health") {
-    sendJson(res, 200, { status: "ok" });
-    return;
-  }
-
-  // GET /api/status — authenticated, full operational details
-  if (method === "GET" && url === "/api/status") {
-    const apiKey = req.headers["x-pipeline-key"] as string | undefined;
-    if (!apiKey || !secureCompare(apiKey, PIPELINE_SERVER_KEY)) {
-      sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Pipeline-Key" });
-      return;
-    }
-
     const lastCompleted = runHistory.filter(r => r.status === "completed").at(-1) ?? null;
     const lastError = runHistory.filter(r => r.status === "failed").at(-1) ?? null;
 
@@ -707,7 +684,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   if (method === "POST" && url === "/api/launch") {
     // Auth check
     const apiKey = req.headers["x-pipeline-key"] as string | undefined;
-    if (!apiKey || !secureCompare(apiKey, PIPELINE_SERVER_KEY)) {
+    if (!apiKey || apiKey !== PIPELINE_SERVER_KEY) {
       sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Pipeline-Key" });
       return;
     }
@@ -744,7 +721,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   if (method === "POST" && url === "/api/events") {
     // Auth check
     const apiKey = req.headers["x-pipeline-key"] as string | undefined;
-    if (!apiKey || !secureCompare(apiKey, PIPELINE_SERVER_KEY)) {
+    if (!apiKey || apiKey !== PIPELINE_SERVER_KEY) {
       sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Pipeline-Key" });
       return;
     }
@@ -788,7 +765,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   // POST /api/answer — Resume paused pipeline with human answer
   if (method === "POST" && url === "/api/answer") {
     const apiKey = req.headers["x-pipeline-key"] as string | undefined;
-    if (!apiKey || !secureCompare(apiKey, PIPELINE_SERVER_KEY)) {
+    if (!apiKey || apiKey !== PIPELINE_SERVER_KEY) {
       sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Pipeline-Key" });
       return;
     }
@@ -876,8 +853,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 
     log(`Pipeline resuming: T-${ticketNumber} -- answer received`);
 
-    const branchSlug = title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").slice(0, 40);
-    const branchName = `${answerProjectConfig.conventions.branch_prefix}${ticketNumber}-${branchSlug}`;
+    const branchName = toBranchName(answerProjectConfig.conventions.branch_prefix, ticketNumber, title);
 
     (async () => {
       let slotId: number | undefined;
@@ -973,7 +949,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   // POST /api/ship
   if (method === "POST" && url === "/api/ship") {
     const apiKey = req.headers["x-pipeline-key"] as string | undefined;
-    if (!apiKey || !secureCompare(apiKey, PIPELINE_SERVER_KEY)) {
+    if (!apiKey || apiKey !== PIPELINE_SERVER_KEY) {
       sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Pipeline-Key" });
       return;
     }
@@ -1006,7 +982,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   if (method === "POST" && url === "/api/update") {
     const updateSecret = serverConfig?.server.update_secret;
     const headerSecret = req.headers["x-update-secret"] as string | undefined;
-    if (!updateSecret || !headerSecret || !secureCompare(headerSecret, updateSecret)) {
+    if (!updateSecret || !headerSecret || headerSecret !== updateSecret) {
       sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Update-Secret" });
       return;
     }
@@ -1054,7 +1030,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   // POST /api/drain — Start graceful drain (authenticated with X-Pipeline-Key)
   if (method === "POST" && url === "/api/drain") {
     const apiKey = req.headers["x-pipeline-key"] as string | undefined;
-    if (!apiKey || !secureCompare(apiKey, PIPELINE_SERVER_KEY)) {
+    if (!apiKey || apiKey !== PIPELINE_SERVER_KEY) {
       sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Pipeline-Key" });
       return;
     }
@@ -1089,7 +1065,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   // POST /api/force-drain — Force immediate drain (authenticated with X-Pipeline-Key)
   if (method === "POST" && url === "/api/force-drain") {
     const apiKey = req.headers["x-pipeline-key"] as string | undefined;
-    if (!apiKey || !secureCompare(apiKey, PIPELINE_SERVER_KEY)) {
+    if (!apiKey || apiKey !== PIPELINE_SERVER_KEY) {
       sendJson(res, 401, { status: "unauthorized", message: "Invalid or missing X-Pipeline-Key" });
       return;
     }

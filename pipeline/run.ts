@@ -1,6 +1,6 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
-import { execSync, spawn } from "node:child_process";
+import { execSync } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { loadProjectConfig, parseCliArgs, type TicketArgs } from "./lib/config.ts";
@@ -13,20 +13,8 @@ import { loadSkills, type AgentRole } from "./lib/load-skills.ts";
 import { Sentry } from "./lib/sentry.ts";
 import { updateCheckpoint, clearCheckpoint, type PipelineCheckpoint } from "./lib/checkpoint.ts";
 import { sanitizeBranchName } from "./lib/sanitize.ts";
-
-// --- Stderr-capturing spawn wrapper for Claude Code subprocesses ---
-function makeSpawn(logPrefix: string) {
-  return (spawnOptions: { command: string; args: string[]; cwd?: string; env?: NodeJS.ProcessEnv; signal?: AbortSignal }) => {
-    const { command, args, cwd, env, signal } = spawnOptions;
-    const child = spawn(command, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"], signal } as Parameters<typeof spawn>[2]);
-    child.stderr?.on("data", (chunk: Buffer) => {
-      for (const line of chunk.toString().split("\n")) {
-        if (line.trim()) console.error(`${logPrefix} [stderr] ${line}`);
-      }
-    });
-    return child;
-  };
-}
+import { toBranchName } from "./lib/utils.ts";
+import { makeSpawn } from "./lib/spawn.ts";
 
 // --- Exported pipeline function (used by worker.ts) ---
 export interface PipelineOptions {
@@ -181,15 +169,11 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
   if (opts.branchName) {
     branchName = opts.branchName;
   } else {
-    const branchSlug = ticket.title
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "-")
-      .replace(/-+/g, "-")
-      .slice(0, 40);
-    branchName = `${config.conventions.branch_prefix}${ticket.ticketId}-${branchSlug}`;
+    branchName = toBranchName(config.conventions.branch_prefix, ticket.ticketId, ticket.title);
   }
 
-  // Validate branch name before any shell interpolation
+  // Validate branch name before any shell interpolation (toBranchName already validates,
+  // but branchName may come from opts.branchName which is external input)
   sanitizeBranchName(branchName);
 
   // workDir: use provided worktree directory, or fall back to projectDir (CLI mode)
@@ -711,15 +695,11 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
   if (opts.branchName) {
     branchName = opts.branchName;
   } else {
-    const branchSlug = ticket.title
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "-")
-      .replace(/-+/g, "-")
-      .slice(0, 40);
-    branchName = `${config.conventions.branch_prefix}${ticket.ticketId}-${branchSlug}`;
+    branchName = toBranchName(config.conventions.branch_prefix, ticket.ticketId, ticket.title);
   }
 
-  // Validate branch name before any shell interpolation
+  // Validate branch name before any shell interpolation (toBranchName already validates,
+  // but branchName may come from opts.branchName which is external input)
   sanitizeBranchName(branchName);
 
   // workDir: use provided worktree directory, or fall back to projectDir (CLI mode)

@@ -21,6 +21,8 @@ interface VercelDeploymentMeta {
   [key: string]: unknown;
 }
 
+import { sleep } from "./utils.ts";
+
 interface VercelDeployment {
   uid: string;
   url: string;
@@ -32,9 +34,7 @@ interface VercelDeploymentsResponse {
   deployments: VercelDeployment[];
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+// sleep() imported from ./utils.ts
 
 /**
  * Wait for a Vercel preview deployment matching the given branch to become READY.

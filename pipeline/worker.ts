@@ -3,8 +3,8 @@ initSentry();
 import { resolve } from "node:path";
 import { mkdirSync } from "node:fs";
 import { execSync } from "node:child_process";
-import { sanitizeBranchName } from "./lib/sanitize.ts";
 import { executePipeline } from "./run.ts";
+import { toBranchName, sleep, log } from "./lib/utils.ts";
 import { classifyError } from "./lib/error-handler.ts";
 import { withWatchdog, saveWorktreeWIP, sendAgentFailedEvent } from "./lib/watchdog.ts";
 import { WorktreeManager } from "./lib/worktree-manager.ts";
@@ -42,11 +42,7 @@ const config = loadProjectConfig(PROJECT_DIR);
 const MAX_WORKERS = config.maxWorkers;
 const worktreeManager = new WorktreeManager(PROJECT_DIR, MAX_WORKERS);
 
-// --- Logging ---
-function log(msg: string) {
-  const ts = new Date().toISOString().replace("T", " ").slice(0, 19);
-  console.log(`[${ts}] ${msg}`);
-}
+// log() imported from ./lib/utils.ts
 
 // --- Supabase helpers ---
 async function supabaseGet<T>(path: string): Promise<T | null> {
@@ -210,7 +206,7 @@ log(`  Poll-Interval: ${POLL_INTERVAL / 1000}s`);
 log(`  Max Workers: ${MAX_WORKERS}`);
 log("==========================================");
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+// sleep() imported from ./lib/utils.ts
 
 // Wrap in async IIFE — top-level await not supported in CJS
 (async () => {
@@ -253,13 +249,7 @@ log("Cleanup done.");
 const slotFailures = new Map<number, number>();
 
 async function runWorkerSlot(ticket: Ticket): Promise<void> {
-  const branchSlug = ticket.title
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 40);
-  const branchName = `${config.conventions.branch_prefix}${ticket.number}-${branchSlug}`;
-  sanitizeBranchName(branchName);
+  const branchName = toBranchName(config.conventions.branch_prefix, ticket.number, ticket.title);
 
   let slotId: number | undefined;
   const runAbortController = new AbortController();
