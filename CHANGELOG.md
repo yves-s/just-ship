@@ -24,6 +24,7 @@
 - Shopify-specific fix guidance in QA fix loop
 
 ### Changed
+- `/just-ship-vps` skill updated for GHCR image-based deploys (docker pull instead of docker build)
 - VPS deploys now use pre-built Docker images from GHCR instead of git-pull + build on server
 - `docker-compose.yml` references `ghcr.io/yves-s/just-ship/pipeline` image instead of local build context
 - VPS Updater (`just-ship-updater.sh`) uses `docker pull` instead of `git fetch` + `docker build`
