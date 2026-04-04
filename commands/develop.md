@@ -19,11 +19,12 @@ Lies `project.json` für Konventionen.
 
 **Pipeline (optional):** Lies `project.json` und bestimme den Pipeline-Modus:
 
-1. **Board API** (bevorzugt): Falls `pipeline.workspace_id` gesetzt → Credentials auflösen:
+1. **Board API** (bevorzugt): Falls `pipeline.workspace_id` gesetzt → `board-api.sh` verwenden:
    ```bash
-   WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --id <workspace_id>)
+   bash .claude/scripts/board-api.sh get "tickets/{N}"
+   bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"status": "in_progress"}'
    ```
-   Aus dem JSON-Output `board_url` und `api_key` verwenden. `pipeline.project_id` aus `project.json`.
+   Credentials werden intern aufgelöst. `pipeline.project_id` aus `project.json`.
 2. **Legacy Supabase MCP**: Falls nur `project_id` gesetzt (ohne `workspace_id`), und `project_id` hat keine Bindestriche → `execute_sql` verwenden, Warnung ausgeben: "Kein Board API konfiguriert. Nutze Legacy Supabase MCP. Fuehre /setup-just-ship aus um zu upgraden."
 3. **Standalone**: Falls weder `workspace_id` noch `project_id` konfiguriert → Alle Pipeline-Schritte überspringen. Ticket-Infos werden per `$ARGUMENTS` übergeben.
 
@@ -46,16 +47,14 @@ Falls kein Argument: Suche nach dem nächsten Ticket mit Status "ready_to_develo
 
 **Bei übergebener Ticket-ID (z.B. `T-162`):**
 1. Nummer extrahieren: `T-162` → `162`
-2. Via Bash curl:
+2. Via board-api.sh:
    ```bash
-   curl -s -H "X-Pipeline-Key: {api_key}" \
-     "{board_url}/api/tickets/162"
+   bash .claude/scripts/board-api.sh get "tickets/162"
    ```
 
 **Bei fehlendem Argument (Suche nach "ready_to_develop"):**
 ```bash
-curl -s -H "X-Pipeline-Key: {api_key}" \
-  "{board_url}/api/tickets?status=ready_to_develop&project={pipeline.project_id}"
+bash .claude/scripts/board-api.sh get "tickets?status=ready_to_develop&project={pipeline.project_id}"
 ```
 Nimm das erste Ticket aus der Response (`data[0]` oder `data.tickets[0]`).
 
@@ -98,12 +97,9 @@ Zeige kurz an: `▶ Ticket T-{N}: {title}` — dann direkt weiter, NICHT auf Bes
 
 **3a) Status updaten + Projekt zuordnen:**
 
-**Board API (bevorzugt):** Via Bash curl:
+**Board API (bevorzugt):** Via board-api.sh:
 ```bash
-curl -s -X PATCH -H "X-Pipeline-Key: {api_key}" \
-  -H "Content-Type: application/json" \
-  -d '{"status": "in_progress", "branch": "{branch}", "project_id": "{pipeline.project_id}"}' \
-  "{board_url}/api/tickets/{N}"
+bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"status": "in_progress", "branch": "{branch}", "project_id": "{pipeline.project_id}"}'
 ```
 Hinweis: `branch` wird mitgesendet damit das Board anzeigt welcher Branch aktiv ist. `project_id` ordnet das Ticket dem Projekt zu falls noch nicht geschehen.
 
@@ -403,10 +399,7 @@ Baue daraus einen Markdown-String für das `summary`-Feld:
 
 **Board API (bevorzugt):**
 ```bash
-curl -s -X PATCH -H "X-Pipeline-Key: {api_key}" \
-  -H "Content-Type: application/json" \
-  -d '{"summary": "{summary_markdown}"}' \
-  "{board_url}/api/tickets/{N}"
+bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"summary": "{summary_markdown}"}'
 ```
 
 **Legacy Supabase MCP (Fallback):**
@@ -425,10 +418,7 @@ REVIEW_URL=$(gh pr view --json url -q .url 2>/dev/null || echo "")
 
 **Board API (bevorzugt):**
 ```bash
-curl -s -X PATCH -H "X-Pipeline-Key: {api_key}" \
-  -H "Content-Type: application/json" \
-  -d '{"status": "in_review", "review_url": "'"$REVIEW_URL"'"}' \
-  "{board_url}/api/tickets/{N}"
+bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"status": "in_review", "review_url": "'"$REVIEW_URL"'"}'
 ```
 
 **Legacy Supabase MCP (Fallback):**
@@ -479,10 +469,7 @@ Falls eine URL gefunden wurde (`$PREVIEW_URL` nicht leer), ins Ticket schreiben:
 **Board API:**
 ```bash
 if [ -n "$PREVIEW_URL" ]; then
-  curl -s -X PATCH -H "X-Pipeline-Key: {api_key}" \
-    -H "Content-Type: application/json" \
-    -d '{"preview_url": "'"$PREVIEW_URL"'"}' \
-    "{board_url}/api/tickets/{N}"
+  bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"preview_url": "'"$PREVIEW_URL"'"}'
 fi
 ```
 

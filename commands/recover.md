@@ -11,11 +11,12 @@ Erkennt ob ein Pipeline-Ticket steckengeblieben ist und recovered es automatisch
 
 Lies `project.json`. Bestimme den Pipeline-Modus:
 
-1. **Board API** (bevorzugt): Falls `pipeline.workspace_id` gesetzt -> Credentials aufloesen:
+1. **Board API** (bevorzugt): Falls `pipeline.workspace_id` gesetzt -> `board-api.sh` verwenden:
    ```bash
-   WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --id <workspace_id>)
+   bash .claude/scripts/board-api.sh get "tickets/{N}"
+   bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"status": "ready_to_develop"}'
    ```
-   Aus dem JSON-Output `board_url` und `api_key` verwenden. `pipeline.project_id` aus `project.json`.
+   Credentials werden intern aufgelöst. `pipeline.project_id` aus `project.json`.
 2. **Standalone**: Falls `pipeline.workspace_id` NICHT gesetzt -> Nur lokales Recovery, keine Board-Updates.
 
 ## WICHTIGSTE REGEL
@@ -49,8 +50,7 @@ Falls `$ACTIVE` == `{N}`: Abbruch mit Meldung "T-{N} wird gerade aktiv bearbeite
 
 Ticket vom Board holen:
 ```bash
-curl -s -H "X-Pipeline-Key: {api_key}" \
-  "{board_url}/api/tickets/{N}"
+bash .claude/scripts/board-api.sh get "tickets/{N}"
 ```
 
 `status` und `pipeline_status` aus der Response auslesen.
@@ -181,10 +181,7 @@ rm -f .claude/.active-ticket
 **3. Ticket zuruecksetzen (falls Pipeline konfiguriert):**
 
 ```bash
-curl -s -X PATCH -H "X-Pipeline-Key: {api_key}" \
-  -H "Content-Type: application/json" \
-  -d '{"status": "ready_to_develop", "pipeline_status": null}' \
-  "{board_url}/api/tickets/{N}"
+bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"status": "ready_to_develop", "pipeline_status": null}'
 ```
 
 Beide Felder muessen zurueckgesetzt werden: `status` auf `ready_to_develop` UND `pipeline_status` auf `null`.

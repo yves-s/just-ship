@@ -15,13 +15,11 @@ Read-only Uebersicht ueber den lokalen Zustand des Repos. Keine Aktionen, nur An
 
 Lies `project.json` fuer Projekt-Name und Pipeline-Config.
 
-**Pipeline (optional):** Falls `pipeline.workspace_id` gesetzt → Credentials aufloesen:
+**Pipeline (optional):** Falls `pipeline.workspace_id` gesetzt → `board-api.sh` verwenden:
 ```bash
-WS_ID=$(node -e "process.stdout.write(require('./project.json').pipeline?.workspace_id || '')")
-WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --id "$WS_ID")
-BOARD_URL=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).board_url)")
-API_KEY=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).api_key)")
+bash .claude/scripts/board-api.sh get "tickets/{N}"
 ```
+Credentials werden intern aufgelöst.
 
 Falls `pipeline.workspace_id` NICHT gesetzt: Board-Abfrage komplett ueberspringen, nur lokale Daten anzeigen.
 
@@ -53,7 +51,7 @@ Ticket-Nummern aus Branch-Namen extrahieren (Pattern: `T-{N}` oder `{N}-` am Anf
 
 Fuer jede gefundene Ticket-Nummer:
 ```bash
-curl -s -H "X-Pipeline-Key: {api_key}" "{board_url}/api/tickets/{N}"
+bash .claude/scripts/board-api.sh get "tickets/{N}"
 ```
 
 Status-Feld (`status`) aus der Response extrahieren.

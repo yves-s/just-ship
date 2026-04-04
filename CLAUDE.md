@@ -74,23 +74,26 @@ Falls Pipeline konfiguriert ist, sind Status-Updates **PFLICHT**:
 | `/develop` — Ticket implementieren | **`in_progress`** | Sofort nach Ticket-Auswahl, VOR dem Coding |
 | `/ship` — PR mergen & abschließen | **`done`** | Nach erfolgreichem Merge |
 
-**Board-API-Credentials auflösen** — bei JEDEM API-Call (Tickets lesen, erstellen, updaten, Status ändern) dieses Snippet verwenden:
+**Board-API-Aufrufe** — IMMER `board-api.sh` verwenden (versteckt Credentials im Terminal-Output):
 ```bash
-# 1. workspace_id aus project.json lesen
-WS_ID=$(node -e "process.stdout.write(require('./project.json').pipeline?.workspace_id || '')")
-# 2. Credentials via read-workspace auflösen (IMMER --id, NIEMALS --slug)
-WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --id "$WS_ID")
-# 3. board_url und api_key aus dem JSON extrahieren
-BOARD_URL=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).board_url)")
-API_KEY=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).api_key)")
-# 4. API-Call
-curl -s -H "X-Pipeline-Key: $API_KEY" "$BOARD_URL/api/tickets/{N}"
+# GET request
+bash .claude/scripts/board-api.sh get "tickets/{N}"
+
+# GET with query params
+bash .claude/scripts/board-api.sh get "tickets?status=ready_to_develop&project={UUID}"
+
+# PATCH request
+bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"status": "in_progress"}'
+
+# POST request
+bash .claude/scripts/board-api.sh post tickets '{"title": "...", "body": "..."}'
 ```
 
 **WICHTIG:**
-- `api_key` und `board_url` stehen **NICHT** in `project.json` — sie liegen in `~/.just-ship/config.json`
+- **NIEMALS** direkt `curl` mit `X-Pipeline-Key` Header verwenden — das zeigt den API-Key im Terminal
 - **NIEMALS** `cat ~/.just-ship/config.json` ausgeben oder manuell nach Workspaces suchen
-- **IMMER** `read-workspace --id` mit der UUID aus `project.json` verwenden, **NIEMALS** `--slug`
+- **NIEMALS** `write-config.sh read-workspace` in inline Bash aufrufen — das gibt Credentials auf stdout aus
+- `board-api.sh` löst Credentials intern auf und gibt nur die API-Response zurück
 
 **Überspringe KEINEN dieser Schritte.** Falls ein Update fehlschlägt, versuche es erneut oder informiere den User.
 
