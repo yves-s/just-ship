@@ -3,6 +3,7 @@ initSentry();
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { execSync } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { loadProjectConfig, type ProjectConfig } from "./lib/config.ts";
 import { classifyError, executeAutoHeal } from "./lib/error-handler.ts";
 import { executePipeline, resumePipeline } from "./run.ts";
@@ -191,7 +192,7 @@ function readBody(req: IncomingMessage, maxBytes = 1_048_576): Promise<string> {
 }
 
 // --- Launch logic (shared between /api/launch and /api/events) ---
-async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId?: string): Promise<void> {
+async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId?: string, launchBody?: Record<string, unknown>): Promise<void> {
   // 0. Drain guard — reject new runs when draining/drained
   if (!drainManager.canAcceptWork()) {
     res.setHeader("Retry-After", "60");
@@ -211,6 +212,172 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
       ticket_number: ticketNumber,
       message: "Ticket is already being processed by this server",
     });
+    return;
+  }
+
+  // --- SaaS ephemeral run mode ---
+  // If the launch payload includes repo_url, this is a SaaS run:
+  // clone the repo to a temp dir, run the pipeline, send a callback, and clean up.
+  const repoUrl = launchBody?.repo_url as string | undefined;
+  if (repoUrl) {
+    const githubToken = launchBody!.github_token as string | undefined;
+    const runId = launchBody!.run_id as string;
+    const runToken = launchBody!.run_token as string;
+    const callbackUrl = launchBody!.callback_url as string;
+    const projectConfig2 = launchBody!.project_config as Record<string, unknown> | undefined;
+
+    if (!runId || !runToken || !callbackUrl) {
+      sendJson(res, 400, {
+        status: "bad_request",
+        ticket_number: ticketNumber,
+        message: "SaaS launch requires: run_id, run_token, callback_url",
+      });
+      return;
+    }
+
+    // Reserve ticket in-memory
+    runningTickets.add(ticketNumber);
+
+    // Respond immediately
+    sendJson(res, 202, {
+      status: "queued",
+      ticket_number: ticketNumber,
+      run_id: runId,
+      message: "SaaS pipeline started",
+    });
+
+    // Run SaaS pipeline in background
+    (async () => {
+      const startTime = Date.now();
+      const tempDir = `/tmp/run-${runId}`;
+      try {
+        // 1. Clone repo
+        const repoUrlWithoutProtocol = repoUrl.replace(/^https?:\/\//, "");
+        const cloneUrl = githubToken
+          ? `https://x-access-token:${githubToken}@${repoUrlWithoutProtocol}`
+          : repoUrl;
+        log(`[SaaS] Cloning ${repoUrlWithoutProtocol} to ${tempDir}`);
+        execSync(`git clone --depth 1 "${cloneUrl}" "${tempDir}"`, {
+          stdio: "pipe",
+          timeout: 120_000,
+        });
+
+        // 2. Write temporary project.json from project_config
+        if (projectConfig2) {
+          const pipelineCfg = (projectConfig2.pipeline ?? {}) as Record<string, unknown>;
+          const stackCfg = (projectConfig2.stack ?? {}) as Record<string, unknown>;
+          const tempProjectJson = {
+            name: projectConfig2.project_name ?? "saas-project",
+            pipeline: { ...pipelineCfg },
+            stack: { ...stackCfg },
+          };
+          writeFileSync(`${tempDir}/project.json`, JSON.stringify(tempProjectJson, null, 2));
+        }
+
+        // 3. Install framework files via setup.sh --update
+        const setupScript = `${tempDir}/setup.sh`;
+        try {
+          execSync(`bash "${setupScript}" --update`, {
+            cwd: tempDir,
+            stdio: "pipe",
+            timeout: 60_000,
+          });
+        } catch (setupErr) {
+          // setup.sh may not exist in the repo yet — non-fatal for SaaS
+          log(`[SaaS] setup.sh --update failed (non-fatal): ${setupErr instanceof Error ? setupErr.message : String(setupErr)}`);
+        }
+
+        // 4. Fetch ticket from Board API
+        const ticket = await fetchTicket(ticketNumber);
+        const title = (ticket?.title as string) ?? "Untitled";
+        const ticketBody = (ticket?.body as string) ?? "No description provided";
+        const tags = Array.isArray(ticket?.tags) ? (ticket.tags as string[]).join(",") : "";
+
+        log(`[SaaS] Pipeline started: T-${ticketNumber} -- ${title}`);
+
+        // 5. Run pipeline
+        const result = await withWatchdog(
+          executePipeline({
+            projectDir: tempDir,
+            ticket: { ticketId: String(ticketNumber), title, description: ticketBody, labels: tags },
+          }),
+          `T-${ticketNumber} SaaS executePipeline`,
+        );
+
+        log(`[SaaS] Pipeline finished: T-${ticketNumber} -> ${result.status}`);
+
+        // 6. Send callback
+        try {
+          await fetch(callbackUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Run-Token": runToken,
+            },
+            body: JSON.stringify({
+              run_id: runId,
+              status: result.status === "completed" ? "completed" : "failed",
+              pr_url: result.branch ? `check PR from branch ${result.branch}` : undefined,
+              tokens_used: {
+                input: result.tokens?.input ?? 0,
+                output: result.tokens?.output ?? 0,
+              },
+              duration_seconds: Math.floor((Date.now() - startTime) / 1000),
+              error_message: result.failureReason,
+            }),
+            signal: AbortSignal.timeout(15_000),
+          });
+        } catch (cbErr) {
+          log(`[SaaS] Callback failed: ${cbErr instanceof Error ? cbErr.message : String(cbErr)}`);
+        }
+
+        recordRun({
+          ticketNumber,
+          status: result.status === "completed" ? "completed" : "failed",
+          error: result.failureReason,
+          at: new Date().toISOString(),
+          durationMs: Date.now() - startTime,
+        });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        log(`[SaaS] Pipeline crashed: T-${ticketNumber} -- ${reason}`);
+        Sentry.captureException(error);
+
+        // Best-effort callback on crash
+        try {
+          await fetch(callbackUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Run-Token": runToken,
+            },
+            body: JSON.stringify({
+              run_id: runId,
+              status: "failed",
+              duration_seconds: Math.floor((Date.now() - startTime) / 1000),
+              error_message: reason,
+            }),
+            signal: AbortSignal.timeout(15_000),
+          });
+        } catch { /* Best-effort: callback delivery on crash is non-critical */ }
+
+        recordRun({
+          ticketNumber,
+          status: "failed",
+          error: reason,
+          at: new Date().toISOString(),
+          durationMs: Date.now() - startTime,
+        });
+      } finally {
+        // Cleanup temp dir
+        try {
+          await rm(tempDir, { recursive: true, force: true });
+          log(`[SaaS] Cleaned up ${tempDir}`);
+        } catch { /* Best-effort: temp dir cleanup failure is non-critical */ }
+        runningTickets.delete(ticketNumber);
+      }
+    })();
+
     return;
   }
 
@@ -714,7 +881,7 @@ async function handleLaunchRoute(req: IncomingMessage, res: ServerResponse): Pro
   if (ticketNumber === null) return;
 
   const projectId = body.project_id as string | undefined;
-  await handleLaunch(ticketNumber, res, projectId);
+  await handleLaunch(ticketNumber, res, projectId, body);
 }
 
 async function handleEventsRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -735,7 +902,7 @@ async function handleEventsRoute(req: IncomingMessage, res: ServerResponse): Pro
   if (ticketNumber === null) return;
 
   const projectId = body.project_id as string | undefined;
-  await handleLaunch(ticketNumber, res, projectId);
+  await handleLaunch(ticketNumber, res, projectId, body);
 }
 
 async function handleAnswerRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {

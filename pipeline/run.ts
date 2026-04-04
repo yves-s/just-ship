@@ -34,6 +34,7 @@ export interface PipelineResult {
   project: string;
   failureReason?: string;
   sessionId?: string;
+  tokens?: { input: number; output: number; estimatedCostUsd: number };
 }
 
 // --- Triage: analyze ticket quality before orchestrator ---
@@ -651,10 +652,12 @@ Branch ist bereits erstellt: ${branchName}`;
     }
   }
 
+  // Collect token totals (always, so they can be returned to caller)
+  const totals = eventHooks?.getTotals();
+
   // Post pipeline summary with aggregated token costs
   if (hasPipeline && eventHooks && exitCode === 0) {
-    const totals = eventHooks.getTotals();
-    if (totals.inputTokens > 0) {
+    if (totals && totals.inputTokens > 0) {
       await postPipelineSummary(eventConfig, totals);
     }
   }
@@ -671,6 +674,9 @@ Branch ist bereits erstellt: ${branchName}`;
     project: config.name,
     failureReason,
     sessionId,
+    tokens: totals
+      ? { input: totals.inputTokens, output: totals.outputTokens, estimatedCostUsd: totals.estimatedCostUsd }
+      : undefined,
   };
 }
 
