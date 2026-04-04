@@ -91,8 +91,7 @@ async function runClaudeFix(
     options: {
       cwd: workDir,
       model: "sonnet",
-      permissionMode: "bypassPermissions",
-      allowDangerouslySkipPermissions: true,
+      permissionMode: "auto",
       allowedTools: ["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
       maxTurns: 30,
       env: { ...process.env, ...(env ?? {}) },

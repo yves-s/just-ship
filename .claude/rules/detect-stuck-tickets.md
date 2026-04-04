@@ -1,35 +1,18 @@
-At the start of each session, on your first interaction with the user, check for stuck pipeline tickets:
+At the start of each session, on your first interaction with the user, check for stuck pipeline tickets.
 
-1. Check if `.worktrees/` directory exists and contains subdirectories:
-   ```bash
-   ls -d .worktrees/T-*/ 2>/dev/null
-   ```
+**IMPORTANT: This rule is READ-ONLY. Do NOT run any bash commands (no `rm`, no `curl`, no cleanup). Only use the Read and Glob tools to check files, then report findings as text.**
 
-2. If worktrees exist, check if each one has an active agent process:
-   ```bash
-   ACTIVE_TICKET=$(cat .claude/.active-ticket 2>/dev/null || echo "")
-   ```
+1. Use Glob to check if `.worktrees/T-*/` directories exist. If none exist, stop here silently.
 
-3. For each worktree where the ticket number does NOT match `.active-ticket` (no agent actively working on it):
-   - Extract ticket number from directory name (`.worktrees/T-{N}` -> `{N}`)
-   - Resolve Board API credentials (workspace_id from project.json -> write-config.sh)
-   - Query ticket status with 3-second timeout:
-     ```bash
-     curl -s --max-time 3 -H "X-Pipeline-Key: {api_key}" "{board_url}/api/tickets/{N}"
-     ```
-   - Check both `status` and `pipeline_status` fields
+2. Use Read to check `.claude/.active-ticket` (if it exists) to see which ticket is currently being worked on.
 
-4. A ticket is "stuck" when:
-   - `status` is `in_progress` AND
-   - `pipeline_status` is `running`, `crashed`, or `null` AND
-   - No active agent is working on it (not in `.active-ticket`)
+3. Use Read to check `project.json` for `pipeline.workspace_id`. If no pipeline config exists, stop here silently.
 
-5. If stuck tickets are found, inform the user:
-   > T-{N} appears stuck on `in_progress` with an orphaned worktree. Run `/recover T-{N}` to resume or restart.
+4. For each worktree where the ticket number does NOT match `.active-ticket`:
+   - Note the ticket number but do NOT query the Board API (no curl, no network calls at session start)
+   - Simply inform the user that an orphaned worktree exists
 
-6. If `pipeline_status` is `paused`: do NOT flag as stuck. Instead:
-   > T-{N} is paused waiting for input.
+5. If orphaned worktrees are found, inform the user:
+   > T-{N} has an orphaned worktree in `.worktrees/`. Run `/recover T-{N}` to resume or clean up.
 
-7. If the Board is unreachable (curl timeout or no pipeline config): skip detection silently.
-
-Do NOT automatically run recovery. Only inform the user.
+6. Do NOT automatically run recovery. Do NOT delete files. Do NOT run any cleanup commands. Only inform the user.

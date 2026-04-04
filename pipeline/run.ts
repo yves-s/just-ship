@@ -103,8 +103,7 @@ Labels: ${ticket.labels}`;
       options: {
         cwd: workDir,
         model: "haiku",
-        permissionMode: "bypassPermissions",
-        allowDangerouslySkipPermissions: true,
+        permissionMode: "default",
         allowedTools: [],
         maxTurns: 1,
         env: { ...process.env, ...(env ?? {}) },
@@ -296,8 +295,7 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
             options: {
               cwd: workDir,
               model: "sonnet",
-              permissionMode: "bypassPermissions",
-              allowDangerouslySkipPermissions: true,
+              permissionMode: "default",
               allowedTools: ["Grep", "Glob", "Read"],
               maxTurns: 3,
               env: { ...process.env, ...(opts.env ?? {}) },
@@ -461,8 +459,7 @@ Branch ist bereits erstellt: ${branchName}`;
       options: {
         cwd: workDir,
         model: "opus",
-        permissionMode: "bypassPermissions",
-        allowDangerouslySkipPermissions: true,
+        permissionMode: "auto",
         allowedTools: ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent"],
         agents: filteredAgents,
         hooks,
@@ -687,6 +684,7 @@ export interface ResumeOptions {
   answer: string;
   abortSignal?: AbortSignal;
   timeoutMs?: number;
+  env?: Record<string, string>;
 }
 
 export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResult> {
@@ -799,8 +797,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
       options: {
         cwd: workDir,
         model: "opus",
-        permissionMode: "bypassPermissions",
-        allowDangerouslySkipPermissions: true,
+        permissionMode: "auto",
         allowedTools: ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent"],
         agents: filteredAgents,
         hooks,
