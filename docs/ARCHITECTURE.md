@@ -164,6 +164,7 @@ just-ship/                         # Framework repository
 +-- .claude/
 |   +-- hooks/                     # Event streaming hooks
 |   |   +-- detect-ticket.sh       # SessionStart: extract ticket from branch
+|   |   +-- detect-ticket-post.sh  # PostToolUse: re-detect ticket after branch changes
 |   |   +-- on-agent-start.sh      # SubagentStart: send event to Board
 |   |   +-- on-agent-stop.sh       # SubagentStop: send event to Board
 |   |   +-- on-session-end.sh      # SessionEnd: send completion event
@@ -898,18 +899,26 @@ Claude Code hooks are shell scripts triggered by lifecycle events. The framework
 | Hook | Script | Purpose |
 |------|--------|---------|
 | `SessionStart` | `detect-ticket.sh` | Extract ticket number from branch name, set `TICKET_NUMBER` env var |
+| `PostToolUse` | `detect-ticket-post.sh` | Re-detect ticket number after Bash commands (catches mid-session branch changes) |
 | `SubagentStart` | `on-agent-start.sh` | Send `agent_started` event to Just Ship Board |
 | `SubagentStop` | `on-agent-stop.sh` | Send `completed` event to Just Ship Board |
 | `SessionEnd` | `on-session-end.sh` | Send session completion event |
 
 ### Ticket Detection Flow
 
-On session start, `detect-ticket.sh`:
+Ticket detection is fully hook-driven. Claude Code never writes `.active-ticket` directly.
 
+**On session start**, `detect-ticket.sh`:
 1. Reads the current git branch name.
-2. Extracts the ticket number (e.g., `feature/287-foo` yields `287`).
+2. Extracts the ticket number (e.g., `feature/T-551-foo` yields `551`).
 3. Writes it to `.claude/.active-ticket` and `$CLAUDE_ENV_FILE`.
 4. Sends an `agent_started` event for the orchestrator.
+
+**After every Bash command**, `detect-ticket-post.sh`:
+1. Reads the current git branch name.
+2. Extracts the ticket number (supports both `T-551-foo` and legacy `551-foo` formats).
+3. Writes to `.active-ticket` only if the value changed.
+4. Catches branch changes that happen mid-session (e.g., `/develop` creating a new branch).
 
 ---
 

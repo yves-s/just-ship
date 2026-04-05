@@ -110,10 +110,7 @@ Ausgabe: `Resume — T-{N} hat vorhandene Arbeit, setze fort`
 
 **1. Infrastruktur re-etablieren:**
 
-Active-Ticket setzen — nutze das **Write-Tool** (NICHT Bash `echo`/`printf`/`>`):
-```
-Write(file_path=".claude/.active-ticket", content="{N}")
-```
+> **Note:** `.active-ticket` wird automatisch vom PostToolUse-Hook (`detect-ticket-post.sh`) gesetzt, sobald der erste Bash-Befehl im Worktree läuft. Kein manuelles Schreiben nötig.
 
 Orchestrator-Event senden:
 ```bash

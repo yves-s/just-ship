@@ -25,8 +25,8 @@ fi
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
 [ -z "$BRANCH" ] && exit 0
 
-# Extract ticket number from branch: feature/287-foo → 287, fix/42-bar → 42
-TICKET_NUMBER=$(echo "$BRANCH" | sed -n 's|^[a-z]*/\([0-9]*\)-.*|\1|p')
+# Extract ticket number from branch: feature/T-551-foo → 551, fix/42-bar → 42
+TICKET_NUMBER=$(echo "$BRANCH" | sed -n 's|^[a-z]*/T\{0,1\}-\{0,1\}\([0-9][0-9]*\)-.*|\1|p')
 
 ACTIVE_TICKET_FILE="$CWD/.claude/.active-ticket"
 
