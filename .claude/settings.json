@@ -71,6 +71,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.skill // \"unknown\"' | { read -r s; echo \"⚡ Skill: $s\" >&2; }",
+            "timeout": 3
+          }
+        ]
       }
     ],
     "SessionEnd": [
