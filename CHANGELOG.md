@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **Rate Limiting on VPS Pipeline API**: In-memory sliding window rate limiter for `/api/launch` (10/min per project), `/api/events` (100/min per project), `/api/ship` (10/min per project), `/api/answer` (30/min per ticket) — returns HTTP 429 with `Retry-After` header; health and admin endpoints remain unlimited
+
 ### Fixed
 - **Pipeline Ship Phase**: Move push, PR creation, and status update from orchestrator agent to pipeline infrastructure (`run.ts`/`server.ts`) — fixes silent failures where code was committed locally but never pushed, leaving tickets stuck at `in_progress` with `pipeline_status: done`
 
