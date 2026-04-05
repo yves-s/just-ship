@@ -16,7 +16,8 @@ PROJECTS_DIR="/home/claude-dev/projects"
 COMPOSE_FILE="/home/claude-dev/just-ship/vps/docker-compose.yml"
 LOCK_FILE="/tmp/just-ship-update.lock"
 POLL_INTERVAL=5
-HEALTH_CHECK_PORT=3001
+CONTAINER_NAME="vps-pipeline-server-1"
+HEALTH_CHECK_URL="http://localhost:3001"
 DRAIN_TIMEOUT_SECS=1800  # 30 minutes
 
 log() {
@@ -70,14 +71,19 @@ callback_reject() {
     "$(jq -n --arg s "failed" --arg e "$reason" '{status: $s, error: $e}')"
 }
 
+# Run curl inside the pipeline container (port not mapped to host)
+container_curl() {
+  docker exec "$CONTAINER_NAME" curl -sf "$@" 2>/dev/null
+}
+
 # Health check - returns 0 if healthy
 health_check() {
-  curl -sf "http://localhost:${HEALTH_CHECK_PORT}/health" > /dev/null 2>&1
+  container_curl "${HEALTH_CHECK_URL}/health" > /dev/null 2>&1
 }
 
 # Get drain state from health endpoint
 get_drain_state() {
-  curl -sf "http://localhost:${HEALTH_CHECK_PORT}/health" 2>/dev/null | jq -r '.drain.state // "unknown"'
+  container_curl "${HEALTH_CHECK_URL}/health" | jq -r '.drain.state // "unknown"'
 }
 
 # Get current running image tag
@@ -141,9 +147,9 @@ process_update() {
   pipeline_key=$(get_pipeline_key)
 
   local drain_response
-  drain_response=$(curl -sf -X POST \
+  drain_response=$(container_curl -X POST \
     -H "X-Pipeline-Key: $pipeline_key" \
-    "http://localhost:${HEALTH_CHECK_PORT}/api/drain" 2>/dev/null || echo "")
+    "${HEALTH_CHECK_URL}/api/drain" || echo "")
 
   if [ -z "$drain_response" ]; then
     log "Warning: drain request failed — server may be down, proceeding with switch"
@@ -163,9 +169,9 @@ process_update() {
     # Force-drain if timeout reached
     if [ "$(get_drain_state)" != "drained" ]; then
       log "Drain timeout reached — force-draining"
-      curl -sf -X POST \
+      container_curl -X POST \
         -H "X-Pipeline-Key: $pipeline_key" \
-        "http://localhost:${HEALTH_CHECK_PORT}/api/force-drain" 2>/dev/null || true
+        "${HEALTH_CHECK_URL}/api/force-drain" || true
       sleep 2
     fi
   fi
