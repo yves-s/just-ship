@@ -160,9 +160,12 @@ async function patchTicket(ticketNumber: number, body: Record<string, unknown>):
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(10000),
     });
+    if (!res.ok) {
+      log(`patchTicket T-${ticketNumber} failed: HTTP ${res.status} ${res.statusText}`);
+    }
     return res.ok;
-  } catch {
-    // Best-effort: ticket patch failure handled by caller via false return
+  } catch (err) {
+    log(`patchTicket T-${ticketNumber} error: ${err instanceof Error ? err.message : String(err)}`);
     return false;
   }
 }
@@ -1157,6 +1160,16 @@ async function handleForceDrainRoute(req: IncomingMessage, res: ServerResponse):
   sendJson(res, 200, { status: "ok", message: "Force-drain completed", drain: drainManager.getStatus() });
 }
 
+async function handleUndrainRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  drainManager.reset();
+  runningTickets.clear();
+  pipelineState.running = null;
+  log("Undrain: server reset to normal, all in-memory state cleared");
+  sendJson(res, 200, { status: "ok", message: "Server reset to normal", drain: drainManager.getStatus() });
+}
+
 // ---------------------------------------------------------------------------
 // Request router — CORS + method/path dispatch to route handlers
 // ---------------------------------------------------------------------------
@@ -1200,6 +1213,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       case "/api/update":      return handleUpdateRoute(req, res);
       case "/api/drain":       return handleDrainRoute(req, res);
       case "/api/force-drain": return handleForceDrainRoute(req, res);
+      case "/api/undrain":     return handleUndrainRoute(req, res);
     }
   }
 
