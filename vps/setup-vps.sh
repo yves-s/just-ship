@@ -141,8 +141,6 @@ fi
 # Bugsink secrets auto-generieren
 BUGSINK_SECRET_KEY=$(openssl rand -base64 50)
 BUGSINK_ADMIN_PASSWORD=$(openssl rand -base64 32)
-echo "  BUGSINK_SECRET_KEY generiert"
-echo "  BUGSINK_ADMIN_PASSWORD generiert"
 
 # .env schreiben
 cat > "$ENV_FILE" <<ENVEOF
@@ -162,14 +160,6 @@ ENVEOF
 chmod 600 "$ENV_FILE"
 chown claude-dev:claude-dev "$ENV_FILE"
 ok ".env gespeichert (chmod 600)"
-
-echo ""
-echo "  ┌─────────────────────────────────────────────────────────────┐"
-echo "  │ Bugsink Admin Credentials (save these, shown only once):   │"
-echo "  │   Email:    admin@localhost                                 │"
-echo "  │   Password: ${BUGSINK_ADMIN_PASSWORD}  │"
-echo "  └─────────────────────────────────────────────────────────────┘"
-echo ""
 
 # ── Git konfigurieren ─────────────────────────────────────────────────────────
 

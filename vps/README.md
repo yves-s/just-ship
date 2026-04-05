@@ -117,7 +117,7 @@ Both UIs are protected by Caddy basicauth. The pipeline-server and worker automa
 |----------|---------|---------|
 | `BUGSINK_SECRET_KEY` | *(auto-generated)* | Django secret key for Bugsink |
 | `BUGSINK_ADMIN_EMAIL` | `admin@localhost` | Bugsink admin email |
-| `BUGSINK_ADMIN_PASSWORD` | *(auto-generated)* | Bugsink admin password (shown once during setup) |
+| `BUGSINK_ADMIN_PASSWORD` | *(auto-generated)* | Bugsink admin password (see `.env` on VPS) |
 | `MONITORING_USER` | `admin` | Caddy basicauth username for `/errors/` and `/logs/` |
 | `MONITORING_HASH` | — | Caddy basicauth password hash (generate with `caddy hash-password`) |
 

@@ -67,12 +67,6 @@ if [ -f "$ENV_FILE" ]; then
     BUGSINK_ADMIN_PASSWORD=$(openssl rand -base64 32)
     echo "BUGSINK_ADMIN_PASSWORD=${BUGSINK_ADMIN_PASSWORD}" >> "$ENV_FILE"
     log "BUGSINK_ADMIN_PASSWORD generated and added to .env"
-    echo ""
-    echo "  ┌─────────────────────────────────────────────────────────────┐"
-    echo "  │ Bugsink Admin Password (save this, shown only once):       │"
-    echo "  │   ${BUGSINK_ADMIN_PASSWORD}  │"
-    echo "  └─────────────────────────────────────────────────────────────┘"
-    echo ""
   fi
   if ! grep -q "^BUGSINK_ADMIN_EMAIL=" "$ENV_FILE"; then
     echo "BUGSINK_ADMIN_EMAIL=admin@localhost" >> "$ENV_FILE"
