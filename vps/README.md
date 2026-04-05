@@ -62,17 +62,19 @@ After VPS setup, connect individual projects. The command copies local env vars,
 
 ## Server Endpoints
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `POST` | `/api/launch` | Yes | Trigger pipeline for a ticket |
-| `POST` | `/api/events` | Yes | Board event handler (filters to "launch") |
-| `POST` | `/api/answer` | Yes | Resume paused pipeline with human answer |
-| `POST` | `/api/ship` | Yes | Merge PR for a ticket |
-| `POST` | `/api/update` | `X-Update-Secret` | Receive update trigger from Board |
-| `POST` | `/api/drain` | Yes | Start graceful drain for updates |
-| `POST` | `/api/force-drain` | Yes | Force immediate drain |
-| `GET` | `/health` | No | Server status (includes `drain` field) |
-| `GET` | `/api/status/:ticket` | No | Pipeline status for a ticket |
+| Method | Path | Auth | Rate Limit | Description |
+|--------|------|------|------------|-------------|
+| `POST` | `/api/launch` | Yes | 10/min per project | Trigger pipeline for a ticket |
+| `POST` | `/api/events` | Yes | 100/min per project | Board event handler (filters to "launch") |
+| `POST` | `/api/answer` | Yes | 30/min per ticket | Resume paused pipeline with human answer |
+| `POST` | `/api/ship` | Yes | 10/min per project | Merge PR for a ticket |
+| `POST` | `/api/update` | `X-Update-Secret` | — | Receive update trigger from Board |
+| `POST` | `/api/drain` | Yes | — | Start graceful drain for updates |
+| `POST` | `/api/force-drain` | Yes | — | Force immediate drain |
+| `GET` | `/health` | No | — | Server status (includes `drain` field) |
+| `GET` | `/api/status/:ticket` | No | — | Pipeline status for a ticket |
+
+Rate limits use in-memory sliding window counters. Exceeded limits return HTTP 429 with `Retry-After` header. State resets on server restart.
 
 Auth = `X-Pipeline-Key` header matching `server.pipeline_key` in server-config.json.
 `X-Update-Secret` = per-VPS secret matching `server.update_secret` in server-config.json.

@@ -21,6 +21,7 @@ import { checkBudget } from "./lib/budget.ts";
 import type { PipelineCheckpoint } from "./lib/checkpoint.ts";
 import { decideResume } from "./lib/resume.ts";
 import { toBranchName, log } from "./lib/utils.ts";
+import { RateLimiter } from "./lib/rate-limiter.ts";
 
 // --- Mode detection ---
 const SERVER_CONFIG_PATH = process.env.SERVER_CONFIG_PATH;
@@ -94,6 +95,14 @@ interface RunRecord {
 const runHistory: RunRecord[] = [];
 const MAX_RUN_HISTORY = 10;
 const serverStartedAt = Date.now();
+
+// --- Rate limiting ---
+const rateLimiters = {
+  launch: new RateLimiter({ windowMs: 60_000, maxRequests: 10 }),
+  events: new RateLimiter({ windowMs: 60_000, maxRequests: 100 }),
+  ship: new RateLimiter({ windowMs: 60_000, maxRequests: 10 }),
+  answer: new RateLimiter({ windowMs: 60_000, maxRequests: 30 }),
+};
 
 function recordRun(record: RunRecord) {
   runHistory.push(record);
@@ -185,6 +194,33 @@ async function patchTicket(ticketNumber: number, body: Record<string, unknown>):
 function sendJson(res: ServerResponse, status: number, data: Record<string, unknown>) {
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(data));
+}
+
+/**
+ * Apply a rate limiter for the given key. Returns true if the request is
+ * allowed, false if blocked (response already sent with 429).
+ */
+function applyRateLimit(
+  limiter: RateLimiter,
+  key: string,
+  route: string,
+  res: ServerResponse,
+): boolean {
+  const result = limiter.check(key);
+  if (!result.allowed) {
+    log(`Rate limit exceeded: ${key} on ${route}`);
+    res.writeHead(429, {
+      "Content-Type": "application/json",
+      "Retry-After": String(result.retryAfterSec),
+    });
+    res.end(JSON.stringify({
+      error: "rate_limit_exceeded",
+      retry_after: result.retryAfterSec,
+      remaining: 0,
+    }));
+    return false;
+  }
+  return true;
 }
 
 function readBody(req: IncomingMessage, maxBytes = 1_048_576): Promise<string> {
@@ -912,10 +948,12 @@ async function handleLaunchRoute(req: IncomingMessage, res: ServerResponse): Pro
   const body = await parseJsonBody(req, res);
   if (!body) return;
 
+  const projectId = body.project_id as string | undefined;
+  if (!applyRateLimit(rateLimiters.launch, projectId ?? "unknown", "/api/launch", res)) return;
+
   const ticketNumber = requireTicketNumber(body, res);
   if (ticketNumber === null) return;
 
-  const projectId = body.project_id as string | undefined;
   await handleLaunch(ticketNumber, res, projectId, body);
 }
 
@@ -924,6 +962,9 @@ async function handleEventsRoute(req: IncomingMessage, res: ServerResponse): Pro
 
   const body = await parseJsonBody(req, res);
   if (!body) return;
+
+  const projectIdForRL = body.project_id as string | undefined;
+  if (!applyRateLimit(rateLimiters.events, projectIdForRL ?? "unknown", "/api/events", res)) return;
 
   const eventType = body.event_type as string | undefined;
 
@@ -936,8 +977,7 @@ async function handleEventsRoute(req: IncomingMessage, res: ServerResponse): Pro
   const ticketNumber = requireTicketNumber(body, res);
   if (ticketNumber === null) return;
 
-  const projectId = body.project_id as string | undefined;
-  await handleLaunch(ticketNumber, res, projectId, body);
+  await handleLaunch(ticketNumber, res, projectIdForRL, body);
 }
 
 async function handleAnswerRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -945,6 +985,9 @@ async function handleAnswerRoute(req: IncomingMessage, res: ServerResponse): Pro
 
   const body = await parseJsonBody(req, res);
   if (!body) return;
+
+  const ticketNum = body.ticket_number;
+  if (!applyRateLimit(rateLimiters.answer, String(ticketNum ?? "unknown"), "/api/answer", res)) return;
 
   const ticketNumber = requireTicketNumber(body, res, "Missing or invalid field: ticket_number");
   if (ticketNumber === null) return;
@@ -1123,11 +1166,13 @@ async function handleShipRoute(req: IncomingMessage, res: ServerResponse): Promi
   const body = await parseJsonBody(req, res);
   if (!body) return;
 
+  const projectIdForRL = body.project_id as string | undefined;
+  if (!applyRateLimit(rateLimiters.ship, projectIdForRL ?? "unknown", "/api/ship", res)) return;
+
   const ticketNumber = requireTicketNumber(body, res, "Missing or invalid field: ticket_number");
   if (ticketNumber === null) return;
 
-  const projectId = body.project_id as string | undefined;
-  await handleShip(ticketNumber, res, projectId);
+  await handleShip(ticketNumber, res, projectIdForRL);
 }
 
 async function handleUpdateRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
