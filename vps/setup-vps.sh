@@ -138,6 +138,12 @@ if [ -z "${PIPELINE_SECRET:-}" ]; then
   echo "  PIPELINE_SECRET generiert (wird in .env gespeichert)"
 fi
 
+# Bugsink secrets auto-generieren
+BUGSINK_SECRET_KEY=$(openssl rand -base64 50)
+BUGSINK_ADMIN_PASSWORD=$(openssl rand -base64 32)
+echo "  BUGSINK_SECRET_KEY generiert"
+echo "  BUGSINK_ADMIN_PASSWORD generiert"
+
 # .env schreiben
 cat > "$ENV_FILE" <<ENVEOF
 # Just Ship — Environment
@@ -146,11 +152,24 @@ cat > "$ENV_FILE" <<ENVEOF
 ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 GH_TOKEN=${GH_TOKEN}
 PIPELINE_SECRET=${PIPELINE_SECRET}
+
+# Bugsink (auto-generated)
+BUGSINK_SECRET_KEY=${BUGSINK_SECRET_KEY}
+BUGSINK_ADMIN_EMAIL=admin@localhost
+BUGSINK_ADMIN_PASSWORD=${BUGSINK_ADMIN_PASSWORD}
 ENVEOF
 
 chmod 600 "$ENV_FILE"
 chown claude-dev:claude-dev "$ENV_FILE"
 ok ".env gespeichert (chmod 600)"
+
+echo ""
+echo "  ┌─────────────────────────────────────────────────────────────┐"
+echo "  │ Bugsink Admin Credentials (save these, shown only once):   │"
+echo "  │   Email:    admin@localhost                                 │"
+echo "  │   Password: ${BUGSINK_ADMIN_PASSWORD}  │"
+echo "  └─────────────────────────────────────────────────────────────┘"
+echo ""
 
 # ── Git konfigurieren ─────────────────────────────────────────────────────────
 

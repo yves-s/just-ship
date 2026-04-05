@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Security**: Bugsink admin password is now auto-generated via `openssl rand -base64 32` during VPS setup — no more hardcoded `admin` default
+- `install-updater.sh` backfills Bugsink secrets for existing installations if missing from `.env`
+
 ### Added
 - **Pipeline Quality Gates**: 5 new modules for automated verification and reliability
   - `artifact-verifier` — 3-level verification (files exist, no stubs, exports wired) runs after each orchestrator completion
