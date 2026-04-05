@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Pipeline Ship Phase**: Move push, PR creation, and status update from orchestrator agent to pipeline infrastructure (`run.ts`/`server.ts`) — fixes silent failures where code was committed locally but never pushed, leaving tickets stuck at `in_progress` with `pipeline_status: done`
+
 ### Changed
 - **Hook-Based Ticket Detection**: Replace Claude Write-tool `.active-ticket` writes with automatic PostToolUse hook — eliminates Permission-Prompt interruptions during autonomous workflows
 - Fix branch name regex in `detect-ticket.sh` to support `T-` prefix format (`feature/T-551-foo` → `551`)

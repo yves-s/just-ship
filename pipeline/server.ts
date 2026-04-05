@@ -331,7 +331,7 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
             body: JSON.stringify({
               run_id: runId,
               status: result.status === "completed" ? "completed" : "failed",
-              pr_url: result.branch ? `check PR from branch ${result.branch}` : undefined,
+              pr_url: result.prUrl ?? (result.branch ? `check PR from branch ${result.branch}` : undefined),
               tokens_used: {
                 input: result.tokens?.input ?? 0,
                 output: result.tokens?.output ?? 0,
@@ -635,11 +635,12 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
       );
 
       if (result.status === "completed") {
-        log(`Pipeline completed: T-${ticketNumber} -> ${result.branch}`);
+        log(`Pipeline completed: T-${ticketNumber} -> ${result.branch}${result.prUrl ? ` (PR: ${result.prUrl})` : ""}`);
         await patchTicket(ticketNumber, {
           pipeline_status: "done",
           status: "in_review",
           branch: result.branch,
+          ...(result.prUrl ? { review_url: result.prUrl } : {}),
           ...(result.tokens ? {
             total_tokens: result.tokens.input + result.tokens.output,
             estimated_cost: result.tokens.estimatedCostUsd,
@@ -1056,6 +1057,7 @@ async function handleAnswerRoute(req: IncomingMessage, res: ServerResponse): Pro
           status: "in_review",
           branch: result.branch,
           session_id: null,
+          ...(result.prUrl ? { review_url: result.prUrl } : {}),
           ...(result.tokens ? {
             total_tokens: result.tokens.input + result.tokens.output,
             estimated_cost: result.tokens.estimatedCostUsd,

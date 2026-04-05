@@ -403,7 +403,10 @@ Internally:
 3. Loads all agent definitions from `.claude/agents/`.
 4. Builds the orchestrator prompt with ticket details.
 5. Calls `query()` from the Agent SDK with the orchestrator prompt.
-6. Outputs JSON result on stdout (for automation/n8n integration).
+6. Ships: pushes branch, creates PR, verifies remote branch exists.
+7. Outputs JSON result on stdout (for automation/n8n integration).
+
+Note: The orchestrator only commits locally. Push, PR creation, and ticket status updates are handled by the pipeline infrastructure (`run.ts`) after the orchestrator exits, ensuring these steps always execute reliably.
 
 ```typescript
 for await (const message of query({
@@ -428,8 +431,8 @@ Loop:
   1. Check Supabase connectivity
   2. Query: tickets WHERE status='ready_to_develop' AND pipeline_status IS NULL
   3. Atomic claim: SET pipeline_status='running' WHERE pipeline_status IS NULL
-  4. Call executePipeline() from run.ts
-  5. On success: SET pipeline_status='done', status='in_review'
+  4. Call executePipeline() from run.ts (includes push + PR creation)
+  5. On success: SET pipeline_status='done', status='in_review', review_url=PR_URL
   6. On failure: SET pipeline_status='failed', wait 5 min cooldown
   7. Sleep POLL_INTERVAL (default 60s)
 ```
