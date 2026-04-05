@@ -419,30 +419,56 @@ Live auf kunde.de ✓
 
 | Frage | Entscheid | Begründung |
 |-------|-----------|------------|
-| **Provider** | Hetzner Cloud | Bestes Preis-Leistungs-Verhältnis, DE-Standort, 20 TB Traffic, starke API |
+| **Provider** | Hostinger KVM 2 | Bestehende Beziehung, potenzieller Deal, EU-Standort, gutes Preis-Leistungs-Verhältnis |
 | **Setup** | Multi-Tenant (1 Server, Container pro Kunde) | 90%+ Kostenersparnis vs. isolierte VPS, einfacheres Management |
 | **Deployment** | Coolify | Feature-reichste Self-Hosted PaaS, Docker Compose native, Multi-Server, aktiv entwickelt |
 | **Security** | SSH-Hardening + UFW + Let's Encrypt + Backups → S3 | Solide Baseline, erweiterbar |
-| **DNS** | Cloudflare Free | Gratis CDN + DDoS + DNS Management |
+| **DNS** | Gandi (bestehend) | Bestehender DNS-Provider, Cloudflare optional als Upgrade |
 | **Datenbanken** | PostgreSQL/MySQL Container pro Projekt (nicht shared) | Isolation + einfache Backups, kein Crosstalk |
 | **Skalierung** | Vertikal → Coolify Worker Nodes | Kein Kubernetes nötig bis 20+ Projekte |
 | **Managed** | Nur bei Feature-Bedarf (Vercel Edge, Shopify Themes) | Self-Hosted als Default, Managed als Ausnahme |
 
+### Tatsächliches Setup (2026-04-05)
+
+Abweichend vom Spike-Vorschlag wurde Hostinger gewählt (bestehende Beziehung, potenzieller Deal).
+
+| Aspekt | Spike-Empfehlung | Tatsächlich |
+|--------|-----------------|-------------|
+| **Provider** | Hetzner Cloud | Hostinger KVM 2 (2 vCPU, 8 GB RAM, 100 GB NVMe) |
+| **Server-IP** | — | `72.60.32.232` |
+| **Coolify** | Empfohlen | Installiert, v4.0.0-beta.470 |
+| **Admin-URL** | — | `https://coolify.just-ship.io` |
+| **DNS** | Cloudflare | Gandi |
+| **Preview-Domain** | — | `*.preview.just-ship.io` (Wildcard A-Record) |
+| **GitHub App** | — | `just-ship-hosting` (App ID: 3286760) |
+| **Pipeline-Trennung** | Empfohlen | Ja — separater VPS, Pipeline bleibt auf bestehendem Hostinger VPS |
+
+**Deployed:**
+- Just Ship Board → `board.just-ship.io` (migriert von Vercel)
+
+**Coolify API:**
+- Token gespeichert unter `/root/.coolify-api/token` auf dem VPS
+- Server UUID: `qf02xm170a67g7n7jemgjj66`
+- GitHub App UUID: `toxipo10ilecq76v0jbjssdw`
+
 ### Nächste Schritte (Follow-Up-Tickets)
 
-1. **Server provisionieren** — Hetzner CPX41 bestellen, Coolify installieren, Security-Baseline
-2. **Erstes Kundenprojekt migrieren** — Pilot mit kleinstem/unkritischstem Projekt
-3. **Monitoring aufsetzen** — Uptime Kuma + Alerting (Telegram/E-Mail)
-4. **Backup verifizieren** — S3-Backup testen, Restore-Prozess dokumentieren
-5. **Kunden-Onboarding-Prozess** — DNS-Anleitung, Domain-Übergabe, SLA-Template
-6. **Pricing-Packages definieren** — Basic/Standard/Premium mit klaren Leistungsbeschreibungen
+1. ~~**Server provisionieren**~~ — Erledigt (Hostinger KVM 2 + Coolify)
+2. ~~**Erstes Projekt deployen**~~ — Erledigt (Just Ship Board)
+3. **Automatisierung** — `coolify` als `hosting.provider` in `project.json`, Preview-URLs ins Board
+4. **Monitoring aufsetzen** — Uptime Kuma + Alerting (Telegram/E-Mail)
+5. **Backup konfigurieren** — Coolify S3-Backups für Datenbanken
+6. **Security-Hardening** — UFW, Fail2Ban, SSH-Hardening
+7. **Weitere Projekte deployen** — just-ship-web, Kundenprojekte
+8. **Kunden-Onboarding-Prozess** — DNS-Anleitung, Domain-Übergabe, SLA-Template
+9. **Pricing-Packages definieren** — Basic/Standard/Premium mit klaren Leistungsbeschreibungen
 
 ### Risiken
 
 | Risiko | Mitigation |
 |--------|-----------|
-| Server-Ausfall | Hetzner Snapshots (wöchentlich), schneller Restore auf neuen Server |
+| Server-Ausfall | Hostinger Daily Backups (aktiviert), schneller Restore |
 | Coolify-Bug | Coolify ist aktiv maintained, Community-Support, Fallback: manuelles Docker |
-| Überlastung | Monitoring + Alerting, Worker Node bei Bedarf |
+| Überlastung | Monitoring + Alerting, zweiter VPS als Worker Node bei Bedarf |
 | Kundenprojekt crasht andere | Docker-Isolation, Resource Limits pro Container |
-| Hetzner-Preiserhöhung | Kosten immer noch 90% unter Managed, einfache Migration zu anderem Provider |
+| Hostinger-Probleme | Migration zu Hetzner jederzeit möglich (Coolify ist provider-agnostisch) |
