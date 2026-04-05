@@ -110,8 +110,10 @@ Ausgabe: `Resume — T-{N} hat vorhandene Arbeit, setze fort`
 
 **1. Infrastruktur re-etablieren:**
 
-Active-Ticket setzen (Write-Tool, nicht Bash echo):
-Schreibe `{N}` in die Datei `.claude/.active-ticket`.
+Active-Ticket setzen — nutze das **Write-Tool** (NICHT Bash `echo`/`printf`/`>`):
+```
+Write(file_path=".claude/.active-ticket", content="{N}")
+```
 
 Orchestrator-Event senden:
 ```bash
