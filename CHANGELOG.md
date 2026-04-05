@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+- **Multi-Project Concurrency**: Replace global single-ticket lock with per-project WorktreeManagers — multiple tickets can now run in parallel across (and within) projects in multi-project mode
+- Health endpoint (`/health`) now returns `running` as an array of all active tickets with `running_count`, instead of a single object
+
 ### Fixed
 - **Security**: Bugsink admin password is now auto-generated via `openssl rand -base64 32` during VPS setup — no more hardcoded `admin` default
 - `install-updater.sh` backfills Bugsink secrets for existing installations if missing from `.env`
