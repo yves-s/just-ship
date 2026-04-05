@@ -455,13 +455,25 @@ Abweichend vom Spike-Vorschlag wurde Hostinger gewählt (bestehende Beziehung, p
 
 1. ~~**Server provisionieren**~~ — Erledigt (Hostinger KVM 2 + Coolify)
 2. ~~**Erstes Projekt deployen**~~ — Erledigt (Just Ship Board)
-3. **Automatisierung** — `coolify` als `hosting.provider` in `project.json`, Preview-URLs ins Board
+3. ~~**Automatisierung**~~ — Erledigt (`coolify` als `hosting.provider`, Preview-URLs, `coolify-deploy.sh`)
 4. **Monitoring aufsetzen** — Uptime Kuma + Alerting (Telegram/E-Mail)
 5. **Backup konfigurieren** — Coolify S3-Backups für Datenbanken
-6. **Security-Hardening** — UFW, Fail2Ban, SSH-Hardening
+6. ~~**Security-Hardening**~~ — Erledigt (UFW, Fail2Ban, SSH key-only, unattended-upgrades)
 7. **Weitere Projekte deployen** — just-ship-web, Kundenprojekte
 8. **Kunden-Onboarding-Prozess** — DNS-Anleitung, Domain-Übergabe, SLA-Template
 9. **Pricing-Packages definieren** — Basic/Standard/Premium mit klaren Leistungsbeschreibungen
+
+### Security-Hardening (2026-04-05)
+
+Auf dem Hosting-VPS (`72.60.32.232`) implementiert:
+
+| Massnahme | Status | Details |
+|-----------|--------|---------|
+| **UFW Firewall** | Aktiv | Nur 22 (SSH), 80 (HTTP), 443 (HTTPS), 8000 (Coolify) offen |
+| **Fail2Ban** | Aktiv | SSH-Jail: 5 Versuche, 1h Ban, 10min Fenster |
+| **SSH Hardening** | Aktiv | `PasswordAuthentication no`, `PermitRootLogin prohibit-password` (Key-only) |
+| **Unattended Upgrades** | Aktiv | Automatische Security-Patches |
+| **Hostinger Backups** | Aktiv | Tägliche Auto-Backups (beim VPS-Kauf aktiviert) |
 
 ### Risiken
 
