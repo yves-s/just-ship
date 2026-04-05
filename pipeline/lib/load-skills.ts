@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { ProjectConfig } from "./config.js";
+import { logger } from "./logger.ts";
 
 // SECURITY: Validate skill name to prevent path traversal
 function isValidSkillName(name: string): boolean {
@@ -58,14 +59,14 @@ export function loadSkills(projectDir: string, config: ProjectConfig): LoadedSki
   for (const name of skillNames) {
     // SECURITY: reject names with path traversal characters
     if (!isValidSkillName(name)) {
-      console.warn(`⚠ Skill name '${name}' contains invalid characters — skipping.`);
+      logger.warn(`Skill name '${name}' contains invalid characters — skipping.`);
       continue;
     }
     const content = loadSkillFile(name, frameworkSkillsDir, installedSkillsDir);
     if (content) {
       skillContents.set(name, content);
     } else {
-      console.warn(`⚠ Skill '${name}' not found — skipping.`);
+      logger.warn(`Skill '${name}' not found — skipping.`);
     }
   }
 
@@ -74,14 +75,14 @@ export function loadSkills(projectDir: string, config: ProjectConfig): LoadedSki
   for (const name of customSkills) {
     // SECURITY: reject names with path traversal characters
     if (!isValidSkillName(name)) {
-      console.warn(`⚠ Custom skill name '${name}' contains invalid characters — skipping.`);
+      logger.warn(`Custom skill name '${name}' contains invalid characters — skipping.`);
       continue;
     }
     const customPath = resolve(projectDir, ".claude", "skills", `${name}.md`);
     if (existsSync(customPath)) {
       skillContents.set(name, readFileSync(customPath, "utf-8"));
     } else {
-      console.warn(`⚠ Custom skill '${name}' not found in .claude/skills/ — skipping.`);
+      logger.warn(`Custom skill '${name}' not found in .claude/skills/ — skipping.`);
     }
   }
 

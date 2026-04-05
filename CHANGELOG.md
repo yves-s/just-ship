@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Added
+- **Structured Logging with Pino**: Replace all `console.log/error/warn` in pipeline with structured JSON logging
+  - New `pipeline/lib/logger.ts` — Pino root logger with ISO timestamps, `service: "engine"` base field, and log level control via `LOG_LEVEL` env var
+  - Sensitive data redaction: API keys, tokens, secrets automatically masked in all log output (partial masking: first 4 + last 4 chars)
+  - Factory functions `createChildLogger` and `createPipelineLogger` for request/ticket-scoped logging with correlation fields (requestId, ticketNumber, workspaceId, branch)
+  - All 50+ `console.log/error/warn` calls across 15 pipeline files replaced with structured logger calls at appropriate levels (debug/info/warn/error)
+
+### Added
 - **Pipeline Quality Gates**: 5 new modules for automated verification and reliability
   - `artifact-verifier` — 3-level verification (files exist, no stubs, exports wired) runs after each orchestrator completion
   - `verify-commands` — auto-discovers and executes lint/test/typecheck from package.json with retry logic (max 2 retries for blocking commands)

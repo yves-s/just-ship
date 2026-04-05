@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve, basename } from "node:path";
 import type { AgentDefinition } from "@anthropic-ai/claude-agent-sdk";
+import { logger } from "./logger.ts";
 
 export type { AgentDefinition };
 
@@ -40,7 +41,7 @@ export function loadAgents(projectDir: string): Record<string, AgentDefinition> 
   try {
     files = readdirSync(agentsDir).filter((f) => f.endsWith(".md"));
   } catch {
-    console.error(`No agents directory found at ${agentsDir}`);
+    logger.error({ agentsDir }, "No agents directory found");
     return agents;
   }
 

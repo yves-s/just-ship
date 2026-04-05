@@ -9,6 +9,7 @@
  */
 
 import { execSync } from "node:child_process";
+import { logger } from "./logger.ts";
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -130,9 +131,7 @@ export function runVerifyCommands(opts: RunVerifyOptions): VerifyCommandResult[]
 
     for (let attempt = 1; attempt <= totalAttempts; attempt++) {
       attempts = attempt;
-      console.error(
-        `[verify] Running: ${command.cmd} (attempt ${attempt}/${totalAttempts})`,
-      );
+      logger.warn({ cmd: command.cmd, attempt, totalAttempts }, "Running verify command");
 
       try {
         const stdout = execSync(command.cmd, {

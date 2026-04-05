@@ -1,5 +1,6 @@
 // Watchdog Module v1.0
 import { execSync } from "node:child_process";
+import { logger } from "./logger.ts";
 
 const WATCHDOG_GRACE_MS = 5 * 60_000;
 const DEFAULT_PIPELINE_TIMEOUT_MS = 1_800_000;
@@ -45,7 +46,7 @@ export function saveWorktreeWIP(workDir: string, ticketNumber: number | string):
     }
     return true;
   } catch {
-    console.warn(`[Watchdog] Failed to save WIP for T-${ticketNumber} — worktree may have been in a broken git state`);
+    logger.warn({ ticketNumber }, "Failed to save WIP — worktree may have been in a broken git state");
     return false;
   }
 }

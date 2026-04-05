@@ -5,6 +5,7 @@ import { mkdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { executePipeline } from "./run.ts";
 import { toBranchName, sleep, log } from "./lib/utils.ts";
+import { logger } from "./lib/logger.ts";
 import { classifyError } from "./lib/error-handler.ts";
 import { withWatchdog, saveWorktreeWIP, sendAgentFailedEvent } from "./lib/watchdog.ts";
 import { WorktreeManager } from "./lib/worktree-manager.ts";
@@ -23,7 +24,7 @@ const required = [
 
 for (const key of required) {
   if (!process.env[key]) {
-    console.error(`ERROR: ${key} must be set`);
+    logger.error(`ERROR: ${key} must be set`);
     process.exit(1);
   }
 }
