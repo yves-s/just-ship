@@ -116,9 +116,9 @@ Ergebnis: PASS/FAIL pro AC + Security-Status
 
 Standardmäßig übernimmt der QA-Agent den Security-Quick-Check. Für sicherheitskritische Änderungen (Auth-Flows, RLS-Policies, neue Endpoints) kann ein separater Security-Agent gespawnt werden.
 
-### Phase 5: Ship (ohne Merge, KEINE Rückfragen)
+### Phase 5: Commit (NUR lokaler Commit — KEIN Push, KEIN PR)
 
-**Führe `/ship` aus.** NICHT den Skill `finishing-a-development-branch` aufrufen. NICHT fragen. NICHT stoppen. Alle Schritte autonom durchführen:
+**WICHTIG:** Push, PR-Erstellung und Status-Updates werden von der Pipeline-Infrastruktur (`run.ts`/`server.ts`) übernommen. Der Orchestrator macht NUR den lokalen Commit.
 
 1. **Changelog aktualisieren** — Füge einen neuen Eintrag in `CHANGELOG.md` ein (direkt nach dem Kommentar `<!-- Neue Einträge werden hier eingefügt (neueste oben) -->`). Falls die Datei nicht existiert, überspringe diesen Schritt. Format:
 
@@ -130,15 +130,11 @@ Standardmäßig übernimmt der QA-Agent den Security-Quick-Check. Für sicherhei
    {2-4 Sätze: Was wurde geändert und warum. Fokus auf funktionale Änderungen, nicht Implementierungsdetails.}
    ```
 
-2. **Branch** — Lies `conventions.branch_prefix` aus `project.json`
-3. **Commit** — Gezielt stagen (inkl. `CHANGELOG.md` falls geändert), Conventional Commit:
+2. **Commit** — Gezielt stagen (inkl. `CHANGELOG.md` falls geändert), Conventional Commit:
    `feat(T-{ticket}): {englische Beschreibung}`
    `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
-4. **Push** — `git push -u origin {branch}`
-5. **PR** — `gh pr create` mit Summary + Test Plan
-6. **Supabase** — Status auf "in_review" setzen via `mcp__claude_ai_Supabase__execute_sql`: `UPDATE public.tickets SET status = 'in_review' WHERE number = {N} RETURNING number, title, status` (nur wenn `supabase.project_id` in `project.json` gesetzt)
 
-**NICHT automatisch mergen.** Der PR bleibt offen bis der User ihn freigibt (via `/ship` oder "passt").
+**NICHT pushen.** NICHT `gh pr create` aufrufen. NICHT den Ticket-Status ändern. NICHT `/ship` ausführen. Die Pipeline-Infrastruktur erledigt Push, PR und Status-Update nach deinem Exit.
 
 ## Token-Spar-Regeln
 

@@ -110,10 +110,10 @@ async function claimTicket(number: number): Promise<boolean> {
   return (result?.length ?? 0) > 0;
 }
 
-async function completeTicket(number: number, branch: string, summary?: string): Promise<void> {
+async function completeTicket(number: number, branch: string, summary?: string, reviewUrl?: string): Promise<void> {
   await supabasePatch(
     `/rest/v1/tickets?number=eq.${number}`,
-    { pipeline_status: "done", status: "in_review", branch, ...(summary ? { summary } : {}) }
+    { pipeline_status: "done", status: "in_review", branch, ...(summary ? { summary } : {}), ...(reviewUrl ? { review_url: reviewUrl } : {}) }
   );
 }
 
@@ -280,18 +280,13 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
     // Generate change summary before completing
     let summary: string | undefined;
     try {
-      let prUrl: string | undefined;
-      try {
-        prUrl = execSync(`gh pr view --json url -q .url`, { cwd: slot.workDir, encoding: "utf-8", timeout: 10000 }).trim();
-      } catch { /* no PR yet */ }
-
-      summary = generateChangeSummary({ workDir: slot.workDir, baseBranch: "main", prUrl });
+      summary = generateChangeSummary({ workDir: slot.workDir, baseBranch: "main", prUrl: result.prUrl });
     } catch {
       // Summary generation is best-effort
     }
 
-    await completeTicket(ticket.number, result.branch, summary);
-    log(`Pipeline completed: T-${ticket.number} → ${result.branch} (slot ${slotId})`);
+    await completeTicket(ticket.number, result.branch, summary, result.prUrl);
+    log(`Pipeline completed: T-${ticket.number} → ${result.branch} (slot ${slotId})${result.prUrl ? ` — PR: ${result.prUrl}` : ""}`);
 
     if (slotId !== undefined) slotFailures.delete(slotId);
   } catch (error) {
