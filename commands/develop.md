@@ -161,11 +161,9 @@ git checkout main && git pull origin main
 git checkout -b {abgeleiteter-prefix}/{ticket-nummer}-{kurzbeschreibung}
 ```
 
-**3d) Active-Ticket für Shell-Hooks setzen** (damit SubagentStop-Events den Board erreichen):
+**3d) Pipeline-Event senden** (Board zeigt aktiven Orchestrator):
 
-Nutze das **Write-Tool** (nicht Bash `echo >`) um die Datei `.claude/.active-ticket` mit dem Inhalt `{N}` zu schreiben. Das Write-Tool ist per `Write(**)` erlaubt und löst keine Permission-Prompt aus.
-
-**3e) Pipeline-Event senden** (Board zeigt aktiven Orchestrator):
+> **Note:** `.active-ticket` wird automatisch vom PostToolUse-Hook (`detect-ticket-post.sh`) gesetzt, sobald der erste Bash-Befehl im Worktree läuft. Kein manuelles Schreiben nötig.
 ```bash
 bash .claude/scripts/send-event.sh {N} orchestrator agent_started
 ```

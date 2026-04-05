@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Changed
+- **Hook-Based Ticket Detection**: Replace Claude Write-tool `.active-ticket` writes with automatic PostToolUse hook — eliminates Permission-Prompt interruptions during autonomous workflows
+- Fix branch name regex in `detect-ticket.sh` to support `T-` prefix format (`feature/T-551-foo` → `551`)
+
+### Removed
+- `.claude/rules/active-ticket-write-tool.md` — obsolete workaround, no longer needed
+
+### Changed
 - **Multi-Project Concurrency**: Replace global single-ticket lock with per-project WorktreeManagers — multiple tickets can now run in parallel across (and within) projects in multi-project mode
 - Health endpoint (`/health`) now returns `running` as an array of all active tickets with `running_count`, instead of a single object
 
