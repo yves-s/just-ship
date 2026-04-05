@@ -32,6 +32,9 @@ let PIPELINE_SERVER_KEY: string;
 let config: ProjectConfig;
 let worktreeManager: WorktreeManager | null = null;
 
+// Per-project WorktreeManagers for multi-project mode (keyed by project slug)
+const projectWorktreeManagers = new Map<string, WorktreeManager>();
+
 if (isMultiProjectMode) {
   serverConfig = loadServerConfig(SERVER_CONFIG_PATH);
   PIPELINE_SERVER_KEY = serverConfig.server.pipeline_key;
@@ -43,6 +46,13 @@ if (isMultiProjectMode) {
   } else {
     PROJECT_DIR = "/tmp";
     config = loadProjectConfig("/tmp");
+  }
+
+  // Initialize a WorktreeManager per project
+  for (const [slug, project] of Object.entries(serverConfig.projects)) {
+    const projectCfg = loadProjectConfig(project.project_dir);
+    projectWorktreeManagers.set(slug, new WorktreeManager(project.project_dir, projectCfg.maxWorkers));
+    log(`WorktreeManager initialized for project '${slug}' (max ${projectCfg.maxWorkers} workers)`);
   }
 } else {
   const required = ["ANTHROPIC_API_KEY", "GH_TOKEN", "PROJECT_DIR", "PIPELINE_SERVER_KEY"] as const;
@@ -65,14 +75,13 @@ const PORT = Number(process.env.PORT ?? serverConfig?.server.port ?? "3001");
 // --- In-memory running set (idempotency guard) ---
 const runningTickets = new Set<number>();
 
-interface PipelineState {
-  running: {
-    ticketNumber: number;
-    projectSlug: string;
-    startedAt: Date;
-  } | null;
+// Per-ticket metadata for observability (replaces single pipelineState lock)
+interface RunningTicketInfo {
+  ticketNumber: number;
+  projectSlug: string;
+  startedAt: Date;
 }
-const pipelineState: PipelineState = { running: null };
+const runningTicketInfo = new Map<number, RunningTicketInfo>();
 
 // --- In-memory run history (ring buffer, last 10 runs) ---
 interface RunRecord {
@@ -386,22 +395,7 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
     return;
   }
 
-  // 1b. Multi-project busy guard (one pipeline at a time)
-  if (isMultiProjectMode && pipelineState.running) {
-    sendJson(res, 429, {
-      status: "busy",
-      ticket_number: ticketNumber,
-      message: "Server is busy processing another ticket",
-      current: {
-        ticket_number: pipelineState.running.ticketNumber,
-        project: pipelineState.running.projectSlug,
-        started_at: pipelineState.running.startedAt.toISOString(),
-      },
-    });
-    return;
-  }
-
-  // 1c. Resolve project in multi-project mode
+  // 1b. Resolve project in multi-project mode
   let projectDir = PROJECT_DIR;
   let projectConfig = config;
   let projectEnv: Record<string, string> = {};
@@ -592,42 +586,41 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
 
   const branchName = toBranchName(projectConfig.conventions.branch_prefix, ticketNumber, title);
 
+  // Track running ticket metadata for observability
   if (isMultiProjectMode) {
-    pipelineState.running = {
+    runningTicketInfo.set(ticketNumber, {
       ticketNumber,
       projectSlug,
       startedAt: new Date(),
-    };
+    });
   }
 
   (async () => {
     const startTime = Date.now();
     let slotId: number | undefined;
+    // Resolve the correct WorktreeManager (per-project in multi-project mode, global otherwise)
+    const activeWtManager = isMultiProjectMode
+      ? projectWorktreeManagers.get(projectSlug) ?? null
+      : worktreeManager;
     try {
       let workDir: string | undefined;
 
-      if (isMultiProjectMode) {
-        // Multi-project mode: no worktree, work directly in project dir (CLI-mode git checkout)
-        workDir = undefined;
-      } else {
-        // Checkpoint-based worktree recovery
-        let worktreeResult;
-        if (checkpoint?.branch_name && worktreeManager) {
-          try {
-            worktreeResult = await worktreeManager.reattach(checkpoint.branch_name);
-            log(`Reattached worktree for checkpoint branch ${checkpoint.branch_name}`);
-          } catch {
-            // Worktree reattach failed — fall through to allocate a fresh one
-            log(`Could not reattach checkpoint worktree, allocating new`);
-            worktreeResult = await worktreeManager.allocate(branchName);
-          }
-        } else if (worktreeManager) {
-          worktreeResult = await worktreeManager.allocate(branchName);
+      // Checkpoint-based worktree recovery (works in both modes now)
+      let worktreeResult;
+      if (checkpoint?.branch_name && activeWtManager) {
+        try {
+          worktreeResult = await activeWtManager.reattach(checkpoint.branch_name);
+          log(`Reattached worktree for checkpoint branch ${checkpoint.branch_name}`);
+        } catch {
+          log(`Could not reattach checkpoint worktree, allocating new`);
+          worktreeResult = await activeWtManager.allocate(branchName);
         }
-        if (worktreeResult) {
-          slotId = worktreeResult.slotId;
-          workDir = worktreeResult.workDir;
-        }
+      } else if (activeWtManager) {
+        worktreeResult = await activeWtManager.allocate(branchName);
+      }
+      if (worktreeResult) {
+        slotId = worktreeResult.slotId;
+        workDir = worktreeResult.workDir;
       }
 
       const result = await withWatchdog(
@@ -656,8 +649,8 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
       } else if (result.status === "paused") {
         log(`Pipeline paused: T-${ticketNumber}`);
         await patchTicket(ticketNumber, { pipeline_status: "paused", session_id: result.sessionId });
-        if (!isMultiProjectMode && slotId !== undefined) {
-          await worktreeManager!.park(slotId);
+        if (slotId !== undefined && activeWtManager) {
+          await activeWtManager.park(slotId);
           slotId = undefined;
         }
       } else {
@@ -714,8 +707,8 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
         if (healResult.healed) log(`Auto-heal complete: ${healResult.summary}`);
       }
     } finally {
-      if (!isMultiProjectMode && slotId !== undefined) await worktreeManager!.release(slotId);
-      if (isMultiProjectMode) pipelineState.running = null;
+      if (slotId !== undefined && activeWtManager) await activeWtManager.release(slotId);
+      if (isMultiProjectMode) runningTicketInfo.delete(ticketNumber);
       runningTickets.delete(ticketNumber);
     }
   })();
@@ -861,17 +854,33 @@ async function handleHealthRoute(_req: IncomingMessage, res: ServerResponse): Pr
   const lastCompleted = runHistory.filter(r => r.status === "completed").at(-1) ?? null;
   const lastError = runHistory.filter(r => r.status === "failed").at(-1) ?? null;
 
+  // Build running tickets list from metadata map (multi-project) or runningTickets set (single)
+  const runningList: Array<{
+    ticket_number: number;
+    project?: string;
+    started_at?: string;
+    elapsed_seconds?: number;
+  }> = [];
+  if (isMultiProjectMode) {
+    for (const info of runningTicketInfo.values()) {
+      runningList.push({
+        ticket_number: info.ticketNumber,
+        project: info.projectSlug,
+        started_at: info.startedAt.toISOString(),
+        elapsed_seconds: Math.round((Date.now() - info.startedAt.getTime()) / 1000),
+      });
+    }
+  } else {
+    for (const ticketNum of runningTickets) {
+      runningList.push({ ticket_number: ticketNum });
+    }
+  }
+
   sendJson(res, 200, {
     status: drainManager.getState() === "drained" ? "draining" : "ok",
     mode: isMultiProjectMode ? "multi-project" : "single",
-    running: pipelineState.running
-      ? {
-          ticket_number: pipelineState.running.ticketNumber,
-          project: pipelineState.running.projectSlug,
-          started_at: pipelineState.running.startedAt.toISOString(),
-          elapsed_seconds: Math.round((Date.now() - pipelineState.running.startedAt.getTime()) / 1000),
-        }
-      : null,
+    running: runningList.length > 0 ? runningList : null,
+    running_count: runningList.length,
     last_completed: lastCompleted,
     last_error: lastError,
     recent_runs: runHistory.slice(-5),
@@ -881,12 +890,13 @@ async function handleHealthRoute(_req: IncomingMessage, res: ServerResponse): Pr
 }
 
 async function handleStatusRoute(_req: IncomingMessage, res: ServerResponse, ticketNum: number): Promise<void> {
-  if (isMultiProjectMode && pipelineState.running?.ticketNumber === ticketNum) {
+  const info = runningTicketInfo.get(ticketNum);
+  if (info) {
     sendJson(res, 200, {
       ticket_number: ticketNum,
       status: "running",
-      project: pipelineState.running.projectSlug,
-      started_at: pipelineState.running.startedAt.toISOString(),
+      project: info.projectSlug,
+      started_at: info.startedAt.toISOString(),
     });
   } else if (runningTickets.has(ticketNum)) {
     sendJson(res, 200, { ticket_number: ticketNum, status: "running" });
@@ -973,10 +983,12 @@ async function handleAnswerRoute(req: IncomingMessage, res: ServerResponse): Pro
   let answerProjectDir = PROJECT_DIR;
   let answerProjectConfig = config;
   let answerProjectEnv: Record<string, string> = {};
+  let answerProjectSlug = "";
 
   if (isMultiProjectMode && answerProjectId) {
     const match = findProjectByProjectId(serverConfig!, answerProjectId);
     if (match) {
+      answerProjectSlug = match.slug;
       answerProjectDir = match.project.project_dir;
       answerProjectEnv = loadProjectEnv(match.project.env_file);
       answerProjectConfig = loadProjectConfig(answerProjectDir);
@@ -1007,14 +1019,14 @@ async function handleAnswerRoute(req: IncomingMessage, res: ServerResponse): Pro
 
   (async () => {
     let slotId: number | undefined;
+    const resumeWtManager = isMultiProjectMode
+      ? projectWorktreeManagers.get(answerProjectSlug) ?? null
+      : worktreeManager;
     try {
       let workDir: string | undefined;
 
-      if (isMultiProjectMode) {
-        // Multi-project mode: no worktree, work directly in project dir
-        workDir = undefined;
-      } else {
-        const slot = await worktreeManager!.reattach(branchName);
+      if (resumeWtManager) {
+        const slot = await resumeWtManager.reattach(branchName);
         slotId = slot.slotId;
         workDir = slot.workDir;
       }
@@ -1034,8 +1046,8 @@ async function handleAnswerRoute(req: IncomingMessage, res: ServerResponse): Pro
 
       if (result.status === "paused") {
         await patchTicket(ticketNumber, { pipeline_status: "paused", session_id: result.sessionId });
-        if (!isMultiProjectMode && slotId !== undefined) {
-          await worktreeManager!.park(slotId);
+        if (slotId !== undefined && resumeWtManager) {
+          await resumeWtManager.park(slotId);
           slotId = undefined;
         }
       } else if (result.status === "completed") {
@@ -1097,7 +1109,7 @@ async function handleAnswerRoute(req: IncomingMessage, res: ServerResponse): Pro
         if (healResult.healed) log(`Auto-heal complete: ${healResult.summary}`);
       }
     } finally {
-      if (!isMultiProjectMode && slotId !== undefined) await worktreeManager!.release(slotId);
+      if (slotId !== undefined && resumeWtManager) await resumeWtManager.release(slotId);
       runningTickets.delete(ticketNumber);
     }
   })();
@@ -1195,7 +1207,7 @@ async function handleUndrainRoute(req: IncomingMessage, res: ServerResponse): Pr
 
   drainManager.reset();
   runningTickets.clear();
-  pipelineState.running = null;
+  runningTicketInfo.clear();
   log("Undrain: server reset to normal, all in-memory state cleared");
   sendJson(res, 200, { status: "ok", message: "Server reset to normal", drain: drainManager.getStatus() });
 }
