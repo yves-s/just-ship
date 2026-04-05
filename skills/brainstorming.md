@@ -23,13 +23,14 @@ You MUST create a task for each of these items and complete them in order:
 
 1. **Explore project context** — check files, docs, recent commits
 2. **Offer visual companion** (if topic will involve visual questions) — this is its own message, not combined with a clarifying question. See the Visual Companion section below.
-3. **Ask clarifying questions** — one at a time, understand purpose/constraints/success criteria
-4. **Propose 2-3 approaches** — with trade-offs and your recommendation
-5. **Present design** — in sections scaled to their complexity, get user approval after each section
-6. **Write design doc** — save to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and commit
-7. **Spec review loop** — dispatch spec-document-reviewer subagent with precisely crafted review context (never your session history); fix issues and re-dispatch until approved (max 3 iterations, then surface to human)
-8. **User reviews written spec** — ask user to review the spec file before proceeding
-9. **Transition to implementation** — invoke writing-plans skill to create implementation plan
+3. **Ask clarifying questions** — one at a time, understand purpose/constraints/success criteria. **Use Expert Advisor Triage** (see below) to only ask the user questions they can uniquely answer.
+4. **Consult expert advisors** — dispatch Design Lead and/or Product CTO subagents to answer technical/UI questions internally. See Expert Advisor Panel section below.
+5. **Propose 2-3 approaches** — with trade-offs and your recommendation, informed by expert advisor input
+6. **Present design** — in sections scaled to their complexity, get user approval after each section
+7. **Write design doc** — save to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and commit
+8. **Spec review loop** — dispatch spec-document-reviewer subagent with precisely crafted review context (never your session history); fix issues and re-dispatch until approved (max 3 iterations, then surface to human)
+9. **User reviews written spec** — ask user to review the spec file before proceeding
+10. **Transition to implementation** — invoke writing-plans skill to create implementation plan
 
 ## Process Flow
 
@@ -38,7 +39,8 @@ digraph brainstorming {
     "Explore project context" [shape=box];
     "Visual questions ahead?" [shape=diamond];
     "Offer Visual Companion\n(own message, no other content)" [shape=box];
-    "Ask clarifying questions" [shape=box];
+    "Ask user ONLY\nproduct/vision questions" [shape=box];
+    "Consult Expert Advisors\n(Design Lead + Product CTO)" [shape=box, style=filled, fillcolor=lightyellow];
     "Propose 2-3 approaches" [shape=box];
     "Present design sections" [shape=box];
     "User approves design?" [shape=diamond];
@@ -50,9 +52,10 @@ digraph brainstorming {
 
     "Explore project context" -> "Visual questions ahead?";
     "Visual questions ahead?" -> "Offer Visual Companion\n(own message, no other content)" [label="yes"];
-    "Visual questions ahead?" -> "Ask clarifying questions" [label="no"];
-    "Offer Visual Companion\n(own message, no other content)" -> "Ask clarifying questions";
-    "Ask clarifying questions" -> "Propose 2-3 approaches";
+    "Visual questions ahead?" -> "Ask user ONLY\nproduct/vision questions" [label="no"];
+    "Offer Visual Companion\n(own message, no other content)" -> "Ask user ONLY\nproduct/vision questions";
+    "Ask user ONLY\nproduct/vision questions" -> "Consult Expert Advisors\n(Design Lead + Product CTO)";
+    "Consult Expert Advisors\n(Design Lead + Product CTO)" -> "Propose 2-3 approaches";
     "Propose 2-3 approaches" -> "Present design sections";
     "Present design sections" -> "User approves design?";
     "User approves design?" -> "Present design sections" [label="no, revise"];
@@ -68,6 +71,98 @@ digraph brainstorming {
 
 **The terminal state is invoking writing-plans.** Do NOT invoke frontend-design, mcp-builder, or any other implementation skill. The ONLY skill you invoke after brainstorming is writing-plans.
 
+## Expert Advisor Panel
+
+The brainstorming process has access to two expert advisors that answer technical and design questions **internally** — so the user is only asked questions they can uniquely answer (product vision, business context, user needs).
+
+### The Advisors
+
+| Advisor | Skill | Answers questions about |
+|---|---|---|
+| **Design Lead** | `skills/design-lead.md` | Layout, typography, color, spacing, components, responsive strategy, accessibility, interaction patterns, UI architecture |
+| **Product CTO** | `skills/product-cto.md` | System architecture, API design, data flow, caching, performance, resilience, observability, security, deployment, testing strategy |
+
+### Question Triage
+
+Before asking ANY question during brainstorming, classify it:
+
+```dot
+digraph triage {
+    "Question arises" [shape=box];
+    "Only user can answer?" [shape=diamond];
+    "Ask user" [shape=box, style=filled, fillcolor=lightblue];
+    "Design/UI/UX question?" [shape=diamond];
+    "Dispatch Design Lead\nsubagent" [shape=box, style=filled, fillcolor=lightyellow];
+    "Architecture/tech question?" [shape=diamond];
+    "Dispatch Product CTO\nsubagent" [shape=box, style=filled, fillcolor=lightyellow];
+    "Answer yourself\n(general knowledge)" [shape=box];
+
+    "Question arises" -> "Only user can answer?";
+    "Only user can answer?" -> "Ask user" [label="yes"];
+    "Only user can answer?" -> "Design/UI/UX question?" [label="no"];
+    "Design/UI/UX question?" -> "Dispatch Design Lead\nsubagent" [label="yes"];
+    "Design/UI/UX question?" -> "Architecture/tech question?";
+    "Architecture/tech question?" -> "Dispatch Product CTO\nsubagent" [label="yes"];
+    "Architecture/tech question?" -> "Answer yourself\n(general knowledge)" [label="no"];
+}
+```
+
+**Ask the user** — questions about product intent, business context, target users, scope, priorities:
+- "What should this feature do?"
+- "Who is the primary user?"
+- "What's more important: speed-to-market or completeness?"
+- "Which data matters most to your customers?"
+- "What's the budget/timeline constraint?"
+
+**Consult Design Lead** — questions about how things should look, feel, and flow:
+- "Should this be a table or card grid?"
+- "What layout pattern works for this dashboard?"
+- "How should the navigation hierarchy work?"
+- "What states does this component need?"
+- "How should this behave on mobile?"
+
+**Consult Product CTO** — questions about how things should be built:
+- "Real-time or polling for this data?"
+- "Where should this logic live — edge, server, or client?"
+- "What caching strategy fits here?"
+- "How should we handle failures from this external API?"
+- "What observability do we need?"
+
+### How to Dispatch Expert Advisors
+
+After collecting enough product context from the user (usually 2-4 questions), dispatch the advisors as subagents. **Dispatch both in parallel** when both are relevant.
+
+**Subagent prompt template:**
+
+```
+You are the [Design Lead / Product CTO] advisor for a brainstorming session.
+
+Read the skill file at `skills/[design-lead / product-cto].md` and apply it to the following context.
+
+## Feature Context
+[Paste: what the user wants to build, who it's for, key constraints, any decisions already made]
+
+## Project Context
+[Paste: relevant tech stack, existing patterns, current architecture from project exploration]
+
+## Questions to Answer
+[List the specific technical/design questions that arose during brainstorming]
+
+Provide your analysis using the output format specified in the skill. Be specific and actionable — your recommendations will be incorporated directly into the design spec.
+```
+
+**After receiving advisor responses:**
+- Synthesize their recommendations into your approach proposals (Step 5)
+- Present the design with advisor decisions already baked in
+- If advisors disagree on an approach, present both options with trade-offs to the user
+- Credit the reasoning: "From an architecture perspective, X makes sense because..." / "The UI works better as Y because..."
+
+### When NOT to Use Advisors
+
+- **Trivial features** (copy change, config tweak, simple bugfix) — don't dispatch advisors for work that doesn't involve design or architecture decisions
+- **User explicitly wants to decide** — if the user says "I want a table, not cards", respect that. Advisors inform defaults, they don't override explicit user preferences
+- **Pure backend logic** with no UI and no architecture decisions — just build it
+
 ## The Process
 
 **Understanding the idea:**
@@ -78,7 +173,7 @@ digraph brainstorming {
 - For appropriately-scoped projects, ask questions one at a time to refine the idea
 - Prefer multiple choice questions when possible, but open-ended is fine too
 - Only one question per message - if a topic needs more exploration, break it into multiple questions
-- Focus on understanding: purpose, constraints, success criteria
+- **Focus on product questions only:** purpose, target users, constraints, success criteria. Do NOT ask the user about layout patterns, architecture choices, caching strategies, or component design — those are for the expert advisors.
 
 **Exploring approaches:**
 
