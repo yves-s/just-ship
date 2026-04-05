@@ -13,6 +13,7 @@ import { join, basename } from "node:path";
 import { tmpdir } from "node:os";
 import type { QaConfig } from "./config.js";
 import { waitForVercelPreview } from "./vercel-preview.js";
+import { logger } from "./logger.ts";
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -119,7 +120,7 @@ function exec(cmd: string, cwd: string, timeoutMs = 120_000): { stdout: string; 
 
 export function runBuildCheck(workDir: string, packageManager: string, overrideCmd?: string): QaCheckResult {
   const cmd = overrideCmd ?? buildCommand(packageManager);
-  console.error(`[qa-runner] Running build: ${cmd}`);
+  logger.info({ cmd }, "Running build");
 
   const { stdout, ok } = exec(cmd, workDir);
   const truncated = stdout.length > 2000 ? `...${stdout.slice(-2000)}` : stdout;
@@ -161,7 +162,7 @@ export function runTestCheck(workDir: string, packageManager: string, overrideCm
   }
 
   const cmd = overrideCmd ?? testCommand(packageManager);
-  console.error(`[qa-runner] Running tests: ${cmd}`);
+  logger.info({ cmd }, "Running tests");
 
   const { stdout, ok } = exec(cmd, workDir, 180_000);
   const truncated = stdout.length > 2000 ? `...${stdout.slice(-2000)}` : stdout;
@@ -305,7 +306,7 @@ export function runPlaywrightSmoke(
   const screenshotPaths: string[] = [];
 
   for (const page of effectivePages) {
-    console.error(`[qa-runner] Playwright smoke: ${page}`);
+    logger.info({ page }, "Playwright smoke test");
     const result = runPlaywrightPage(workDir, previewUrl, page, timeoutMs);
     checks.push(result.check);
     if (result.screenshotPath) {
@@ -469,7 +470,7 @@ export function postQaReport(
 
   const prNumber = prList.trim();
   if (!prFound || !prNumber) {
-    console.error(`[qa-runner] No PR found for branch "${branchName}" -- skipping report post`);
+    logger.info({ branchName }, "No PR found for branch -- skipping QA report post");
     return;
   }
 
@@ -480,7 +481,7 @@ export function postQaReport(
 
   try {
     exec(`gh pr comment ${prNumber} --body-file "${tmpFile}"`, workDir);
-    console.error(`[qa-runner] QA report posted to PR #${prNumber}`);
+    logger.info({ prNumber }, "QA report posted to PR");
   } finally {
     try {
       unlinkSync(tmpFile);
@@ -500,7 +501,7 @@ export function postQaReport(
   }
 
   exec(`gh pr edit ${prNumber} --add-label "${label}"`, workDir);
-  console.error(`[qa-runner] Label "${label}" added to PR #${prNumber}`);
+  logger.info({ prNumber, label }, "Label added to PR");
 }
 
 // ---------------------------------------------------------------------------
@@ -517,7 +518,7 @@ export async function runQa(ctx: QaContext): Promise<QaReport> {
     fixHistory: [],
   };
 
-  console.error(`[qa-runner] Starting QA (tier: ${ctx.qaTier}) for ${ctx.ticketId}`);
+  logger.info({ tier: ctx.qaTier, ticketId: ctx.ticketId }, "Starting QA");
 
   // --- Build check (all tiers) ---
   const buildResult = runBuildCheck(ctx.workDir, ctx.packageManager, ctx.buildCommand);

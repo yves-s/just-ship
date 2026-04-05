@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { homedir } from "node:os";
+import { logger } from "./logger.ts";
 
 export interface PipelineConfig {
   projectId: string;
@@ -73,7 +74,7 @@ function loadGlobalConfig(): GlobalConfig | null {
   try {
     return JSON.parse(readFileSync(configPath, "utf-8"));
   } catch {
-    console.warn("[Config] Could not parse ~/.just-ship/config.json — continuing without global config");
+    logger.warn("Could not parse ~/.just-ship/config.json — continuing without global config");
     return null;
   }
 }
@@ -124,9 +125,9 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
 
   if (rawPipeline.api_key) {
     // Old format: credentials in project.json
-    console.warn(
-      "\u26a0 api_key in project.json is deprecated.\n" +
-      "  Run 'just-ship connect' or '.claude/scripts/write-config.sh migrate' to upgrade."
+    logger.warn(
+      "api_key in project.json is deprecated. " +
+      "Run 'just-ship connect' or '.claude/scripts/write-config.sh migrate' to upgrade."
     );
     pipeline = buildPipelineConfig(rawPipeline, globalConfig);
     if (!pipeline.apiUrl) pipeline.apiUrl = (rawPipeline.api_url as string) ?? "";
@@ -151,22 +152,22 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
             apiKey: apiKey,
           };
         } catch {
-          console.warn(`\u26a0 Could not read server-config.json at ${serverConfigPath}`);
+          logger.warn({ serverConfigPath }, "Could not read server-config.json");
           pipeline = buildPipelineConfig(rawPipeline, null);
         }
       } else {
-        console.warn(
-          `\u26a0 workspace_id '${wsId}' configured but ~/.just-ship/config.json not found.\n` +
-          `  Run 'just-ship connect' to set up the connection.`
+        logger.warn(
+          { workspaceId: wsId },
+          "workspace_id configured but ~/.just-ship/config.json not found. Run 'just-ship connect' to set up the connection."
         );
         pipeline = buildPipelineConfig(rawPipeline, null);
       }
     } else {
       const ws = globalConfig.workspaces[wsId];
       if (!ws) {
-        console.error(
-          `Workspace '${wsId}' not found in ~/.just-ship/config.json.\n` +
-          `Run 'just-ship connect' to set up the connection.`
+        logger.error(
+          { workspaceId: wsId },
+          "Workspace not found in ~/.just-ship/config.json. Run 'just-ship connect' to set up the connection."
         );
         pipeline = buildPipelineConfig(rawPipeline, globalConfig);
       } else {
@@ -176,9 +177,8 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
 
   } else if (rawPipeline.workspace) {
     // Intermediate format: slug-based (deprecated)
-    console.warn(
-      `\u26a0 pipeline.workspace (slug) is deprecated.\n` +
-      `  Run '.claude/scripts/write-config.sh migrate' to upgrade.`
+    logger.warn(
+      "pipeline.workspace (slug) is deprecated. Run '.claude/scripts/write-config.sh migrate' to upgrade."
     );
     const slug = rawPipeline.workspace as string;
     let ws: WorkspaceEntry | undefined;

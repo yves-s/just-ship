@@ -1,5 +1,6 @@
 import { initSentry, Sentry } from "./lib/sentry.ts";
 initSentry();
+import { logger } from "./lib/logger.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { execSync } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -47,7 +48,7 @@ if (isMultiProjectMode) {
   const required = ["ANTHROPIC_API_KEY", "GH_TOKEN", "PROJECT_DIR", "PIPELINE_SERVER_KEY"] as const;
   for (const key of required) {
     if (!process.env[key]) {
-      console.error(`ERROR: ${key} must be set`);
+      logger.error(`ERROR: ${key} must be set`);
       process.exit(1);
     }
   }

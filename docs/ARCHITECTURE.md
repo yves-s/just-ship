@@ -1113,14 +1113,23 @@ VPS (Ubuntu 22.04)
 | `POLL_INTERVAL` | Polling interval in seconds (default: 60) |
 | `MAX_FAILURES` | Consecutive failures before worker stops (default: 5) |
 | `LOG_DIR` | Log directory (default: `~/pipeline-logs`) |
+| `LOG_LEVEL` | Pino log level: `debug`, `info`, `warn`, `error` (default: `debug` in dev, `info` in production) |
 | `BUGSINK_DSN` | Bugsink error tracking DSN (auto-configured in Docker) |
+
+### Structured Logging
+
+The pipeline uses **Pino** for structured JSON logging (`pipeline/lib/logger.ts`). Every log line includes `level`, `timestamp` (ISO 8601), and `service: "engine"`. Child loggers add correlation fields like `ticketNumber`, `workspaceId`, `branch`, and `requestId`.
+
+Sensitive data (API keys, tokens, secrets) is automatically redacted via Pino's `redact` option — values are partially masked (first 4 + last 4 chars visible) before serialization, so secrets never reach the log stream.
+
+Log level is controlled via `LOG_LEVEL` env var (defaults to `debug` in development, `info` in production).
 
 ### Monitoring
 
 VPS deployments include built-in monitoring via two lightweight containers (~286 MB total):
 
 - **Bugsink** (`/errors/`) — Error tracking with stack traces. The pipeline-server and worker use `@sentry/node` SDK pointed at the Bugsink DSN. Sentry-compatible, so switching to GlitchTip or Sentry Cloud later only requires changing the DSN.
-- **Dozzle** (`/logs/`) — Live Docker container log viewer. Reads the Docker socket (read-only), zero code changes required.
+- **Dozzle** (`/logs/`) — Live Docker container log viewer. Reads the Docker socket (read-only), zero code changes required. With structured JSON logging, Dozzle can parse and filter log fields directly.
 
 Both UIs are protected by Caddy basicauth and only accessible through the reverse proxy.
 

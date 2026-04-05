@@ -10,6 +10,7 @@ import { execSync } from "node:child_process";
 import { runQa, postQaReport, type QaContext, type QaReport } from "./qa-runner.js";
 import { makeSpawn } from "./spawn.ts";
 import { sleep } from "./utils.ts";
+import { logger } from "./logger.ts";
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -110,7 +111,7 @@ export async function runQaWithFixLoop(ctx: QaContext): Promise<FixLoopResult> {
   const maxIterations = ctx.qaConfig.maxFixIterations;
   const isFullWithVercel = ctx.qaTier === "full" && ctx.qaConfig.previewProvider === "vercel";
 
-  console.error(`[qa-fix-loop] Running initial QA (tier: ${ctx.qaTier}) for T-${ctx.ticketId}`);
+  logger.info({ tier: ctx.qaTier, ticketId: ctx.ticketId }, "Running initial QA");
 
   let report = await runQa(ctx);
   let iteration = 0;
@@ -118,9 +119,7 @@ export async function runQaWithFixLoop(ctx: QaContext): Promise<FixLoopResult> {
 
   while (report.status === "failed" && iteration < maxIterations) {
     iteration++;
-    console.error(
-      `[qa-fix-loop] QA failed — starting fix attempt ${iteration}/${maxIterations} for T-${ctx.ticketId}`,
-    );
+    logger.info({ iteration, maxIterations, ticketId: ctx.ticketId }, "QA failed — starting fix attempt");
 
     // a. Build fix prompt from failed blocking checks
     const fixPrompt = buildFixPrompt(ctx.ticketId, report, iteration);
@@ -134,7 +133,7 @@ export async function runQaWithFixLoop(ctx: QaContext): Promise<FixLoopResult> {
       fixHistory.push(`Attempt ${iteration}: ${commitMsg}`);
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error(`[qa-fix-loop] Fix session failed: ${errorMsg}`);
+      logger.info({ errorMsg }, "QA fix session failed");
       fixHistory.push(`Attempt ${iteration}: Failed — ${errorMsg}`);
     }
 
@@ -149,12 +148,12 @@ export async function runQaWithFixLoop(ctx: QaContext): Promise<FixLoopResult> {
 
     // f. For full-tier with Vercel, wait for redeployment
     if (isFullWithVercel) {
-      console.error("[qa-fix-loop] Waiting 5s for Vercel redeployment...");
+      logger.debug("Waiting 5s for Vercel redeployment");
       await sleep(5000);
     }
 
     // g. Re-run QA
-    console.error(`[qa-fix-loop] Re-running QA after fix attempt ${iteration}`);
+    logger.debug({ iteration }, "Re-running QA after fix attempt");
     const newReport = await runQa(ctx);
 
     // h. Attach accumulated fix history
@@ -165,13 +164,9 @@ export async function runQaWithFixLoop(ctx: QaContext): Promise<FixLoopResult> {
   }
 
   if (report.status === "passed") {
-    console.error(
-      `[qa-fix-loop] QA passed after ${iteration} fix iteration(s) for T-${ctx.ticketId}`,
-    );
+    logger.info({ iterations: iteration, ticketId: ctx.ticketId }, "QA passed");
   } else if (iteration >= maxIterations) {
-    console.error(
-      `[qa-fix-loop] QA still failing after ${iteration} fix iteration(s) for T-${ctx.ticketId}`,
-    );
+    logger.info({ iterations: iteration, ticketId: ctx.ticketId }, "QA still failing after max fix iterations");
   }
 
   // Post the final report to the PR

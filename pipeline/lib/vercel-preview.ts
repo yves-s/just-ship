@@ -22,6 +22,7 @@ interface VercelDeploymentMeta {
 }
 
 import { sleep } from "./utils.ts";
+import { logger } from "./logger.ts";
 
 interface VercelDeployment {
   uid: string;
@@ -56,7 +57,7 @@ export async function waitForVercelPreview(
 
   const token = process.env.VERCEL_TOKEN;
   if (!token) {
-    console.error("[vercel-preview] VERCEL_TOKEN not set -- skipping preview poll");
+    logger.warn("VERCEL_TOKEN not set -- skipping preview poll");
     return null;
   }
 
@@ -69,9 +70,7 @@ export async function waitForVercelPreview(
 
   const startTime = Date.now();
 
-  console.error(
-    `[vercel-preview] Waiting for preview deployment (branch: ${branchName}, project: ${vercelProjectId})`,
-  );
+  logger.info({ branch: branchName, vercelProjectId }, "Waiting for Vercel preview deployment");
 
   while (Date.now() - startTime < vercelPreviewMaxWaitMs) {
     try {
@@ -92,9 +91,7 @@ export async function waitForVercelPreview(
       );
 
       if (!res.ok) {
-        console.error(
-          `[vercel-preview] API returned ${res.status} -- retrying in ${vercelPreviewPollIntervalMs}ms`,
-        );
+        logger.debug({ status: res.status, retryMs: vercelPreviewPollIntervalMs }, "Vercel API returned non-OK status, retrying");
         await sleep(vercelPreviewPollIntervalMs);
         continue;
       }
@@ -107,37 +104,29 @@ export async function waitForVercelPreview(
       if (match) {
         if (match.readyState === "READY") {
           const previewUrl = `https://${match.url}`;
-          console.error(`[vercel-preview] Deployment ready: ${previewUrl}`);
+          logger.info({ previewUrl }, "Vercel deployment ready");
           return previewUrl;
         }
 
         if (match.readyState === "ERROR") {
-          console.error(
-            `[vercel-preview] Deployment failed (uid: ${match.uid}) -- aborting`,
-          );
+          logger.warn({ uid: match.uid }, "Vercel deployment failed -- aborting");
           return null;
         }
 
         const elapsed = Math.round((Date.now() - startTime) / 1000);
-        console.error(
-          `[vercel-preview] Deployment state: ${match.readyState} (${elapsed}s elapsed) -- polling`,
-        );
+        logger.debug({ readyState: match.readyState, elapsedSeconds: elapsed }, "Vercel deployment polling");
       } else {
         const elapsed = Math.round((Date.now() - startTime) / 1000);
-        console.error(
-          `[vercel-preview] No deployment found for branch "${branchName}" (${elapsed}s elapsed) -- polling`,
-        );
+        logger.debug({ branch: branchName, elapsedSeconds: elapsed }, "No Vercel deployment found for branch, polling");
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`[vercel-preview] Poll error: ${message} -- retrying`);
+      logger.debug({ message }, "Vercel poll error -- retrying");
     }
 
     await sleep(vercelPreviewPollIntervalMs);
   }
 
-  console.error(
-    `[vercel-preview] Timed out after ${vercelPreviewMaxWaitMs}ms waiting for preview`,
-  );
+  logger.warn({ timeoutMs: vercelPreviewMaxWaitMs }, "Timed out waiting for Vercel preview deployment");
   return null;
 }

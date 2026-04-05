@@ -1,3 +1,5 @@
+import { logger } from "./logger.ts";
+
 interface BudgetConfig {
   apiUrl: string;
   apiKey: string;
@@ -27,7 +29,7 @@ export async function checkBudget(
     });
 
     if (!wsRes.ok) {
-      console.error(`[Budget] Failed to fetch workspace: ${wsRes.status}`);
+      logger.error({ status: wsRes.status }, "Failed to fetch workspace for budget check");
       return { allowed: true };
     }
 
@@ -46,7 +48,7 @@ export async function checkBudget(
     );
 
     if (!costRes.ok) {
-      console.error(`[Budget] Failed to fetch costs: ${costRes.status}`);
+      logger.error({ status: costRes.status }, "Failed to fetch costs for budget check");
       return { allowed: true };
     }
 
@@ -70,7 +72,7 @@ export async function checkBudget(
       thresholdReached: currentCost >= ceiling * threshold,
     };
   } catch (error) {
-    console.error(`[Budget] Check failed: ${error instanceof Error ? error.message : String(error)}`);
+    logger.error({ err: error instanceof Error ? error.message : String(error) }, "Budget check failed");
     return { allowed: true };
   }
 }

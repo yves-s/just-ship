@@ -2,6 +2,7 @@ import { execSync } from "node:child_process";
 import { existsSync, readdirSync, rmSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { sanitizeBranchName } from "./sanitize.ts";
+import { logger } from "./logger.ts";
 
 interface Slot {
   slotId: number;
@@ -133,7 +134,7 @@ export class WorktreeManager {
         .filter((d) => d.isDirectory())
         .map((d) => d.name);
     } catch {
-      console.warn("[WorktreeManager] Could not read worktree base directory during prune");
+      logger.warn("Could not read worktree base directory during prune");
       return;
     }
 
@@ -264,7 +265,7 @@ export class WorktreeManager {
         this._git("worktree prune");
       } catch {
         // Best-effort cleanup -- log but don't throw
-        console.warn(`[WorktreeManager] Failed to clean up worktree: ${workDir}`);
+        logger.warn({ workDir }, "Failed to clean up worktree");
       }
     }
   }
@@ -281,7 +282,7 @@ export class WorktreeManager {
         .filter((d) => d.isDirectory())
         .map((d) => d.name);
     } catch {
-      console.warn("[WorktreeManager] Could not read worktree base directory during parked scan");
+      logger.warn("Could not read worktree base directory during parked scan");
       return null;
     }
 

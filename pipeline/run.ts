@@ -14,6 +14,7 @@ import { Sentry } from "./lib/sentry.ts";
 import { updateCheckpoint, clearCheckpoint, type PipelineCheckpoint } from "./lib/checkpoint.ts";
 import { sanitizeBranchName } from "./lib/sanitize.ts";
 import { toBranchName, log } from "./lib/utils.ts";
+import { logger } from "./lib/logger.ts";
 import { makeSpawn } from "./lib/spawn.ts";
 import { estimateCost } from "./lib/cost.ts";
 import { checkLevel1Exists } from "./lib/artifact-verifier.ts";
@@ -139,14 +140,14 @@ Labels: ${ticket.labels}`;
 
       if (parsed.verdict === "enriched" && parsed.enriched_body) {
         result.description = parsed.enriched_body;
-        console.error(`[Triage] Enriched — ${result.analysis}`);
+        logger.info({ analysis: result.analysis }, "Triage: enriched");
       } else {
-        console.error(`[Triage] Sufficient — ${result.analysis}`);
+        logger.info({ analysis: result.analysis }, "Triage: sufficient");
       }
-      console.error(`[Triage] QA tier: ${result.qaTier}`);
+      logger.info({ qaTier: result.qaTier }, "Triage QA tier");
     }
   } catch (error) {
-    console.error(`[Triage] Error: ${error instanceof Error ? error.message : String(error)}`);
+    logger.warn({ err: error instanceof Error ? error.message : String(error) }, "Triage error");
   }
 
   if (hasPipeline) {
@@ -206,14 +207,14 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
     writeFileSync(join(claudeDir, ".active-ticket"), ticket.ticketId);
   } catch {
     // Best-effort: .active-ticket enables event hooks but is not required for pipeline execution
-    console.error(`[Pipeline] Warning: could not write .active-ticket`);
+    logger.warn("Could not write .active-ticket");
   }
 
   // --- Load agents + orchestrator prompt ---
   const agents = loadAgents(workDir);
   const loadedSkills = loadSkills(projectDir, config);
   if (loadedSkills.skillNames.length > 0) {
-    console.error(`[Pipeline] Skills loaded: ${loadedSkills.skillNames.join(", ")}`);
+    logger.info({ skills: loadedSkills.skillNames }, "Skills loaded");
   }
 
   // Filter agents by skipAgents config
@@ -222,7 +223,7 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
     Object.entries(agents).filter(([name]) => !skipAgents.includes(name))
   );
   if (skipAgents.length > 0) {
-    console.error(`[Pipeline] Skipping agents: ${skipAgents.join(", ")}`);
+    logger.info({ skipAgents }, "Skipping agents");
   }
 
   // Inject skills into agent prompts
@@ -332,7 +333,7 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
           if (enriched.enriched_description) {
             ticketDescription = enriched.enriched_description;
           }
-          console.error(`[Enrichment] Done — ${triageResult.affectedFiles?.length ?? 0} files, ${triageResult.addedACs?.length ?? 0} ACs added`);
+          logger.info({ filesCount: triageResult.affectedFiles?.length ?? 0, acsCount: triageResult.addedACs?.length ?? 0 }, "Enrichment done");
         }
 
         // Post enrichment as Board comment (non-blocking)
@@ -351,7 +352,7 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
         }
       }
     } catch (e) {
-      console.error(`[Enrichment] Skipped: ${e instanceof Error ? e.message : String(e)}`);
+      logger.debug({ err: e instanceof Error ? e.message : String(e) }, "Enrichment skipped");
     }
   }
 
@@ -362,9 +363,9 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
         timeout: 30_000,
         stdio: "pipe",
       });
-      console.error("[Shopify] Environment check passed");
+      logger.info("Shopify environment check passed");
     } catch (e) {
-      console.error(`[Shopify] Environment check failed: ${e instanceof Error ? e.message : String(e)}`);
+      logger.warn({ err: e instanceof Error ? e.message : String(e) }, "Shopify environment check failed");
     }
   }
 
@@ -410,7 +411,7 @@ Branch ist bereits erstellt: ${branchName}`;
 
   // SECURITY: Validate timeout value bounds
   if (!Number.isFinite(timeoutMs) || timeoutMs < MIN_TIMEOUT_MS || timeoutMs > MAX_TIMEOUT_MS) {
-    console.warn(`Invalid timeout ${timeoutMs}ms, using default ${DEFAULT_TIMEOUT_MS}ms`);
+    logger.warn({ timeoutMs, defaultMs: DEFAULT_TIMEOUT_MS }, "Invalid timeout value, using default");
     timeoutMs = DEFAULT_TIMEOUT_MS;
   }
 
@@ -445,14 +446,15 @@ Branch ist bereits erstellt: ${branchName}`;
     // --- Diagnostic logging ---
     const agentNames = Object.keys(filteredAgents);
     const skillNames = loadedSkills.skillNames;
-    console.error(`[Pipeline] Starting orchestrator query:`);
-    console.error(`[Pipeline]   workDir: ${workDir}`);
-    console.error(`[Pipeline]   model: opus`);
-    console.error(`[Pipeline]   agents: ${agentNames.join(", ") || "none"}`);
-    console.error(`[Pipeline]   skills: ${skillNames.join(", ") || "none"}`);
-    console.error(`[Pipeline]   prompt length: ${prompt.length} chars`);
-    console.error(`[Pipeline]   branch: ${branchName}`);
-    console.error(`[Pipeline]   timeout: ${timeoutMs / 60_000} min`);
+    logger.info({
+      workDir,
+      model: "opus",
+      agents: agentNames,
+      skills: skillNames,
+      promptLength: prompt.length,
+      branch: branchName,
+      timeoutMinutes: timeoutMs / 60_000,
+    }, "Starting orchestrator query");
 
     Sentry.addBreadcrumb({ category: "pipeline", message: "orchestrator_start", data: { ticketId: ticket.ticketId, branch: branchName } });
 
@@ -497,7 +499,7 @@ Branch ist bereits erstellt: ${branchName}`;
           sdkUsage = resultMsg.usage;
         }
         if (resultMsg.subtype !== "success") {
-          console.error("[SDK Result]", resultMsg.subtype);
+          logger.warn({ subtype: resultMsg.subtype }, "SDK result non-success");
           exitCode = 1;
           throw new Error(`Pipeline exited with status: ${resultMsg.subtype}`);
         }
@@ -539,7 +541,7 @@ Branch ist bereits erstellt: ${branchName}`;
           });
         } catch {
           // Best-effort: question storage enables human-in-the-loop UI but pipeline can pause without it
-          console.error("[Pipeline] Warning: could not store question in ticket");
+          logger.warn("Could not store question in ticket");
         }
       }
       return {
@@ -568,7 +570,7 @@ Branch ist bereits erstellt: ${branchName}`;
 
         const level1 = checkLevel1Exists(diffOutput);
         if (!level1.passed) {
-          console.error(`[Verifier] WARN: ${level1.message}`);
+          logger.warn({ message: level1.message }, "Artifact verification warning");
           if (hasPipeline) {
             await postPipelineEvent(eventConfig, "verification_warning", "orchestrator", {
               level: 1,
@@ -576,10 +578,10 @@ Branch ist bereits erstellt: ${branchName}`;
             });
           }
         } else {
-          console.error(`[Verifier] Level 1 OK: ${level1.message}`);
+          logger.info({ message: level1.message }, "Artifact verification level 1 OK");
         }
       } catch {
-        console.error("[Verifier] Could not run artifact verification — continuing");
+        logger.debug("Could not run artifact verification — continuing");
       }
     }
 
@@ -587,7 +589,7 @@ Branch ist bereits erstellt: ${branchName}`;
     if (exitCode === 0 && lastAssistantText) {
       const scopeCheck = detectScopeReduction(lastAssistantText);
       if (scopeCheck.detected) {
-        console.error(`[ScopeGuard] WARNING: ${scopeCheck.message}`);
+        logger.warn({ message: scopeCheck.message }, "Scope reduction detected");
         if (hasPipeline) {
           await postPipelineEvent(eventConfig, "scope_reduction_warning", "orchestrator", {
             markers: scopeCheck.markers.map((m) => m.pattern),
@@ -614,7 +616,7 @@ Branch ist bereits erstellt: ${branchName}`;
         }
       } catch {
         // Summary is best-effort — don't fail the pipeline
-        console.error("[Summary] Failed to generate or send change summary");
+        logger.info("Failed to generate or send change summary");
       }
     }
   } catch (error) {
@@ -624,12 +626,12 @@ Branch ist bereits erstellt: ${branchName}`;
     } else {
       failureReason = error instanceof Error ? error.message : String(error);
     }
-    console.error(`Pipeline error: ${failureReason}`);
+    logger.error({ failureReason }, "Pipeline error");
     if (hasPipeline) await postPipelineEvent(eventConfig, "pipeline_failed", "orchestrator");
   } finally {
     clearTimeout(timeoutId);
     if (exitCode !== 0) {
-      console.error(`[Pipeline] Final state: exitCode=${exitCode}, reason=${failureReason ?? "unknown"}, timedOut=${timedOut}`);
+      logger.error({ exitCode, reason: failureReason ?? "unknown", timedOut }, "Pipeline final state");
     }
   }
 
@@ -685,19 +687,19 @@ Branch ist bereits erstellt: ${branchName}`;
       const verifyResults = runVerifyCommands({ workDir, commands: verifyCommands });
       for (const vr of verifyResults) {
         if (vr.passed) {
-          console.error(`[Verify] OK: ${vr.cmd} (${vr.attempts} attempt(s))`);
+          logger.info({ cmd: vr.cmd, attempts: vr.attempts }, "Verify command OK");
         } else if (vr.blocking) {
-          console.error(`[Verify] FAILED: ${vr.cmd} after ${vr.attempts} attempt(s)`);
+          logger.warn({ cmd: vr.cmd, attempts: vr.attempts }, "Verify command FAILED");
           qaContext.verifyOutput = vr.output;
           qaContext.verifyFailed = true;
         } else {
-          console.error(`[Verify] WARN: ${vr.cmd} failed (advisory)`);
+          logger.warn({ cmd: vr.cmd }, "Verify command failed (advisory)");
         }
       }
     }
 
     const { finalReport, iterations } = await runQaWithFixLoop(qaContext);
-    console.error(`[QA] ${finalReport.tier} tier — ${finalReport.status} (${iterations} fix loops)`);
+    logger.info({ tier: finalReport.tier, status: finalReport.status, fixLoops: iterations }, "QA complete");
 
     if (hasPipeline) {
       await postPipelineEvent(eventConfig, "completed", "qa", {
@@ -796,7 +798,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
     writeFileSync(join(claudeDir, ".active-ticket"), ticket.ticketId);
   } catch {
     // Best-effort: .active-ticket enables event hooks but is not required for pipeline execution
-    console.error(`[Pipeline] Warning: could not write .active-ticket`);
+    logger.warn("Could not write .active-ticket");
   }
 
   const agents = loadAgents(workDir);
@@ -907,7 +909,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
           sdkUsage = resultMsg.usage;
         }
         if (resultMsg.subtype !== "success") {
-          console.error("[SDK Result]", resultMsg.subtype);
+          logger.warn({ subtype: resultMsg.subtype }, "SDK result non-success");
           exitCode = 1;
           throw new Error(`Pipeline exited with status: ${resultMsg.subtype}`);
         }
@@ -947,7 +949,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
           });
         } catch {
           // Best-effort: question storage enables human-in-the-loop UI but pipeline can pause without it
-          console.error("[Pipeline] Warning: could not store question in ticket");
+          logger.warn("Could not store question in ticket");
         }
       }
       return {
@@ -978,7 +980,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
         }
       } catch {
         // Summary is best-effort — don't fail the pipeline
-        console.error("[Summary] Failed to generate or send change summary");
+        logger.info("Failed to generate or send change summary");
       }
     }
   } catch (error) {
@@ -988,12 +990,12 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
     } else {
       failureReason = error instanceof Error ? error.message : String(error);
     }
-    console.error(`Resume pipeline error: ${failureReason}`);
+    logger.error({ failureReason }, "Resume pipeline error");
     if (hasPipeline) await postPipelineEvent(eventConfig, "pipeline_failed", "orchestrator");
   } finally {
     clearTimeout(timeoutId);
     if (exitCode !== 0) {
-      console.error(`[Pipeline] Final state: exitCode=${exitCode}, reason=${failureReason ?? "unknown"}, timedOut=${timedOut}`);
+      logger.error({ exitCode, reason: failureReason ?? "unknown", timedOut }, "Resume pipeline final state");
     }
   }
 
@@ -1041,32 +1043,31 @@ if (isMain) {
     try {
       ticket = parseCliArgs(process.argv.slice(2));
     } catch (e) {
-      console.error(e instanceof Error ? e.message : String(e));
+      logger.error(e instanceof Error ? e.message : String(e));
       process.exit(1);
     }
     const config = loadProjectConfig(projectDir);
 
     // --- Banner ---
-    console.error("================================================");
-    console.error(`  ${config.name} — Autonomous Pipeline (SDK)`);
-    console.error(`  Ticket: ${ticket.ticketId} — ${ticket.title}`);
-    console.error("================================================\n");
+    logger.info({ project: config.name, ticketId: ticket.ticketId, title: ticket.title }, "Autonomous Pipeline (SDK) starting");
 
     const result = await executePipeline({ projectDir, ticket });
 
     // --- JSON output (stdout, for n8n / worker) ---
-    console.error("\n================================================");
-    console.error(`  Pipeline ${result.status}`);
-    console.error("================================================");
+    logger.info({ status: result.status }, "Pipeline finished");
 
-    console.log(JSON.stringify({
+    const cliResult = {
       status: result.status,
       ...(result.status === "failed" ? { exit_code: result.exitCode } : {}),
       ticket_id: ticket.ticketId,
       ticket_title: ticket.title,
       branch: result.branch,
       project: result.project,
-    }));
+    };
+    // Keep stdout JSON output for CLI consumers (n8n, worker)
+    // Also emit through logger for log aggregation
+    logger.info(cliResult, "Pipeline result");
+    console.log(JSON.stringify(cliResult));
 
     if (result.status === "failed") process.exit(result.exitCode);
   })();

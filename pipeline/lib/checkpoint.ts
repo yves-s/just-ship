@@ -1,3 +1,5 @@
+import { logger } from "./logger.ts";
+
 export interface PipelineCheckpoint {
   phase: "triage" | "planning" | "agents_dispatched" | "agents_done" | "qa" | "pr_created";
   completed_agents: string[];
@@ -48,7 +50,7 @@ export async function updateCheckpoint(
       signal: AbortSignal.timeout(8000),
     });
   } catch {
-    console.error("[Checkpoint] Failed to write checkpoint");
+    logger.error("Failed to write checkpoint");
   }
 }
 
@@ -67,6 +69,6 @@ export async function clearCheckpoint(config: CheckpointConfig): Promise<void> {
       signal: AbortSignal.timeout(8000),
     });
   } catch {
-    console.error("[Checkpoint] Failed to clear checkpoint");
+    logger.error("Failed to clear checkpoint");
   }
 }

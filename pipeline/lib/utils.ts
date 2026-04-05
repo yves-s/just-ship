@@ -4,6 +4,7 @@
  */
 
 import { sanitizeBranchName } from "./sanitize.ts";
+import { logger } from "./logger.ts";
 
 /**
  * Generate a git branch name from a prefix, ticket ID, and title.
@@ -27,9 +28,9 @@ export function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Timestamped log to stdout (format: `[YYYY-MM-DD HH:MM:SS] message`).
+ * Timestamped log to stdout. Now backed by Pino structured logger.
+ * Kept for backward compatibility — new code should use logger directly.
  */
 export function log(msg: string): void {
-  const ts = new Date().toISOString().replace("T", " ").slice(0, 19);
-  console.log(`[${ts}] ${msg}`);
+  logger.info(msg);
 }
