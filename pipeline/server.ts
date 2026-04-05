@@ -630,7 +630,15 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
 
       if (result.status === "completed") {
         log(`Pipeline completed: T-${ticketNumber} -> ${result.branch}`);
-        await patchTicket(ticketNumber, { pipeline_status: "done", status: "in_review", branch: result.branch });
+        await patchTicket(ticketNumber, {
+          pipeline_status: "done",
+          status: "in_review",
+          branch: result.branch,
+          ...(result.tokens ? {
+            total_tokens: result.tokens.input + result.tokens.output,
+            estimated_cost: result.tokens.estimatedCostUsd,
+          } : {}),
+        });
         recordRun({ ticketNumber, status: "completed", at: new Date().toISOString(), durationMs: Date.now() - startTime });
       } else if (result.status === "paused") {
         log(`Pipeline paused: T-${ticketNumber}`);
@@ -1018,7 +1026,16 @@ async function handleAnswerRoute(req: IncomingMessage, res: ServerResponse): Pro
           slotId = undefined;
         }
       } else if (result.status === "completed") {
-        await patchTicket(ticketNumber, { pipeline_status: "done", status: "in_review", branch: result.branch, session_id: null });
+        await patchTicket(ticketNumber, {
+          pipeline_status: "done",
+          status: "in_review",
+          branch: result.branch,
+          session_id: null,
+          ...(result.tokens ? {
+            total_tokens: result.tokens.input + result.tokens.output,
+            estimated_cost: result.tokens.estimatedCostUsd,
+          } : {}),
+        });
       } else {
         const reason = result.failureReason ?? `exited with code ${result.exitCode}`;
         const classification = classifyError({

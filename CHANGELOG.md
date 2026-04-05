@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Pipeline token tracking: SDK result usage data is now extracted and posted as `pipeline_completed` event with `input_tokens`, `output_tokens`, `estimated_cost_usd` — previously all values were null because hook-based token collection didn't fire for registered custom agents
+- Token totals now also written to ticket's `total_tokens` and `estimated_cost` fields on pipeline completion
+
+### Fixed
 - **Security**: API keys no longer visible in Claude Code terminal output during `/develop` and `/ship` workflows
 - New `board-api.sh` wrapper script hides credentials by suppressing stderr during credential resolution
 - All Board API calls in commands now use `board-api.sh` instead of inline curl with exposed headers
