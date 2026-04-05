@@ -13,6 +13,7 @@ import { join, basename } from "node:path";
 import { tmpdir } from "node:os";
 import type { QaConfig } from "./config.js";
 import { waitForVercelPreview } from "./vercel-preview.js";
+import { waitForCoolifyPreview } from "./coolify-preview.js";
 import { logger } from "./logger.ts";
 
 // ---------------------------------------------------------------------------
@@ -622,10 +623,20 @@ export async function runQa(ctx: QaContext): Promise<QaReport> {
     return report;
   }
 
-  // --- Full tier: Vercel preview + Playwright + functional stubs ---
+  // --- Full tier: Preview URL + Playwright + functional stubs ---
 
-  // Wait for Vercel preview deployment
-  const previewUrl = await waitForVercelPreview(ctx.branchName, ctx.qaConfig);
+  // Wait for preview deployment (Vercel, Coolify, or none)
+  let previewUrl: string | null = null;
+  if (ctx.qaConfig.previewProvider === "vercel") {
+    previewUrl = await waitForVercelPreview(ctx.branchName, ctx.qaConfig);
+  } else if (ctx.qaConfig.previewProvider === "coolify") {
+    previewUrl = await waitForCoolifyPreview(ctx.branchName, {
+      coolifyUrl: ctx.qaConfig.coolifyUrl,
+      coolifyAppUuid: ctx.qaConfig.coolifyAppUuid,
+      coolifyPollIntervalMs: ctx.qaConfig.coolifyPollIntervalMs,
+      coolifyMaxWaitMs: ctx.qaConfig.coolifyMaxWaitMs,
+    });
+  }
   report.previewUrl = previewUrl;
 
   if (previewUrl) {
@@ -651,7 +662,7 @@ export async function runQa(ctx: QaContext): Promise<QaReport> {
     report.checks.push({
       name: "preview",
       passed: false,
-      details: "No Vercel preview URL available -- Playwright smoke tests skipped",
+      details: "No preview URL available -- Playwright smoke tests skipped",
       blocking: false,
     });
   }

@@ -25,6 +25,7 @@
   - All 50+ `console.log/error/warn` calls across 15 pipeline files replaced with structured logger calls at appropriate levels (debug/info/warn/error)
 
 ### Added
+- **Coolify Hosting Integration**: `"coolify"` as `hosting.provider` in `project.json` — preview URL polling via Coolify API, QA runner integration, `coolify-deploy.sh` for automated project creation
 - **Spike T-551**: Hosting infrastructure analysis for customer projects — Hetzner + Coolify recommended, multi-tenant architecture, cost model, security baseline, managed vs. self-hosted comparison
 - **Pipeline Quality Gates**: 5 new modules for automated verification and reliability
   - `artifact-verifier` — 3-level verification (files exist, no stubs, exports wired) runs after each orchestrator completion

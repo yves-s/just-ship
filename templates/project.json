@@ -20,7 +20,9 @@
   "hosting": {
     "provider": "",
     "project_id": "",
-    "team_id": ""
+    "team_id": "",
+    "coolify_url": "",
+    "coolify_app_uuid": ""
   },
   "shopify": {
     "store": ""

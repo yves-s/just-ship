@@ -5,16 +5,7 @@
  * branch reaches READY state. Used by the QA pipeline to obtain a testable URL.
  */
 
-// Defined locally until config.ts is updated with QA support
-export interface QaConfig {
-  maxFixIterations: number;
-  playwrightTimeoutMs: number;
-  previewProvider: "vercel" | "none";
-  vercelProjectId: string;
-  vercelTeamId: string;
-  vercelPreviewPollIntervalMs: number;
-  vercelPreviewMaxWaitMs: number;
-}
+import type { QaConfig } from "./config.ts";
 
 interface VercelDeploymentMeta {
   githubCommitRef?: string;
