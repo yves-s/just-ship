@@ -9,7 +9,10 @@
     "tsx": "^4.0.0"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ci": "vitest run --reporter=verbose"
   },
   "devDependencies": {
     "typescript": "^5.8.0",

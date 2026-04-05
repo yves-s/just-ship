@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+- **Pipeline Quality Gates**: 5 new modules for automated verification and reliability
+  - `artifact-verifier` — 3-level verification (files exist, no stubs, exports wired) runs after each orchestrator completion
+  - `verify-commands` — auto-discovers and executes lint/test/typecheck from package.json with retry logic (max 2 retries for blocking commands)
+  - `scope-guard` — detects scope reduction in agent output ("placeholder", "v1", "hardcoded", etc.) with false-positive filtering
+  - `supervisor` — agent timeout wrapper with retry/skip logic for stuck agents
+  - `resume` — checkpoint-based resume decision logic (resume vs restart, skip completed agents)
+- Test infrastructure: Vitest config, `npm run test` / `test:ci` scripts, CI gate blocks merge on test failure
+- 91 tests across 8 test files (60 new tests for quality gate modules)
+
 ### Fixed
 - Pipeline token tracking: SDK result usage data is now extracted and posted as `pipeline_completed` event with `input_tokens`, `output_tokens`, `estimated_cost_usd` — previously all values were null because hook-based token collection didn't fire for registered custom agents
 - Token totals now also written to ticket's `total_tokens` and `estimated_cost` fields on pipeline completion
