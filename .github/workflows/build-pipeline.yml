@@ -36,6 +36,9 @@ jobs:
       - name: Type check pipeline
         run: cd pipeline && npm ci && npm run typecheck
 
+      - name: Run tests
+        run: cd pipeline && npm run test:ci
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:

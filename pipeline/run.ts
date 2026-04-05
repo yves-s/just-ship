@@ -1,7 +1,7 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { execSync } from "node:child_process";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadProjectConfig, parseCliArgs, type TicketArgs } from "./lib/config.ts";
 import { loadAgents, loadOrchestratorPrompt, loadTriagePrompt, loadEnrichmentPrompt } from "./lib/load-agents.ts";
@@ -16,6 +16,9 @@ import { sanitizeBranchName } from "./lib/sanitize.ts";
 import { toBranchName, log } from "./lib/utils.ts";
 import { makeSpawn } from "./lib/spawn.ts";
 import { estimateCost } from "./lib/cost.ts";
+import { checkLevel1Exists } from "./lib/artifact-verifier.ts";
+import { resolveVerifyCommands, runVerifyCommands } from "./lib/verify-commands.ts";
+import { detectScopeReduction } from "./lib/scope-guard.ts";
 
 // --- Exported pipeline function (used by worker.ts) ---
 export interface PipelineOptions {
@@ -554,6 +557,46 @@ Branch ist bereits erstellt: ${branchName}`;
       await updateCheckpoint(checkpointConfig, currentCheckpoint, { phase: "agents_done" });
     }
 
+    // --- Artifact Verification ---
+    if (exitCode === 0) {
+      try {
+        const diffOutput = execSync("git diff --name-status main HEAD", {
+          cwd: workDir,
+          encoding: "utf-8",
+          timeout: 10_000,
+        }).trim();
+
+        const level1 = checkLevel1Exists(diffOutput);
+        if (!level1.passed) {
+          console.error(`[Verifier] WARN: ${level1.message}`);
+          if (hasPipeline) {
+            await postPipelineEvent(eventConfig, "verification_warning", "orchestrator", {
+              level: 1,
+              message: level1.message,
+            });
+          }
+        } else {
+          console.error(`[Verifier] Level 1 OK: ${level1.message}`);
+        }
+      } catch {
+        console.error("[Verifier] Could not run artifact verification — continuing");
+      }
+    }
+
+    // --- Scope Reduction Guard ---
+    if (exitCode === 0 && lastAssistantText) {
+      const scopeCheck = detectScopeReduction(lastAssistantText);
+      if (scopeCheck.detected) {
+        console.error(`[ScopeGuard] WARNING: ${scopeCheck.message}`);
+        if (hasPipeline) {
+          await postPipelineEvent(eventConfig, "scope_reduction_warning", "orchestrator", {
+            markers: scopeCheck.markers.map((m) => m.pattern),
+            message: scopeCheck.message,
+          });
+        }
+      }
+    }
+
     // --- Generate and send change summary to ticket ---
     if (hasPipeline) {
       try {
@@ -614,33 +657,42 @@ Branch ist bereits erstellt: ${branchName}`;
       triageFindings: triageResult?.affectedFiles || undefined,
     };
 
-    // Run verify command if configured
-    let verifyCommand = config.stack.verifyCommand;
-    if (!verifyCommand && config.stack.platform === "shopify" && config.stack.variant === "liquid") {
-      // Shopify default: only use if CLI is available
+    // Run verification commands (configured + auto-discovered)
+    const packageJsonPath = join(workDir, "package.json");
+    let packageJsonScripts: Record<string, string> = {};
+    try {
+      const pkg = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+      packageJsonScripts = pkg.scripts ?? {};
+    } catch { /* no package.json */ }
+
+    let shopifyCliAvailable = false;
+    if (config.stack.platform === "shopify" && config.stack.variant === "liquid") {
       try {
         execSync("which shopify", { stdio: "pipe" });
-        verifyCommand = "shopify theme check --fail-level error";
-      } catch {
-        console.warn("[Pipeline] shopify CLI not found — skipping default verify.");
-      }
+        shopifyCliAvailable = true;
+      } catch { /* not available */ }
     }
 
-    if (verifyCommand) {
-      console.error(`[Pipeline] Running verify: ${verifyCommand}`);
-      try {
-        const verifyOutput = execSync(verifyCommand, {
-          cwd: workDir,
-          encoding: "utf-8",
-          timeout: 60000,
-        });
-        console.error("[Pipeline] Verify passed.");
-        qaContext.verifyOutput = verifyOutput;
-      } catch (error: unknown) {
-        const err = error as { stdout?: string; message?: string };
-        console.error("[Pipeline] Verify failed — passing to QA agent.");
-        qaContext.verifyOutput = err.stdout ?? err.message ?? "Verify command failed";
-        qaContext.verifyFailed = true;
+    const verifyCommands = resolveVerifyCommands({
+      verifyCommand: config.stack.verifyCommand,
+      platform: config.stack.platform,
+      variant: config.stack.variant,
+      packageJsonScripts,
+      shopifyCliAvailable,
+    });
+
+    if (verifyCommands.length > 0) {
+      const verifyResults = runVerifyCommands({ workDir, commands: verifyCommands });
+      for (const vr of verifyResults) {
+        if (vr.passed) {
+          console.error(`[Verify] OK: ${vr.cmd} (${vr.attempts} attempt(s))`);
+        } else if (vr.blocking) {
+          console.error(`[Verify] FAILED: ${vr.cmd} after ${vr.attempts} attempt(s)`);
+          qaContext.verifyOutput = vr.output;
+          qaContext.verifyFailed = true;
+        } else {
+          console.error(`[Verify] WARN: ${vr.cmd} failed (advisory)`);
+        }
       }
     }
 

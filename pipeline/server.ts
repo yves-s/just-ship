@@ -18,6 +18,7 @@ import {
 } from "./lib/server-config.ts";
 import { checkBudget } from "./lib/budget.ts";
 import type { PipelineCheckpoint } from "./lib/checkpoint.ts";
+import { decideResume } from "./lib/resume.ts";
 import { toBranchName, log } from "./lib/utils.ts";
 
 // --- Mode detection ---
@@ -443,6 +444,17 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
   }
 
   const checkpoint = ticket?.pipeline_checkpoint as PipelineCheckpoint | null;
+
+  // --- Resume decision ---
+  const resumeDecision = decideResume(checkpoint);
+  if (resumeDecision.action === "resume") {
+    log(`T-${ticketNumber}: resuming from phase '${resumeDecision.resumeFrom}' (attempt ${resumeDecision.attempt})`);
+    if (resumeDecision.skipAgents?.length) {
+      log(`T-${ticketNumber}: skipping completed agents: ${resumeDecision.skipAgents.join(", ")}`);
+    }
+  } else if (checkpoint) {
+    log(`T-${ticketNumber}: checkpoint exists but restarting — ${resumeDecision.reason}`);
+  }
 
   // 3. Check pipeline_status
   const pipelineStatus = ticket.pipeline_status as string | null;
