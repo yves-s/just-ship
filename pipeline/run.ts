@@ -13,8 +13,9 @@ import { loadSkills, type AgentRole } from "./lib/load-skills.ts";
 import { Sentry } from "./lib/sentry.ts";
 import { updateCheckpoint, clearCheckpoint, type PipelineCheckpoint } from "./lib/checkpoint.ts";
 import { sanitizeBranchName } from "./lib/sanitize.ts";
-import { toBranchName } from "./lib/utils.ts";
+import { toBranchName, log } from "./lib/utils.ts";
 import { makeSpawn } from "./lib/spawn.ts";
+import { estimateCost } from "./lib/cost.ts";
 
 // --- Exported pipeline function (used by worker.ts) ---
 export interface PipelineOptions {
@@ -434,6 +435,7 @@ Branch ist bereits erstellt: ${branchName}`;
   // --- Run orchestrator ---
   let exitCode = 0;
   let failureReason: string | undefined;
+  let sdkUsage: { input_tokens?: number; output_tokens?: number } | undefined;
   try {
     if (hasPipeline) await postPipelineEvent(eventConfig, "agent_started", "orchestrator");
 
@@ -486,7 +488,11 @@ Branch ist bereits erstellt: ${branchName}`;
         }
       }
       if (message.type === "result") {
-        const resultMsg = message as SDKMessage & { type: "result"; subtype: string };
+        const resultMsg = message as SDKMessage & { type: "result"; subtype: string; usage?: { input_tokens?: number; output_tokens?: number } };
+        // Extract usage data from SDK result
+        if (resultMsg.usage) {
+          sdkUsage = resultMsg.usage;
+        }
         if (resultMsg.subtype !== "success") {
           console.error("[SDK Result]", resultMsg.subtype);
           exitCode = 1;
@@ -652,14 +658,28 @@ Branch ist bereits erstellt: ${branchName}`;
     }
   }
 
-  // Collect token totals (always, so they can be returned to caller)
-  const totals = eventHooks?.getTotals();
+  // Collect token totals — prefer SDK result usage over hook-based totals
+  const hookTotals = eventHooks?.getTotals();
+  let finalTokens: { input: number; output: number; estimatedCostUsd: number } | undefined;
 
-  // Post pipeline summary with aggregated token costs
-  if (hasPipeline && eventHooks && exitCode === 0) {
-    if (totals && totals.inputTokens > 0) {
-      await postPipelineSummary(eventConfig, totals);
-    }
+  if (sdkUsage && (sdkUsage.input_tokens ?? 0) > 0) {
+    // SDK provides total session usage including all subagents
+    const input = sdkUsage.input_tokens ?? 0;
+    const output = sdkUsage.output_tokens ?? 0;
+    const costUsd = estimateCost("opus", input, output);
+    finalTokens = { input, output, estimatedCostUsd: costUsd };
+    log(`[Tokens] SDK usage: ${input} in / ${output} out = $${costUsd.toFixed(4)}`);
+  } else if (hookTotals && hookTotals.inputTokens > 0) {
+    finalTokens = { input: hookTotals.inputTokens, output: hookTotals.outputTokens, estimatedCostUsd: hookTotals.estimatedCostUsd };
+  }
+
+  // Post pipeline summary with token costs
+  if (hasPipeline && eventConfig && finalTokens) {
+    await postPipelineSummary(eventConfig, {
+      inputTokens: finalTokens.input,
+      outputTokens: finalTokens.output,
+      estimatedCostUsd: finalTokens.estimatedCostUsd,
+    });
   }
 
   // Clear checkpoint on successful completion
@@ -674,9 +694,7 @@ Branch ist bereits erstellt: ${branchName}`;
     project: config.name,
     failureReason,
     sessionId,
-    tokens: totals
-      ? { input: totals.inputTokens, output: totals.outputTokens, estimatedCostUsd: totals.estimatedCostUsd }
-      : undefined,
+    tokens: finalTokens,
   };
 }
 
@@ -794,6 +812,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
 
   let exitCode = 0;
   let failureReason: string | undefined;
+  let sdkUsage: { input_tokens?: number; output_tokens?: number } | undefined;
 
   try {
     if (hasPipeline) await postPipelineEvent(eventConfig, "agent_started", "orchestrator");
@@ -830,7 +849,11 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
         }
       }
       if (message.type === "result") {
-        const resultMsg = message as SDKMessage & { type: "result"; subtype: string };
+        const resultMsg = message as SDKMessage & { type: "result"; subtype: string; usage?: { input_tokens?: number; output_tokens?: number } };
+        // Extract usage data from SDK result
+        if (resultMsg.usage) {
+          sdkUsage = resultMsg.usage;
+        }
         if (resultMsg.subtype !== "success") {
           console.error("[SDK Result]", resultMsg.subtype);
           exitCode = 1;
@@ -922,12 +945,27 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
     }
   }
 
-  // Post pipeline summary with aggregated token costs
-  if (hasPipeline && eventHooks && exitCode === 0) {
-    const totals = eventHooks.getTotals();
-    if (totals.inputTokens > 0) {
-      await postPipelineSummary(eventConfig, totals);
-    }
+  // Collect token totals — prefer SDK result usage over hook-based totals
+  const hookTotals = eventHooks?.getTotals();
+  let finalTokens: { input: number; output: number; estimatedCostUsd: number } | undefined;
+
+  if (sdkUsage && (sdkUsage.input_tokens ?? 0) > 0) {
+    const input = sdkUsage.input_tokens ?? 0;
+    const output = sdkUsage.output_tokens ?? 0;
+    const costUsd = estimateCost("opus", input, output);
+    finalTokens = { input, output, estimatedCostUsd: costUsd };
+    log(`[Tokens] SDK usage: ${input} in / ${output} out = $${costUsd.toFixed(4)}`);
+  } else if (hookTotals && hookTotals.inputTokens > 0) {
+    finalTokens = { input: hookTotals.inputTokens, output: hookTotals.outputTokens, estimatedCostUsd: hookTotals.estimatedCostUsd };
+  }
+
+  // Post pipeline summary with token costs
+  if (hasPipeline && eventConfig && finalTokens) {
+    await postPipelineSummary(eventConfig, {
+      inputTokens: finalTokens.input,
+      outputTokens: finalTokens.output,
+      estimatedCostUsd: finalTokens.estimatedCostUsd,
+    });
   }
 
   return {
@@ -937,6 +975,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
     project: config.name,
     failureReason,
     sessionId: newSessionId ?? resumeSessionId,
+    tokens: finalTokens,
   };
 }
 
