@@ -245,7 +245,7 @@ Every `/develop` run executes a strict 10-step pipeline. No step is optional, no
  6  Build Check          Run build commands -- DevOps agent only on failure
  7  Review               QA agent checks acceptance criteria + security
  8  Docs Check           Auto-update CHANGELOG, README, ARCHITECTURE, VPS docs, CONTRIBUTING
- 9  Ship (no merge)      Commit → Push → PR → status "in_review" → Vercel preview URL
+ 9  Ship (no merge)      Commit → Push → PR → status "in_review" → Preview URL (Vercel/Coolify/Shopify)
 10  Automated QA         Build + tests + optional Playwright screenshots, QA report on PR
 ```
 

@@ -13,11 +13,15 @@ export interface PipelineConfig {
 export interface QaConfig {
   maxFixIterations: number;
   playwrightTimeoutMs: number;
-  previewProvider: "vercel" | "none";
+  previewProvider: "vercel" | "coolify" | "none";
   vercelProjectId: string;
   vercelTeamId: string;
   vercelPreviewPollIntervalMs: number;
   vercelPreviewMaxWaitMs: number;
+  coolifyUrl: string;
+  coolifyAppUuid: string;
+  coolifyPollIntervalMs: number;
+  coolifyMaxWaitMs: number;
   shopifyEnabled?: boolean;
 }
 
@@ -109,6 +113,10 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
         vercelTeamId: "",
         vercelPreviewPollIntervalMs: 10000,
         vercelPreviewMaxWaitMs: 300000,
+        coolifyUrl: "",
+        coolifyAppUuid: "",
+        coolifyPollIntervalMs: 10000,
+        coolifyMaxWaitMs: 300000,
       },
       stack: { packageManager: "npm" },
       skills: undefined,
@@ -201,22 +209,26 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
   // Read hosting config from root of project.json (new format)
   // Supports both object format {provider, project_id, team_id} and legacy string format
   const rawHosting = raw.hosting;
-  let hostingProvider: "vercel" | "none" = "none";
+  let hostingProvider: "vercel" | "coolify" | "none" = "none";
   let vercelProjectId = "";
   let vercelTeamId = "";
+  let coolifyUrl = "";
+  let coolifyAppUuid = "";
 
   if (typeof rawHosting === "object" && rawHosting !== null) {
-    // New object format: { provider: "vercel", project_id: "prj_xxx", team_id: "team_xxx" }
-    const h = rawHosting as { provider?: string; project_id?: string; team_id?: string };
+    const h = rawHosting as { provider?: string; project_id?: string; team_id?: string; coolify_url?: string; coolify_app_uuid?: string };
     if (h.provider === "vercel") {
       hostingProvider = "vercel";
       vercelProjectId = h.project_id ?? "";
       vercelTeamId = h.team_id ?? "";
+    } else if (h.provider === "coolify") {
+      hostingProvider = "coolify";
+      coolifyUrl = h.coolify_url ?? "";
+      coolifyAppUuid = h.coolify_app_uuid ?? "";
     }
   } else if (typeof rawHosting === "string" && rawHosting === "vercel") {
     // Legacy string format: "vercel" (backwards compatibility)
     hostingProvider = "vercel";
-    // Fall back to qa config for project_id/team_id in legacy mode
     vercelProjectId = (rawQa.vercel_project_id as string) ?? "";
     vercelTeamId = (rawQa.vercel_team_id as string) ?? "";
   }
@@ -224,11 +236,15 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
   const qa: QaConfig = {
     maxFixIterations: Number(rawQa.max_fix_iterations ?? 3),
     playwrightTimeoutMs: Number(rawQa.playwright_timeout_ms ?? 60000),
-    previewProvider: (rawQa.preview_provider as "vercel" | "none") ?? hostingProvider,
+    previewProvider: (rawQa.preview_provider as "vercel" | "coolify" | "none") ?? hostingProvider,
     vercelProjectId: vercelProjectId || ((rawQa.vercel_project_id as string) ?? ""),
     vercelTeamId: vercelTeamId || ((rawQa.vercel_team_id as string) ?? ""),
     vercelPreviewPollIntervalMs: Number(rawQa.vercel_preview_poll_interval_ms ?? 10000),
     vercelPreviewMaxWaitMs: Number(rawQa.vercel_preview_max_wait_ms ?? 300000),
+    coolifyUrl: coolifyUrl || ((rawQa.coolify_url as string) ?? ""),
+    coolifyAppUuid: coolifyAppUuid || ((rawQa.coolify_app_uuid as string) ?? ""),
+    coolifyPollIntervalMs: Number(rawQa.coolify_poll_interval_ms ?? 10000),
+    coolifyMaxWaitMs: Number(rawQa.coolify_max_wait_ms ?? 300000),
     shopifyEnabled: raw.stack?.platform === "shopify",
   };
 
