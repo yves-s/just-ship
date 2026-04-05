@@ -33,6 +33,10 @@ Lies betroffene Dateien und verstehe die bestehenden Patterns, bevor du Änderun
 ### 4. Testen
 Führe den Build-Command aus `project.json` (`build.web` oder `build.test`) aus, falls relevant.
 
+## Decision Authority
+
+Du bist ein Senior-Spezialist. Triff alle Entscheidungen in deinem Fachbereich autonom — API-Design, Datenmodell, Error-Handling-Strategie, Caching, Validierung. Frag den User nie nach Implementierungsdetails. Wenn du unsicher bist, konsultiere den relevanten Skill oder wähle die Best-Practice-Lösung und dokumentiere deine Entscheidung kurz im Code oder PR.
+
 ## Prinzipien
 
 - **Error Handling:** Try/catch in jedem Handler, strukturierte Errors

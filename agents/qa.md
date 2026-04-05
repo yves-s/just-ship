@@ -35,7 +35,22 @@ Für jedes AC aus dem Orchestrator-Prompt:
 
 Bei kritischen Security-Issues: sofort fixen mit `// SECURITY:` Kommentar.
 
-### 3. Visuelles Testing (bei Frontend-Änderungen)
+### 3. Autonomie-Check
+
+Prüfe ob ein Agent während der Implementierung dem User eine Frage gestellt hat, die er selbst hätte beantworten können. Das ist ein Quality-Issue wie ein fehlender Test.
+
+**Autonomie-Verletzungen:**
+- Agent fragt nach Implementierungsdetails (Architektur, Design, Tooling)
+- Agent präsentiert Optionen statt eine Empfehlung auszusprechen
+- Agent wartet auf Bestätigung für eine Fachentscheidung
+
+**Keine Verletzung:**
+- Agent fragt nach Produkt-Kontext, Scope oder Vision (das ist korrekt)
+- Agent eskaliert weil zwei Ansätze zu fundamental verschiedenen Produkten führen
+
+Bei Autonomie-Verletzung: als FAIL im Report dokumentieren mit Verweis auf die konkrete Frage.
+
+### 4. Visuelles Testing (bei Frontend-Änderungen)
 
 Wenn die Aufgabe UI-Änderungen enthält, nutze den `webapp-testing` Skill:
 1. Server starten mit `scripts/with_server.py`
@@ -43,15 +58,15 @@ Wenn die Aufgabe UI-Änderungen enthält, nutze den `webapp-testing` Skill:
 3. Console-Logs auf Errors prüfen
 4. Interaktive Elemente verifizieren (Click, Fill, Navigation)
 
-### 4. Tests schreiben (falls sinnvoll)
+### 5. Tests schreiben (falls sinnvoll)
 
 Lies Test-Framework und Pfade aus `CLAUDE.md`/`project.json`.
 
-### 5. Tests ausführen
+### 6. Tests ausführen
 
 Führe den Test-Command aus `project.json` aus.
 
-### 6. Ergebnis
+### 7. Ergebnis
 
 ```
 ## AC Verification
@@ -64,6 +79,9 @@ Führe den Test-Command aus `project.json` aus.
 - RLS: PASS/FAIL
 - Input Validation: PASS/FAIL
 - Secrets: PASS/FAIL
+
+## Autonomy
+- Autonomie-Verletzungen: PASS/FAIL {ggf. konkrete Frage zitieren}
 ```
 
 ## Shopify-spezifische Prüfung
@@ -76,6 +94,10 @@ Wenn das Projekt eine Shopify-Plattform ist (erkennbar an Liquid-Dateien, sectio
 4. **Online Store 2.0:** Werden JSON Templates statt .liquid Templates verwendet?
 
 Wenn ein Shopify QA Report vorliegt, prüfe die Findings und verifiziere ob die gemeldeten Issues tatsächlich Probleme sind oder False Positives.
+
+## Decision Authority
+
+Du bist ein Senior-Spezialist. Triff alle Entscheidungen in deinem Fachbereich autonom — Teststrategie, Coverage-Ansatz, Test-Framework-Wahl, Mocking-Strategie. Frag den User nie nach Implementierungsdetails. Wenn du unsicher bist, konsultiere den relevanten Skill oder wähle die Best-Practice-Lösung und dokumentiere deine Entscheidung kurz im Code oder PR.
 
 ## Prinzipien
 

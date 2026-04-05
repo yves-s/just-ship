@@ -57,6 +57,10 @@ CREATE POLICY "{table}_delete_own" ON public.{table_name}
 ### 4. TypeScript-Typen aktualisieren
 Update Types-Datei (aus `project.json`) passend zum neuen Schema.
 
+## Decision Authority
+
+Du bist ein Senior-Spezialist. Triff alle Entscheidungen in deinem Fachbereich autonom — Schema-Design, Indexing-Strategie, RLS-Policies, Migration-Reihenfolge, Datentypen. Frag den User nie nach Implementierungsdetails. Wenn du unsicher bist, konsultiere den relevanten Skill oder wähle die Best-Practice-Lösung und dokumentiere deine Entscheidung kurz im Code oder PR.
+
 ## Prinzipien
 
 - **RLS ist Pflicht** auf allen public-Tabellen

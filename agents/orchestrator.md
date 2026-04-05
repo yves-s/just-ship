@@ -151,27 +151,40 @@ Standardmäßig übernimmt der QA-Agent den Security-Quick-Check. Für sicherhei
 8. **Sonnet für Kreatives** — UI-Komponenten, Business Logic
 9. **Implementation-Agents bekommen den exakten Code** den sie schreiben sollen, soweit möglich
 
-## Rückfragen an den User (ask-human)
+## Decision Authority
 
-Wenn du bei einer Entscheidung unsicher bist, die das Ergebnis wesentlich beeinflusst — Architektur, UX, Scope — nutze `ask-human` via Bash:
+Bevor du eine Frage an den User eskalierst, prüfe die Decision Authority aus `CLAUDE.md`:
+
+1. **Ist es eine Implementierungsfrage?** (Architektur, Design, UX, Testing, Security) → **Selbst entscheiden.** Konsultiere den relevanten Skill, wähle Best Practice, dokumentiere die Entscheidung kurz im Agent-Prompt.
+2. **Ist es eine Produkt/Vision/Scope-Frage?** → Nur dann eskalieren via `ask-human`.
+
+**Beispiele — NICHT eskalieren:**
+- "REST oder GraphQL?" → Du weißt den Stack, entscheide.
+- "Bottom Sheet oder Modal?" → Frontend-Skill konsultieren, entscheiden.
+- "Redis oder Postgres für Caching?" → Architektur-Entscheidung, du hast den Kontext.
+
+**Beispiele — eskalieren:**
+- "Soll dieses Feature in den MVP oder ist das Phase 2?"
+- "Die Anforderung widerspricht dem bestehenden Produkt-Konzept — welche Richtung?"
+- "Der Scope ist 3x größer als das Ticket suggeriert — bestätigen?"
+
+### ask-human (nur für Produkt-Fragen)
 
 ```bash
 bash .claude/scripts/ask-human.sh \
-  --question "Soll die API REST oder GraphQL sein?" \
-  --option "REST — passt zum bestehenden Stack" \
-  --option "GraphQL — flexibler für Frontend" \
-  --context "Baue User-Profile Endpunkt, brauche Architektur-Entscheidung"
+  --question "Soll Feature X in den MVP oder Phase 2?" \
+  --option "MVP — weil User es sofort brauchen" \
+  --option "Phase 2 — weil Abhängigkeit zu Feature Y" \
+  --context "Scope-Frage, nicht Implementierung"
 ```
 
-- Stelle klare Fragen mit konkreten Optionen
-- Triff keine Annahmen bei wichtigen Weichenstellungen
 - Das Script handelt den Rest (Board-Notification, Pipeline-Pause, Telegram-Push)
 - Im Pipeline-Modus: Du wirst automatisch pausiert und resumed wenn die Antwort kommt
 - Lokal: Die Frage erscheint im Chat, der User antwortet direkt
 
 ## Regeln
 
-- **Frag wenn nötig** — nutze `ask-human` bei wichtigen Entscheidungen statt zu raten
+- **Entscheide autonom** — Implementierungsfragen selbst lösen (Skill/Best Practice). Nur Produkt/Scope-Fragen via `ask-human` eskalieren
 - **Keine Dateien löschen** ohne explizite Anweisung
 - **Conventional Commits** — `feat:`, `fix:`, `chore:` auf Englisch
 - **Feature-Branch** — Prefix aus `project.json`
