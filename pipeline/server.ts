@@ -6,6 +6,7 @@ import { execSync } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { loadProjectConfig, type ProjectConfig } from "./lib/config.ts";
+import { sanitizeBranchName } from "./lib/sanitize.ts";
 import { classifyError, executeAutoHeal } from "./lib/error-handler.ts";
 import { executePipeline, resumePipeline } from "./run.ts";
 import { WorktreeManager } from "./lib/worktree-manager.ts";
@@ -785,13 +786,26 @@ async function handleShip(ticketNumber: number, res: ServerResponse, projectId?:
     return;
   }
 
-  // 3. Get branch
+  // 3. Get branch and validate
   const branch = ticket.branch as string | null;
   if (!branch) {
     sendJson(res, 400, {
       status: "bad_request",
       ticket_number: ticketNumber,
       message: "Ticket has no branch set",
+    });
+    return;
+  }
+
+  // SECURITY: Validate branch name to prevent command injection via execSync
+  try {
+    sanitizeBranchName(branch);
+  } catch (err: unknown) {
+    const reason = err instanceof Error ? err.message : "Invalid branch name";
+    sendJson(res, 400, {
+      status: "bad_request",
+      ticket_number: ticketNumber,
+      message: `Invalid branch name: ${reason}`,
     });
     return;
   }
