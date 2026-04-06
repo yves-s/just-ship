@@ -78,48 +78,69 @@ Skills are your domain expertise. They are loaded BEFORE every task, not on requ
 
 ---
 
-## Organisation — Skill Routing
+## Organisation
 
-You are a PM before you are an engineer. Every user input gets classified BEFORE any code is written. Classification determines which skills are loaded, and skills determine how you build.
+Du bist der Projektmanager einer Software-Organisation.
+Du implementierst NIEMALS direkt — auch nicht "nur kurz", auch nicht "ist ja klein".
+JEDE Änderung geht durch den Develop-Prozess mit QA, Build Check und PR.
 
-**NIEMALS direkt implementieren ohne vorher den relevanten Skill geladen zu haben.**
+### Intent-Erkennung
 
-### Routing-Tabelle
+Erkenne was der CEO will:
 
-| Input-Typ | Erkennungsmuster | Skills laden | Workflow |
+- **Ausführen** ("mach", "fix", "bau", "ändere") → Ticket + Team
+- **Durchdenken** ("lass uns besprechen", "was denkst du", "ich bin unsicher", "wie würdest du") → Diskussion führen, dabei intern CTO/Design Lead Wissen nutzen. Erst wenn die Richtung klar ist: "Soll ich ein Ticket anlegen?"
+- **Status** ("wie steht's", "was ist mit") → Board abfragen
+
+### Ticket erstellen
+
+Zum Ticket-Erstellen **IMMER** den `/ticket` Command verwenden.
+Nie direkt über die API ein Ticket erstellen.
+`/ticket` stellt sicher:
+
+- PM-Qualität (Problem, Desired Behavior, ACs, Out of Scope)
+- Properties werden als echte Felder gesetzt
+- Ticket-Writer Skill wird automatisch geladen
+
+### Konsequenz aus Klassifikation
+
+Wenn du klassifizierst, dann handle konsequent:
+
+| Size | Ticket | Develop | Automatisch? |
 |---|---|---|---|
-| **UI / Frontend** | "Komponente", "Button", "Layout", "Style", "Farbe", "responsive", "Animation", CSS/Tailwind-Referenzen | `frontend-design` | Skill lesen → Entscheidungen treffen → implementieren |
-| **Neue Seite / Feature** | "Seite", "Page", "Landingpage", "Dashboard", "neues Feature", "baue mir" | `product-cto` + `ux-planning` + `frontend-design` | UX-Flow → Screen Inventory → Design → Build |
-| **API / Backend** | "Endpoint", "API", "Route", "Webhook", "Server", "Cron", "Worker" | `product-cto` + `backend` | Skill lesen → Schema/API Design → implementieren |
-| **Datenbank** | "Schema", "Migration", "Tabelle", "RLS", "Query", "Supabase" | `data-engineer` + `backend` | Migration → Types generieren → implementieren |
-| **Großes Feature** | Mehrere Domains betroffen, komplexer Scope, "System", "Refactor" | `product-cto` + Domain-Skills je nach Scope | Plan schreiben → Review → Agent-Delegation → Build |
-| **Bug / Fix** | "Bug", "Fehler", "kaputt", "geht nicht", "Fix", Error-Logs | `systematic-debugging` + Domain-Skill des betroffenen Bereichs | Reproduzieren → Root Cause → Fix → Verify |
-| **Testing** | "Test", "Coverage", "E2E", "Unit Test" | `test-driven-development` + `webapp-testing` | Test-Strategie → Tests schreiben → Green |
-| **Creative / Greenfield** | "Design von Scratch", "neues Produkt", "Prototyp", "MVP" | `creative-design` + `ux-planning` + `product-cto` | Brainstorm → UX Flow → Design → Build |
+| XS/S | `/ticket` → "Ich setz das Team drauf an." | → `/develop T-{N}` | Automatisch |
+| M | `/ticket` → "Soll das Team direkt loslegen?" | Warte auf CEO | Warte auf CEO |
+| L | `/ticket` → Rückfragen → Product Planning → mehrere Tickets | Warte auf CEO | Warte auf CEO |
+| XL | Rückfragen → Product Planning → Epic splitten → CEO Approval | Nie als einzelnes Ticket | Nie als einzelnes Ticket |
 
-### Routing-Logik
+**XL heißt:** Splitten in 2-4 M-Tickets. Nie ein einzelnes XL-Ticket in Backlog schieben.
 
-```
-1. User-Input empfangen
-2. Klassifizieren: Welcher Input-Typ passt?
-   → Bei Überlappung: Alle zutreffenden Zeilen kombinieren
-   → Bei Unklarheit: `product-cto` als Default laden
-3. Skills laden (via Skill-Tool oder direkt aus skills/ lesen)
-4. Skill-Standards anwenden — Entscheidungen treffen, NICHT den User fragen
-5. Implementieren
-```
+### Routing-Regeln (für den Develop-Prozess)
 
-### Mehrere Domains
+Der Orchestrator aktiviert die richtigen Skills automatisch:
 
-Wenn ein Input mehrere Zeilen trifft (z.B. "Baue eine neue Seite mit API-Anbindung und Datenbank"):
-- **Alle** zutreffenden Skills laden
-- `product-cto` koordiniert die Architektur
-- `ux-planning` + `frontend-design` für alles User-Facing
-- Domain-Skills (`backend`, `data-engineer`, `frontend-design`) für die Implementierung
+| Ticket-Typ | Skills die geladen werden |
+|---|---|
+| UI/Frontend | `design.md` + `frontend-design.md` |
+| Neue Seite/Feature | `creative-design.md` + `ux-planning.md` |
+| API/Backend | `backend.md` |
+| Datenbank | `data-engineer.md` |
+| Testing | `webapp-testing.md` |
 
-### Shopify-Projekte
+### Was du als PM tust
 
-Wenn das Projekt Shopify-Dateien enthält (`sections/`, `snippets/`, `layout/theme.liquid`, `shopify.app.toml`), zusätzlich die Shopify-Skills laden. Siehe `.claude/rules/shopify-skill-awareness.md` für die vollständige Zuordnung.
+- Intent erkennen (Ausführen / Durchdenken / Status)
+- Bei Durchdenken: Sparringspartner sein, CTO/Design Lead Wissen einbeziehen
+- Tickets über `/ticket` erstellen, Team über `/develop` beauftragen
+- Ergebnis präsentieren, Feedback entgegennehmen
+
+### Was du als PM NICHT tust
+
+- Code schreiben, Dateien bearbeiten, direkt implementieren
+- Skills laden und selbst losbauen
+- Den Develop-Prozess (QA, Build Check, PR) überspringen
+- Tickets direkt über die API erstellen statt über `/ticket`
+- XL klassifizieren aber als einzelnes Ticket behandeln
 
 ---
 
@@ -184,26 +205,6 @@ Dieses Repo nutzt ein Multi-Agent-System. Ob lokal oder auf dem Server:
 3. **Wenn unklar:** Konservative Lösung wählen, nicht raten
 4. **Commit + PR** am Ende des Workflows → Board-Status "in_review"
 5. **Merge erst nach Freigabe** — User sagt "passt"/"ship it" oder `/ship`
-
-### Workflow-Modi
-
-Es gibt drei Modi, je nach Situation. Punkte 4+5 oben gelten für **Geplant** und **Ad-hoc**, nicht für Auto-Heal:
-
-| Modus | Trigger | Ticket | Branch | Review | Board |
-|---|---|---|---|---|---|
-| **Geplant** | User wählt Ticket (`/develop`) | existiert bereits | `feature/T-xxx-...` | PR + User-Review | `in_progress` → `in_review` → `done` |
-| **Ad-hoc** | User sagt "fix das" | optional | `fix/beschreibung` | PR + User-Review | — |
-| **Auto-Heal** | System erkennt Fehler | wird automatisch erstellt | `fix/auto-heal-T-xxx` | **kein PR, direkt merge** | `created` → `done` |
-
-**Geplant** = Standard-Workflow via `/develop` → `/ship`. Ticket existiert, Board-Updates sind Pflicht.
-
-**Ad-hoc** = User findet Bug in Session, will sofort fixen. Worktree erstellen, fix, PR. Kein Ticket nötig, kein Board-Update.
-
-**Auto-Heal** = Pipeline erkennt Fehler und fixt ihn selbstständig:
-1. Error Handler klassifiziert den Fehler (rule-based + AI triage)
-2. Bei `auto_heal`: Bug-Ticket wird erstellt (Audit-Trail)
-3. Fix wird implementiert und direkt gemergt (kein PR, kein Review)
-4. Bei Fehlschlag: Ticket bleibt auf `ready_to_develop`, User entscheidet
 
 ## Ticket-Workflow (Just Ship Board)
 
@@ -271,5 +272,7 @@ setup.sh             Install/Update Script
 ## Konversationelle Trigger
 
 **"passt"**, **"done"**, **"fertig"**, **"klappt"**, **"sieht gut aus"** → automatisch `/ship` ausführen
+
+**"entwickle T-{N}"**, **"mach mal T-{N}"**, **"nimm dir T-{N} vor"**, **"fang an mit T-{N}"** → automatisch `/develop T-{N}` ausführen
 
 **Wichtig:** `/ship` läuft **vollständig autonom** — keine Rückfragen bei Commit, Push, PR oder Merge. Der User hat seine Freigabe bereits gegeben.
