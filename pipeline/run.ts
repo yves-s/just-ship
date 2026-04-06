@@ -732,7 +732,7 @@ WICHTIG: Push, PR-Erstellung und Status-Updates werden automatisch von der Pipel
       } else {
         // Push branch
         logger.info({ branch: branchName }, "Pushing branch");
-        execSync(`git push -u origin ${branchName}`, {
+        execSync(`git push -u origin "${branchName}"`, {
           cwd: workDir,
           encoding: "utf-8",
           timeout: 60_000,
@@ -740,7 +740,7 @@ WICHTIG: Push, PR-Erstellung und Status-Updates werden automatisch von der Pipel
         });
 
         // Verify branch exists on remote
-        const remoteRef = execSync(`git ls-remote --heads origin ${branchName}`, {
+        const remoteRef = execSync(`git ls-remote --heads origin "${branchName}"`, {
           cwd: workDir,
           encoding: "utf-8",
           timeout: 10_000,
@@ -1099,14 +1099,14 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
         failureReason = "No commits produced by orchestrator";
       } else {
         logger.info({ branch: branchName }, "Pushing branch");
-        execSync(`git push -u origin ${branchName}`, {
+        execSync(`git push -u origin "${branchName}"`, {
           cwd: workDir,
           encoding: "utf-8",
           timeout: 60_000,
           stdio: "pipe",
         });
 
-        const remoteRef = execSync(`git ls-remote --heads origin ${branchName}`, {
+        const remoteRef = execSync(`git ls-remote --heads origin "${branchName}"`, {
           cwd: workDir,
           encoding: "utf-8",
           timeout: 10_000,
