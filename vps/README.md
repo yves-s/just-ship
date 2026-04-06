@@ -51,6 +51,7 @@ After VPS setup, connect individual projects. The command copies local env vars,
 |------|---------|
 | `Dockerfile` | Docker image: Node.js 20, git, gh, Claude Code, pipeline SDK, framework files |
 | `entrypoint.sh` | Container startup: configures git identity and gh auth |
+| `Caddyfile` | Caddy reverse proxy config: security headers, basicauth for monitoring, auto-TLS |
 | `docker-compose.yml` | Caddy (HTTPS) + pipeline-server (GHCR image) + Bugsink + Dozzle containers |
 | `just-ship-updater.sh` | Update-Agent: watches for triggers, orchestrates zero-downtime updates |
 | `just-ship-updater.service` | systemd unit for Update-Agent (runs on host, outside Docker) |
@@ -120,32 +121,43 @@ Both UIs are protected by Caddy basicauth. The pipeline-server and worker automa
 | `BUGSINK_SECRET_KEY` | *(auto-generated)* | Django secret key for Bugsink |
 | `BUGSINK_ADMIN_EMAIL` | `admin@localhost` | Bugsink admin email |
 | `BUGSINK_ADMIN_PASSWORD` | *(auto-generated)* | Bugsink admin password (see `.env` on VPS) |
+| `CADDY_DOMAIN` | `:80` | Domain for Caddy auto-TLS (e.g. `pipeline.example.com`). Without it, Caddy serves HTTP only |
 | `MONITORING_USER` | `admin` | Caddy basicauth username for `/errors/` and `/logs/` |
-| `MONITORING_HASH` | — | Caddy basicauth password hash (generate with `caddy hash-password`) |
+| `MONITORING_HASH` | *(required)* | Caddy basicauth password hash (generate with `caddy hash-password`) |
 
-## HTTPS einrichten (optional)
+## HTTPS Setup
 
-Der VPS laeuft standardmaessig ohne HTTPS auf `http://IP:3001`. Das funktioniert, weil die Kommunikation Server-to-Server ist (Board-Backend → VPS) — kein Browser involviert.
+The `vps/Caddyfile` is deployed automatically with `docker-compose.yml`. By default, Caddy listens on `:80` (HTTP only). To enable auto-TLS:
 
-**Wann HTTPS sinnvoll ist:**
-
-- Wenn der API Key (`X-Pipeline-Key`) nicht im Klartext ueber das Internet gesendet werden soll
-- Wenn der VPS auch von Browsern direkt erreichbar sein soll
-- In Umgebungen mit hoeheren Sicherheitsanforderungen
-
-**Wie:**
-
-1. Subdomain anlegen: `just-ship.deinedomain.de` → DNS A-Record auf VPS-IP
-2. Caddyfile erstellen:
+1. Create DNS A-Record: `pipeline.yourdomain.com` → VPS IP
+2. Set `CADDY_DOMAIN` in `/home/claude-dev/.env`:
+   ```bash
+   CADDY_DOMAIN=pipeline.yourdomain.com
    ```
-   just-ship.deinedomain.de {
-       reverse_proxy pipeline-server:3001
-   }
-   ```
-3. `docker-compose.yml` nutzt bereits einen Caddy-Service — nur den Caddy-Container aktivieren und das Caddyfile ablegen
-4. Caddy holt sich automatisch ein Let's Encrypt Zertifikat
+3. Restart: `docker compose -f vps/docker-compose.yml up -d caddy`
+4. Caddy automatically provisions a Let's Encrypt certificate
 
-**Ohne HTTPS** ist das Risiko gering: Jemand muesste gezielt den Netzwerkpfad zwischen dem Board-Server und dem VPS abhoeren, um den 64-Zeichen API Key abzufangen. Fuer ein persoenliches Dev-Setup ist das vertretbar.
+### Security Headers
+
+The Caddyfile sets the following headers on all responses:
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload`
+- `Server` header stripped
+
+### Monitoring Access
+
+Dozzle (`/logs/`) and Bugsink (`/errors/`) are protected by basicauth. Generate the password hash and set it in `.env`:
+
+```bash
+# Generate hash (run inside the Caddy container or locally)
+docker exec -it caddy caddy hash-password --plaintext 'your-password'
+
+# Add to .env
+MONITORING_USER=admin
+MONITORING_HASH='$2a$14$...'  # output from caddy hash-password
+```
 
 ## Update
 

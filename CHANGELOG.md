@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Added
+- **Caddy Hardening**: Versioned `vps/Caddyfile` with security headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Strict-Transport-Security`), basicauth on Dozzle/Bugsink, auto-TLS via `CADDY_DOMAIN` env var, no wildcard CORS
+
+### Added
 - **Org-Routing for Terminal**: CLAUDE.md template now includes "Organisation — Skill Routing" section with routing table (Input-Typ → Skills → Workflow) covering 8 categories (UI/Frontend, Neue Seite/Feature, API/Backend, Datenbank, Großes Feature, Bug/Fix, Testing, Creative/Greenfield) — ensures Claude loads domain skills before implementing, matching Sidekick PM behavior
 - **just-ship-update sync**: New section is automatically synced to existing projects via `/just-ship-update` command
 
