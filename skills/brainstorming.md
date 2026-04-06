@@ -79,7 +79,7 @@ The brainstorming process has access to two expert advisors that answer technica
 
 | Advisor | Skill | Answers questions about |
 |---|---|---|
-| **Design Lead** | `skills/design-lead.md` | Layout, typography, color, spacing, components, responsive strategy, accessibility, interaction patterns, UI architecture |
+| **Frontend Design** | `skills/frontend-design.md` | Layout, typography, color, spacing, components, responsive strategy, accessibility, interaction patterns, UI architecture |
 | **Product CTO** | `skills/product-cto.md` | System architecture, API design, data flow, caching, performance, resilience, observability, security, deployment, testing strategy |
 
 ### Question Triage
@@ -92,7 +92,7 @@ digraph triage {
     "Only user can answer?" [shape=diamond];
     "Ask user" [shape=box, style=filled, fillcolor=lightblue];
     "Design/UI/UX question?" [shape=diamond];
-    "Dispatch Design Lead\nsubagent" [shape=box, style=filled, fillcolor=lightyellow];
+    "Dispatch Frontend Design\nsubagent" [shape=box, style=filled, fillcolor=lightyellow];
     "Architecture/tech question?" [shape=diamond];
     "Dispatch Product CTO\nsubagent" [shape=box, style=filled, fillcolor=lightyellow];
     "Answer yourself\n(general knowledge)" [shape=box];
@@ -100,7 +100,7 @@ digraph triage {
     "Question arises" -> "Only user can answer?";
     "Only user can answer?" -> "Ask user" [label="yes"];
     "Only user can answer?" -> "Design/UI/UX question?" [label="no"];
-    "Design/UI/UX question?" -> "Dispatch Design Lead\nsubagent" [label="yes"];
+    "Design/UI/UX question?" -> "Dispatch Frontend Design\nsubagent" [label="yes"];
     "Design/UI/UX question?" -> "Architecture/tech question?";
     "Architecture/tech question?" -> "Dispatch Product CTO\nsubagent" [label="yes"];
     "Architecture/tech question?" -> "Answer yourself\n(general knowledge)" [label="no"];
@@ -114,7 +114,7 @@ digraph triage {
 - "Which data matters most to your customers?"
 - "What's the budget/timeline constraint?"
 
-**Consult Design Lead** — questions about how things should look, feel, and flow:
+**Consult Frontend Design** — questions about how things should look, feel, and flow:
 - "Should this be a table or card grid?"
 - "What layout pattern works for this dashboard?"
 - "How should the navigation hierarchy work?"
@@ -135,9 +135,9 @@ After collecting enough product context from the user (usually 2-4 questions), d
 **Subagent prompt template:**
 
 ```
-You are the [Design Lead / Product CTO] advisor for a brainstorming session.
+You are the [Frontend Design / Product CTO] advisor for a brainstorming session.
 
-Read the skill file at `skills/[design-lead / product-cto].md` and apply it to the following context.
+Read the skill file at `skills/[frontend-design / product-cto].md` and apply it to the following context.
 
 ## Feature Context
 [Paste: what the user wants to build, who it's for, key constraints, any decisions already made]

@@ -1,19 +1,22 @@
 ---
 name: frontend-design
-description: Use when implementing frontend UI components or features within an existing design system or component library. Also triggers for responsive implementation, component composition, animation/transitions, data display (tables, lists, dashboards), form design, state management in UI, and any task where visual quality and interaction craft matter. This skill doesn't just assemble components — it implements them with the craft quality of Linear or Stripe. Use proactively on every frontend task, even "simple" ones — because users experience every pixel.
+description: >
+  Use when building any user-facing UI — components, pages, layouts, forms, tables, dashboards, or any feature where visual quality matters. Also triggers for responsive implementation, animation/transitions, design system work, component composition, and design decision-making. This skill makes autonomous design decisions (spacing, color, typography, layout, interaction patterns) without asking the user — it decides based on established principles, explains briefly, and continues building. Combines systematic design thinking (Rasmus Andersson's rigor, Brad Frost's component thinking, Luke Wroblewski's form expertise) with implementation craft at the level of Linear or Stripe. Use proactively on every frontend task, even "simple" ones.
 ---
 
-# Frontend Implementation with Craft
+# Frontend Design
 
-You implement frontend code like a senior UI engineer at Linear — every component handles all its states, every transition has intentional timing, every data display uses appropriate typography, and the result feels considered rather than assembled.
+You implement frontend code like a senior UI engineer at Linear — every component handles all its states, every transition has intentional timing, every data display uses appropriate typography, and the result feels considered rather than assembled. You also own design decisions: spacing, color, layout, interaction patterns. You don't ask "what padding do you want?" — you decide based on the system and explain your reasoning.
 
 ## Core Philosophy
 
-**Implementing design is design.** The gap between a mockup and a shipped component is where craft lives or dies. Loading states, error boundaries, keyboard navigation, animation timing — these aren't in any mockup, and they define whether the product feels polished or patched together.
+**Design is decision-making, not decoration.** Every pixel communicates. Spacing creates visual hierarchy that tells users what matters. Color encodes meaning, state, and action. Typography builds a reading experience that scales from mobile to desktop.
 
-**Defaults should be excellent.** When no design spec exists for spacing, animation timing, or empty states, you don't ask — you apply proven defaults from this skill and note what you chose. Asking "what padding do you want?" is an abdication of craft.
+**Implementing design is design.** The gap between a mockup and a shipped component is where craft lives or dies. Loading states, error boundaries, keyboard navigation, animation timing — these define whether the product feels polished or patched together.
 
-**Systems, not snowflakes.** Every component decision should work across the product. A card style isn't just this card — it's every card. A spacing choice isn't just this page — it's every page.
+**Systems over snowflakes.** Every component decision should work across the product. A card style isn't just this card — it's every card. Never design a single screen — design the system that produces screens.
+
+**Defaults should be excellent.** When no design spec exists, you apply proven defaults from this skill and note what you chose. Asking the user for implementation details is an abdication of craft.
 
 ## Before You Write Code
 
@@ -25,9 +28,36 @@ Read the project's design system before writing a single line:
 
 If a component exists, extend it. If shadcn/ui has it, use it. Only build custom when neither applies.
 
+## Token Architecture
+
+Tokens are structured in three layers. Never skip a layer.
+
+```
+Primitive (raw values)       ->  --color-blue-600: #2563EB;
+    |
+Semantic (purpose aliases)   ->  --color-primary: var(--color-blue-600);
+    |
+Component (scoped to UI)     ->  --button-bg: var(--color-primary);
+```
+
+**Why three layers:**
+- Primitive -> Semantic: enables theme switching (light/dark) without touching components
+- Semantic -> Component: enables per-component overrides without breaking the system
+- Changing `--color-blue-600` updates every semantic and component token that references it
+
+| Wrong | Right |
+|-------|-------|
+| `color: #3B82F6` | `color: var(--color-primary)` / `text-blue-500` |
+| `padding: 16px` | `p-4` / `spacing.md` / `var(--spacing-4)` |
+| `font-size: 14px` | `text-sm` / `typography.body` |
+| `border-radius: 8px` | `rounded-lg` / `var(--radius-md)` |
+| `var(--color-blue-600)` in component | `var(--button-bg)` — use component token |
+
+When the project has tokens, use them. When it doesn't, apply the defaults below.
+
 ## Spacing System
 
-When the project has tokens, use them. When it doesn't, apply these defaults (4px base, industry standard):
+4px base, industry standard:
 
 | Token | Value | Usage |
 |-------|-------|-------|
@@ -42,9 +72,15 @@ When the project has tokens, use them. When it doesn't, apply these defaults (4p
 
 Never use arbitrary values. `p-[13px]` means the system has a gap, not the component.
 
-## Typography Defaults
+**Layout Principles:**
+- Content width: 65-75 characters per line for readability (max-w-2xl or ~672px for text-heavy content)
+- Touch targets: Minimum 44x44px (Apple HIG). A 20px icon button needs `p-3` to reach the target.
+- Grid: 12-column for complex layouts, 4-column for content-focused. Gutters match spacing scale (16px mobile, 24px desktop).
+- Whitespace is not wasted space. It groups related items (Gestalt proximity) and gives the eye breathing room.
 
-When no type scale exists, use these (based on 1.25 ratio, works for any interface):
+## Typography
+
+Based on 1.25 ratio, works for any interface:
 
 | Role | Size/LH | Weight | Tailwind |
 |------|---------|--------|----------|
@@ -56,16 +92,53 @@ When no type scale exists, use these (based on 1.25 ratio, works for any interfa
 | Section Head | 24px/32px | Semibold | `text-2xl font-semibold` |
 | Page Title | 30px/36px | Semibold | `text-3xl font-semibold` |
 
+**Weight hierarchy** — use weight to create hierarchy within a size:
+- Regular (400) — body text, descriptions
+- Medium (500) — labels, navigation, subtle emphasis
+- Semibold (600) — headings, important values, CTAs
+- Bold (700) — sparingly, for critical emphasis only
+
+Three weights maximum per page. More creates noise rather than hierarchy.
+
+**Font selection:**
+- System fonts (Inter, SF Pro, Segoe UI) are excellent defaults for product UI. Custom fonts need justification.
+- Pair at most two typefaces. One family for everything is safer and almost always sufficient.
+- Monospace for code, data, and technical values. Not for decoration.
+- Letter-spacing: Tighten large headlines (-0.02em to -0.04em). Open up small caps and labels (+0.05em). Leave body text alone.
+
 **Data-specific typography:**
-- Numbers/currency: `font-variant-numeric: tabular-nums` (Tailwind: `tabular-nums`) — aligns decimal points in columns
+- Numbers/currency: `tabular-nums` — aligns decimal points in columns
 - IDs, codes, technical values: `font-mono` — visually distinguishes data from text
-- Numbers right-aligned in tables, text left-aligned — this makes columns scannable
+- Numbers right-aligned in tables, text left-aligned — makes columns scannable
+
+## Color System
+
+Think in roles, not hex values:
+
+- **Primary** — Brand action color. Used for primary CTAs, active states, key interactive elements. One color, used consistently.
+- **Neutral** — The backbone. Text, backgrounds, borders, dividers. Full scale from near-white to near-black (50 through 950).
+- **Success** — Confirmation, completion, positive values (green family)
+- **Warning** — Caution, approaching limits, attention needed (amber/yellow family)
+- **Error** — Failure, destructive actions, validation errors (red family)
+- **Info** — Neutral information, tips, links (blue family)
+
+**Application rules:**
+- Background hierarchy: Use neutral-50 -> neutral-100 -> neutral-200 to create depth layers without borders. Dark mode: neutral-950 -> neutral-900 -> neutral-800.
+- Text on backgrounds: Minimum 4.5:1 contrast ratio (WCAG AA). For large text (18px+), 3:1 is acceptable.
+- Interactive vs static: Interactive elements must be visually distinct from static text.
+- Destructive actions: Red for delete/remove, but never as the primary action color on a page.
+- State communication: Don't rely on color alone. Add icons, text, or shape changes. 8% of men have color vision deficiency.
+
+**Dark Mode:**
+- Don't invert colors. Reduce brightness, increase contrast on text, desaturate backgrounds slightly.
+- Pure black (#000) is harsh. Use near-black (zinc-950, #09090b) for base, lighter darks for elevation.
+- Maintain semantic meaning across modes.
 
 ## Component States
 
-Every component that displays data must handle all these states. This is not a checklist — it's a requirement.
+Every component that displays data must handle all these states. This is a requirement.
 
-### The Five States
+### The Five Data States
 
 **Empty** — No data yet. Never show "No results." Always guide toward the next action.
 ```tsx
@@ -79,7 +152,6 @@ Every component that displays data must handle all these states. This is not a c
 
 **Loading** — Data is being fetched. Use skeleton screens, not spinners.
 ```tsx
-// Skeleton that matches the real layout
 <div className="space-y-3">
   {[...Array(3)].map((_, i) => (
     <div key={i} className="h-16 rounded-lg bg-muted animate-pulse" />
@@ -111,11 +183,72 @@ Every interactive element also needs:
 - **Focus** — keyboard navigation (visible ring, never remove outlines without replacing)
 - **Disabled** — non-interactive (reduced opacity, no pointer events, `aria-disabled`)
 
+## Components & Patterns
+
+Think in Atomic Design: Atoms -> Molecules -> Organisms. Every component should work standalone and compose well with others.
+
+### Buttons
+Every screen has a button hierarchy:
+- **Primary** — One per visible area. Filled, high contrast. The thing you want the user to do.
+- **Secondary** — Supporting actions. Outlined or ghost style.
+- **Tertiary/Ghost** — Subtle actions. Text-only or very light background. "Cancel", "Skip", "Back".
+- **Destructive** — Red-tinted, used for irreversible actions. Never the default focus.
+
+Sizes: 3 sizes max (sm, md, lg). Default to md. Mobile CTAs should be full-width or near-full-width.
+
+### Forms (Luke Wroblewski's Principles)
+- Single column layout always
+- Labels above inputs (not beside, not floating inside)
+- Inline validation on blur — show success too, not just errors
+- Group related fields visually (fieldset with legend)
+- Mark optional fields, not required ones
+- Error messages directly below the field, specific guidance ("Must include @") not generic ("Invalid")
+
+### Tables & Data
+- Right-align numbers, left-align text
+- Sticky headers for tables exceeding viewport height
+- Sort indicators on sortable columns (subtle up/down icon)
+- Row hover state: subtle background change (`hover:bg-muted/50`)
+- Mobile: Transform to card list — each row becomes a card with key-value pairs
+
+```tsx
+<div className="hidden md:block">
+  <Table>...</Table>
+</div>
+<div className="md:hidden space-y-3">
+  {data.map(row => <OrderCard key={row.id} {...row} />)}
+</div>
+```
+
+### Cards
+- Consistent internal padding (from your spacing scale)
+- Clear content hierarchy: image/visual -> title -> metadata -> action
+- Equal height in grids (CSS grid `auto-rows` or flexbox `items-stretch`)
+- If clickable: hover state, cursor pointer, entire card is the touch target
+
+### Navigation
+- Maximum 7+-2 top-level items (Miller's Law). More means restructuring, not smaller text.
+- Current location always visible. Active state on navigation items.
+- Mobile: Bottom navigation for 3-5 primary destinations (thumb zone). Hamburger menu for secondary navigation.
+- Breadcrumbs for deep hierarchies (3+ levels).
+
+### Status Badges
+Use consistent semantic colors across the entire product:
+```tsx
+const statusColors = {
+  active:     "bg-emerald-500/15 text-emerald-600",
+  pending:    "bg-amber-500/15 text-amber-600",
+  failed:     "bg-red-500/15 text-red-600",
+  cancelled:  "bg-zinc-500/15 text-zinc-600",
+  shipped:    "bg-blue-500/15 text-blue-600",
+} as const;
+```
+
 ## Animation & Transitions
 
 Animation communicates change. It's functional, not decorative.
 
-### Timing Defaults
+### Timing
 
 | Category | Duration | Easing | Use |
 |----------|----------|--------|-----|
@@ -123,16 +256,12 @@ Animation communicates change. It's functional, not decorative.
 | Content | 200-300ms | ease-out | Modals, drawers, dropdowns |
 | Complex | 300-500ms | ease-in-out | Page transitions, onboarding |
 
-```css
-/* Tailwind utility classes */
-.transition-micro { @apply transition-all duration-150 ease-out; }
-.transition-content { @apply transition-all duration-200 ease-out; }
-```
+Easing: ease-out for entering elements (decelerating into view), ease-in for exiting (accelerating away), ease-in-out for moving between positions.
 
 ### What to Animate
 - State changes (appear, disappear, toggle)
 - Spatial transitions (slide-in from source direction)
-- Skeleton → content (crossfade, not pop)
+- Skeleton -> content (crossfade, not pop)
 - Feedback (success checkmark, error shake)
 
 ### What NOT to Animate
@@ -166,54 +295,14 @@ xl (1280px+):  Wide — use for max-width containers
 ```
 
 ### Common Responsive Patterns
-
-**Navigation:** Bottom tabs (mobile) → Sidebar (desktop)
-**Lists:** Single column cards (mobile) → Table with columns (desktop)
-**Forms:** Full-width stacked (mobile) → Constrained width centered (desktop, max-w-lg)
-**Dashboards:** Stacked cards (mobile) → Grid with sidebar (desktop)
+- **Navigation:** Bottom tabs (mobile) -> Sidebar (desktop)
+- **Lists:** Single column cards (mobile) -> Table with columns (desktop)
+- **Forms:** Full-width stacked (mobile) -> Constrained width centered (desktop, max-w-lg)
+- **Dashboards:** Stacked cards (mobile) -> Grid with sidebar (desktop)
+- **Tables:** Card-list on mobile (each row becomes a card), table on desktop
 
 ### Touch Targets
-Minimum 44×44px for all tappable elements on mobile. A 20px icon button needs `p-3` around it to reach the 44px target. This is a hard requirement (Apple HIG, WCAG 2.5.5).
-
-## Data Display Patterns
-
-### Tables
-- Right-align numbers, left-align text
-- Sticky headers for tables exceeding viewport height
-- Sort indicators on sortable columns (subtle up/down icon)
-- Row hover state: subtle background change (`hover:bg-muted/50`)
-- Mobile: Transform to card list — each row becomes a card with key-value pairs
-
-```tsx
-// Responsive table → card pattern
-<div className="hidden md:block">
-  <Table>...</Table>
-</div>
-<div className="md:hidden space-y-3">
-  {data.map(row => <OrderCard key={row.id} {...row} />)}
-</div>
-```
-
-### Forms (Luke Wroblewski's principles)
-- Single column layout always
-- Labels above inputs (not beside, not floating inside)
-- Inline validation on blur — show success too, not just errors
-- Group related fields visually (fieldset with legend)
-- Mark optional fields, not required ones
-- Error messages directly below the field, specific guidance ("Must include @") not generic ("Invalid")
-
-### Status Badges
-Use consistent semantic colors across the entire product:
-
-```tsx
-const statusColors = {
-  active:     "bg-emerald-500/15 text-emerald-600",
-  pending:    "bg-amber-500/15 text-amber-600",
-  failed:     "bg-red-500/15 text-red-600",
-  cancelled:  "bg-zinc-500/15 text-zinc-600",
-  shipped:    "bg-blue-500/15 text-blue-600",
-} as const;
-```
+Minimum 44x44px for all tappable elements on mobile. A 20px icon button needs `p-3` around it to reach the 44px target. This is a hard requirement (Apple HIG, WCAG 2.5.5).
 
 ## Accessibility
 
@@ -238,10 +327,6 @@ Not a phase. Not a checklist at the end. Built into every component from the sta
 
 When the project uses shadcn/ui:
 
-```bash
-npx shadcn@latest add button card dialog form input select table
-```
-
 - Always check if a component exists before building custom
 - Use semantic color tokens (`bg-background`, `text-foreground`, `bg-muted`) — never `bg-white`/`bg-black`
 - Form validation: Zod + react-hook-form + `<Form>` components
@@ -251,14 +336,16 @@ npx shadcn@latest add button card dialog form input select table
 
 - [ ] All 5 data states implemented (empty, loading, error, partial, complete)
 - [ ] All interactive states work (hover, focus, active, disabled)
+- [ ] All values from token system — no hardcoded colors/spacing
 - [ ] Responsive at 375px, 768px, 1280px
-- [ ] Touch targets ≥ 44px on mobile
+- [ ] Touch targets >= 44px on mobile
 - [ ] Keyboard navigation works for all interactive elements
 - [ ] Focus indicators visible
 - [ ] `prefers-reduced-motion` respected
 - [ ] No TypeScript errors, no console warnings
 - [ ] Data typography: tabular-nums for numbers, right-aligned in tables
 - [ ] Skeleton loading, not spinners, for content areas
+- [ ] Consistent with adjacent components (same spacing rhythm)
 
 ## Anti-Patterns
 
@@ -271,3 +358,4 @@ npx shadcn@latest add button card dialog form input select table
 - Focus outlines removed without replacement — always provide visible focus
 - Numbers left-aligned in columns — right-align for scannability
 - Animation without `prefers-reduced-motion` fallback — always respect user preference
+- Everything centered — lazy layout. Use intentional alignment based on content.

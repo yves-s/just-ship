@@ -1,7 +1,6 @@
 ---
-name: just-ship-ticket-writer
-description: Write high-quality product tickets — user stories, bugs, improvements, spikes, and technical debt items. Use this skill whenever the user wants to create, refine, split, or review a ticket. Triggers on phrases like "write a ticket", "create a story", "document this bug", "formulate a ticket for...", "this ticket is too big", or when the user shares rough requirements or feature ideas that need structuring.
-allowed-tools: Bash, mcp__claude_ai_Supabase__execute_sql, mcp__claude_ai_Notion__notion-create-pages, mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-fetch
+name: ticket-writer
+description: Write high-quality product tickets — user stories, bugs, improvements, spikes, and technical debt items. Use this skill whenever the user wants to create, refine, split, or review a ticket for any project management tool (Notion, Linear, Jira, GitHub Issues, or plain Markdown). Triggers on phrases like "write a ticket", "create a story", "document this bug", "formulate a ticket for...", "this ticket is too big", or when the user shares rough requirements, bug reports, or feature ideas that need structuring. Also triggers when the user asks to review or improve an existing ticket. Always use this skill before writing tickets to ensure consistent, PM-quality structure — never include implementation details, code, or architecture decisions in tickets.
 ---
 
 # Ticket Writer
@@ -19,8 +18,6 @@ Why this matters: When tickets prescribe solutions, developers lose the freedom 
 ## You Are a PM, Not a Developer
 
 **Do NOT search, read, or explore the codebase.** You gather context by asking the user — not by reading source files. A PM writes tickets based on conversations, user feedback, and product goals. The code is irrelevant to your job.
-
-The only file you may read is `project.json` (via Bash: `cat project.json`) to determine pipeline delivery config.
 
 ## Before You Write: Context Check
 
@@ -47,6 +44,23 @@ Something doesn't work as expected.
 **Title format:** `Bug: [What is broken]`
 **Focus:** Current behavior vs. expected behavior. Include steps to reproduce when available.
 **Signal:** The user describes unexpected behavior, errors, or broken flows.
+
+**Mandatory structure for bugs:**
+```
+## Steps to Reproduce
+1. ...
+2. ...
+3. ...
+
+## Current Behavior
+[What happens now]
+
+## Expected Behavior
+[What should happen]
+
+## Environment (if known)
+[Browser, OS, device, user role]
+```
 
 ### Improvement
 Something existing gets better.
@@ -97,7 +111,7 @@ Add these only when they provide value:
 - **Timebox** — for spikes (e.g. "2 days max")
 - **Expected Deliverable** — for spikes (e.g. "decision document", "proof of concept")
 - **Business Impact** — for tech debt (quantify the cost of inaction)
-- **Dependencies** — when other tickets or teams must complete work first
+- **Dependencies** — when other tickets or teams must complete work first (see Dependencies section)
 - **Open Questions** — unresolved items that don't block starting but need answers
 
 ## Acceptance Criteria
@@ -134,7 +148,7 @@ Use for complex flows where preconditions and sequences matter.
       Then they are prompted to log in or continue as guest
 ```
 
-When to use: Multi-step flows, conditional logic, scenarios where "it depends" on state. Especially valuable when the same action produces different outcomes based on context.
+When to use: Multi-step flows, conditional logic, scenarios where "it depends" on state.
 
 ### Format 3: Rule-Based
 
@@ -147,7 +161,7 @@ Use when the acceptance criteria describe constraints or business rules rather t
 - [ ] Discount is calculated before tax, not after
 ```
 
-When to use: Business logic, validation rules, edge cases, constraints. Good for tickets where the "flow" is simple but the rules are complex.
+When to use: Business logic, validation rules, edge cases, constraints.
 
 ### Choosing the Right Format
 
@@ -158,11 +172,9 @@ When to use: Business logic, validation rules, edge cases, constraints. Good for
 | Business rules and constraints | Rule-Based |
 | Complex ticket with all of the above | Mix formats within the same ticket |
 
-Mixing formats in one ticket is fine — use whatever makes each criterion clearest.
-
 ### Good vs. Bad Acceptance Criteria
 
-| ❌ Bad | ✅ Good | Why |
+| Bad | Good | Why |
 |---|---|---|
 | "Implement a CNAME record" | "Google login shows the custom domain in the URL bar" | Describes outcome, not implementation |
 | "Add cache_control: ephemeral" | "Content processing takes no longer than before" | Measurable, no tech prescription |
@@ -223,6 +235,36 @@ A ticket is too big when any of these apply:
 
 When splitting, each resulting ticket must be independently shippable and testable. A ticket that only makes sense in combination with another ticket hasn't been split — it's been fragmented.
 
+## Sizing
+
+Every ticket gets a T-shirt size to set expectations before development starts.
+
+| Size | Signals | Typical scope |
+|---|---|---|
+| **S** | Single file, config change, copy update, clear fix with known cause | Hours |
+| **M** | Feature in 1 domain (FE or BE or DB), 2-5 files, clear ACs | 1-2 days |
+| **L** | Cross-domain (FE + BE + DB), multiple integration points, 6+ files | 3-5 days |
+| **XL** | Cross-repo, architecture change, migration, vague requirements | 1+ week — consider splitting |
+
+**When in doubt, size up.** An M that turns out to be an S is fine. An M that turns out to be an XL is a sprint risk.
+
+**XL is a smell.** If a ticket is XL, ask whether it can be split. Most XL tickets are actually 2-3 M tickets hiding behind a vague title.
+
+## Dependencies
+
+When a ticket depends on other work, document it explicitly:
+
+```
+## Dependencies
+- **Blocked by:** [Ticket reference] — [what it provides that this ticket needs]
+- **Blocks:** [Ticket reference] — [what this ticket provides]
+```
+
+Three rules for dependencies:
+1. **Name the dependency, not just the ticket.** "Blocked by T-42" is useless. "Blocked by T-42 — needs the payment API endpoint to be live" is actionable.
+2. **Distinguish hard blocks from soft blocks.** A hard block means work cannot start. A soft block means work can start but cannot be completed or shipped.
+3. **If everything depends on everything, the tickets are too intertwined.** Re-split by vertical slices (user-facing increments) instead of horizontal layers (API, then UI, then tests).
+
 ## Properties
 
 Set these for every ticket:
@@ -230,110 +272,23 @@ Set these for every ticket:
 - **Status**: `ready_to_develop` (well-defined, can be picked up) or `backlog` (needs refinement)
 - **Priority**: `high` / `medium` / `low` — see Priority Guide below
 - **Type**: User Story / Bug / Improvement / Spike / Tech Debt
+- **Size**: S / M / L / XL
 
 ### Priority Guide
 
 | Priority | Criteria |
 |---|---|
-| `high` | Blocks users from completing a core workflow, causes data loss or security risk, or has a hard external deadline (customer commitment, legal requirement) |
-| `medium` | Meaningfully degrades UX or productivity, but a workaround exists. Should be addressed in the next 1–2 sprints |
+| `high` | Blocks users from completing a core workflow, causes data loss or security risk, or has a hard external deadline |
+| `medium` | Meaningfully degrades UX or productivity, but a workaround exists. Should be addressed in the next 1-2 sprints |
 | `low` | Nice-to-have, minor annoyance, or edge case affecting few users. Can wait without meaningful business impact |
 
 When in doubt: if the ticket has no clear urgency signal, default to `medium`.
 
-### Komplexität
+## Output
 
-Setze die Komplexität basierend auf diesen Heuristiken:
+Present the ticket as structured Markdown. The user decides where to put it (Notion, Linear, Jira, GitHub Issues, or just keep the Markdown).
 
-| Komplexität | Signale |
-|---|---|
-| `low` | Einzelne Datei, Bug-Fix mit klarer Reproduktion, Config-Update, Text-Änderung, Dependency-Bump |
-| `medium` | Feature in 1 Repo, 2-5 Dateien, klare Acceptance Criteria, eine Domain (Frontend ODER Backend ODER DB) |
-| `high` | Cross-Domain (Frontend + Backend + DB), Architektur-Änderung, Migration, vage Anforderungen, 6+ Dateien |
-| `critical` | Cross-Repo, System-Redesign, Breaking Changes, Infrastruktur-Umbau, durchgehend menschliches Urteil nötig |
-
-**Wichtig:** `low` und `medium` Tickets können autonom auf dem VPS bearbeitet werden. `high` und `critical` werden nur lokal via `/develop` bearbeitet. Setze die Komplexität konservativ — im Zweifel eher höher.
-
-### Spike Due Date
-
-Bei Spike-Tickets: Setze automatisch ein `due_date` von +3 Tagen ab Erstellung. Spikes sind zeitbegrenzte Untersuchungen — ohne Deadline werden sie vergessen.
-
-## Output and Delivery
-
-### Pipeline-Modus bestimmen
-
-Read `project.json` and determine the pipeline mode:
-
-1. **Board API** (bevorzugt): Falls `pipeline.workspace_id` gesetzt → Credentials auflösen:
-   ```bash
-   WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --id <workspace_id>)
-   ```
-   Aus dem JSON-Output `board_url` und `api_key` verwenden. `pipeline.project_id` aus `project.json`.
-2. **Legacy Supabase MCP**: Falls nur `project_id` gesetzt (ohne `workspace_id`), und `project_id` hat keine Bindestriche → `execute_sql` verwenden, Warnung ausgeben: "Kein Board API konfiguriert. Nutze Legacy Supabase MCP. Fuehre /setup-just-ship aus um zu upgraden."
-3. **Kein Pipeline**: Falls weder `workspace_id` noch `project_id` konfiguriert → User fragen wo das Ticket hin soll
-
-**project_id Format-Check:** Falls `pipeline.project_id` gesetzt ist und KEINE Bindestriche enthält (kurzer alphanumerischer String wie `wsmnutkobalfrceavpxs`), ist es eine alte Supabase-Projekt-ID. Warnung ausgeben: "pipeline.project_id sieht nach einer alten Supabase-ID aus. Fuehre /setup-just-ship aus um auf Board-UUID zu migrieren."
-
-### Board API (bevorzugt) — Primary & Automatic
-
-**CRITICAL:** When Board API credentials are resolved, insert the ticket via Board API IMMEDIATELY after writing. Do NOT ask the user for confirmation or where to deliver. Just do it.
-
-Via Bash curl:
-```bash
-curl -s -X POST -H "X-Pipeline-Key: {api_key}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "{title}",
-    "body": "{body_markdown}",
-    "priority": "{priority}",
-    "tags": ["{tag1}", "{tag2}"],
-    "status": "backlog",
-    "project_id": "{pipeline.project_id}"
-  }' \
-  "{board_url}/api/tickets"
-```
-
-Use `backlog` as default status. Use `ready_to_develop` only if ACs are complete and unambiguous.
-
-### Legacy Supabase MCP (Fallback)
-
-Falls nur `pipeline.project_id` gesetzt (ohne `workspace_id`), nutze `mcp__claude_ai_Supabase__execute_sql`:
-
-```sql
-INSERT INTO public.tickets (title, body, priority, tags, status, workspace_id, project_id)
-VALUES (
-  '{title}',
-  '{body_markdown}',
-  '{priority}',
-  ARRAY['{tag1}', '{tag2}'],
-  'backlog',
-  '{pipeline.workspace_id}',
-  (SELECT id FROM public.projects
-   WHERE name = '{pipeline.project_name}'
-     AND workspace_id = '{pipeline.workspace_id}')
-)
-RETURNING number, title, status;
-```
-
-### HARD RULES
-
-1. **`project_id` ist PFLICHT.** Bei Board API: `pipeline.project_id` aus `project.json`. Bei Legacy: Subquery verwenden. NIEMALS weglassen, NIEMALS NULL.
-2. **`body` ist PFLICHT.** Vollständiges Ticket-Markdown (Problem, Desired Behavior, ACs, Out of Scope). NIEMALS leer oder NULL. **Das Feld heißt `body`, NICHT `description`.** Die API lehnt unbekannte Felder ab.
-3. **CRITICAL — Ticket-Prefix ist `T-`, NIEMALS `#`:**
-   - Korrekt: `Ticket T-1 erstellt: {title}`
-   - FALSCH: `Ticket #1 erstellt: {title}`
-   - Das `number` kommt aus der API Response bzw. `RETURNING`.
-   - **Jede Erwähnung einer Ticket-Nummer MUSS mit `T-` beginnen.** Das `#`-Zeichen vor Ticket-Nummern ist in JEDER Ausgabe verboten — Bestätigungen, Referenzen, Commits, PRs, Logs.
-
-> ⚠️ **MANDATORY SELF-CHECK:** Bevor du die Bestätigung schreibst — scanne deinen gesamten Output nach `#` gefolgt von einer Zahl. Falls gefunden → durch `T-` ersetzen. Keine Ausnahmen.
-
-### Kein Pipeline — User fragen
-
-Only if there is no `project.json` or no pipeline config at all, ask the user where to deliver: Board (needs API config), Notion, or Markdown only.
-
-**Notion:** Use `mcp__claude_ai_Notion__notion-search` to find the target database, then `mcp__claude_ai_Notion__notion-create-pages` to create the ticket as a page.
-
-**Other tools (Linear, Jira, GitHub Issues):** Adapt the Markdown output to the tool's conventions.
+If the user asks you to create the ticket in a specific tool, use the appropriate integration (Notion MCP, etc.). But writing the ticket well is your primary job — delivery is secondary.
 
 ## Common Pitfalls
 
@@ -343,16 +298,17 @@ Only if there is no `project.json` or no pipeline config at all, ask the user wh
 - **Missing boundaries:** Without "Out of Scope", developers guess what's included
 - **Kitchen-sink tickets:** One ticket per outcome. If the ticket has "and" in the title, split it
 - **Premature tech debt tickets:** If you can't articulate the business impact, it's not ready to be a ticket yet
+- **Orphan dependencies:** Referencing tickets that don't exist yet. Create them or note them as open questions.
 
 ## Full Example
 
-### ❌ Bad Ticket (too technical)
+### Bad Ticket (too technical)
 
 > **Architecture: Inject user context dynamically into AI routing**
 >
 > Use the Xentral API to pull customer segments, then pass them as system prompt context to the routing layer. Add cache_control: ephemeral to reduce token costs. Store the mapping in a new customer_segments table.
 
-### ✅ Good Ticket (PM-style)
+### Good Ticket (PM-style)
 
 > **AI categorization respects the customer's segment**
 >
@@ -375,4 +331,4 @@ Only if there is no `project.json` or no pipeline config at all, ask the user wh
 > - No changes to segment definitions themselves
 > - No new UI for segment management
 >
-> **Status:** `ready_to_develop` | **Priority:** `medium` | **Type:** User Story
+> **Status:** `ready_to_develop` | **Priority:** `medium` | **Type:** User Story | **Size:** M
