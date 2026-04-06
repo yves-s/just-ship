@@ -9,6 +9,10 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    environment:
+      - CADDY_DOMAIN=${CADDY_DOMAIN:-:80}
+      - MONITORING_USER=${MONITORING_USER:-admin}
+      - MONITORING_HASH=${MONITORING_HASH:?MONITORING_HASH is required - generate with caddy hash-password}
     depends_on:
       - pipeline-server
 
