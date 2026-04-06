@@ -168,26 +168,31 @@ async function fetchTicket(ticketNumber: number): Promise<Record<string, unknown
   }
 }
 
-async function patchTicket(ticketNumber: number, body: Record<string, unknown>): Promise<boolean> {
+async function patchTicket(ticketNumber: number, body: Record<string, unknown>, maxRetries = 3): Promise<boolean> {
   const { apiUrl, apiKey } = getApiCredentials();
-  try {
-    const res = await fetch(`${apiUrl}/api/tickets/${ticketNumber}`, {
-      method: "PATCH",
-      headers: {
-        "X-Pipeline-Key": apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!res.ok) {
-      log(`patchTicket T-${ticketNumber} failed: HTTP ${res.status} ${res.statusText}`);
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(`${apiUrl}/api/tickets/${ticketNumber}`, {
+        method: "PATCH",
+        headers: {
+          "X-Pipeline-Key": apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (res.ok) return true;
+      log(`patchTicket T-${ticketNumber} attempt ${attempt}/${maxRetries} failed: HTTP ${res.status} ${res.statusText}`);
+      if (res.status >= 400 && res.status < 500) return false; // Client error — don't retry
+    } catch (err) {
+      log(`patchTicket T-${ticketNumber} attempt ${attempt}/${maxRetries} error: ${err instanceof Error ? err.message : String(err)}`);
     }
-    return res.ok;
-  } catch (err) {
-    log(`patchTicket T-${ticketNumber} error: ${err instanceof Error ? err.message : String(err)}`);
-    return false;
+    if (attempt < maxRetries) {
+      await new Promise((r) => setTimeout(r, 1000 * attempt)); // Backoff: 1s, 2s
+    }
   }
+  log(`patchTicket T-${ticketNumber} failed after ${maxRetries} attempts`);
+  return false;
 }
 
 // --- HTTP helpers ---

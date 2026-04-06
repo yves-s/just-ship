@@ -241,9 +241,20 @@ SOFORT WEITER ZU SCHRITT 6.
 
 ### 6. Pipeline-Status auf "done" (nur wenn konfiguriert)
 
-**Board API (bevorzugt):** Via Bash curl:
+**Board API (bevorzugt):** Via Bash curl mit Retry bei Fehler:
 ```bash
-bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"status": "done", "summary": "{pr_summary}"}'
+SHIP_STATUS_OK=false
+for ATTEMPT in 1 2 3; do
+  if bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"status": "done", "summary": "{pr_summary}"}'; then
+    SHIP_STATUS_OK=true
+    break
+  fi
+  echo "Board-Status-Update fehlgeschlagen (Versuch $ATTEMPT/3), retry in ${ATTEMPT}s..."
+  sleep $ATTEMPT
+done
+if [ "$SHIP_STATUS_OK" != "true" ]; then
+  echo "⚠ Board-Status-Update auf 'done' fehlgeschlagen nach 3 Versuchen. Manuell prüfen: T-{N}"
+fi
 ```
 Hinweis: `summary` wird mitgesendet damit das Board eine Zusammenfassung des abgeschlossenen Tickets anzeigt.
 
