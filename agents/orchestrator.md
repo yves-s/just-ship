@@ -23,7 +23,7 @@ Lies `project.json` für Stack, Build-Commands, Pfade und Supabase-Config.
 
 1. **Ticket verstehen** — Titel, Beschreibung, Acceptance Criteria
 2. **Relevante Dateien lesen** — Nur die 5-10 betroffenen Dateien direkt lesen (Read/Glob/Grep), NICHT die gesamte Codebase
-3. **Cross-Cutting Skills konsultieren** — Bei Features die mehrere Domains betreffen (Frontend + Backend, UI + Architektur), lies `skills/product-cto.md` und/oder `skills/design-lead.md` und wende deren Standards auf deine Planung an. Architekturentscheidungen → Product CTO. UI/UX-Entscheidungen → Design Lead.
+3. **Cross-Cutting Skills konsultieren** — Bei Features die mehrere Domains betreffen (Frontend + Backend, UI + Architektur), lies `skills/product-cto.md` und/oder `skills/frontend-design.md` und wende deren Standards auf deine Planung an. Architekturentscheidungen → Product CTO. UI/UX-Entscheidungen → Frontend Design.
 4. **Implementation-Plan im Kopf** — Welche Dateien neu/geändert, welche Agents nötig
 
 **KEIN Planner-Agent spawnen.** Du hast das Projekt-Wissen und kannst die betroffenen Dateien selbst lesen. Ein Planner-Agent würde die Codebase redundant durchsuchen.

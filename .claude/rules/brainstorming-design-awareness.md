@@ -5,9 +5,8 @@ When brainstorming involves visual, UI, or UX topics — especially when the Vis
 | Topic | Read |
 |---|---|
 | Greenfield / creative aesthetics | `skills/creative-design.md` |
-| Design system compliance | `skills/design.md` |
+| Component patterns, states, design tokens | `skills/frontend-design.md` |
 | User flows, screens, IA | `skills/ux-planning.md` |
-| Component patterns, states | `skills/frontend-design.md` |
 
 **Why:** The Visual Companion generates generic wireframes without design expertise. The project has dedicated design skills that define quality standards, anti-patterns (Anti-AI-Slop), and UX methodology — but they're not automatically loaded during brainstorming.
 
@@ -16,4 +15,4 @@ When brainstorming involves visual, UI, or UX topics — especially when the Vis
 2. If yes, read the relevant skill files before the first visual question
 3. Apply Anti-AI-Slop rules from `creative-design.md` to every mockup: no generic fonts, no purple gradients, no centered-everything layouts, distinctive typography
 4. Apply UX planning principles: map user flows before designing screens, define all states (empty, loading, error), information architecture before visual polish
-5. If the target project has an existing design system (shadcn/ui, tailwind, theme files), read `design.md` and `frontend-design.md` and use the project's actual tokens/components in mockups
+5. If the target project has an existing design system (shadcn/ui, tailwind, theme files), read `frontend-design.md` and use the project's actual tokens/components in mockups

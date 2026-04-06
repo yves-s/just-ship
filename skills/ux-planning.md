@@ -65,15 +65,19 @@ For each step, decide (don't just list):
 ### Flow Notation
 
 ```
-Loyalty Rewards Flow:
-  Dashboard (km-Balance prominent)
-    → [Tap Reward Card] → Reward Detail (Bottom Sheet on mobile, Side Panel on desktop)
-        → [Tap "Redeem"] → Confirmation (inline in sheet, not separate modal)
-            → [Confirm] → Success State (code shown, undo available 10s)
-            → [Cancel] → Back to Reward Detail
-        → [Insufficient km] → Locked state with distance indicator
-    → [Pull to Refresh] → Strava sync trigger → Balance update animation
-    → [Tap History] → Redemption History (list, sorted by date desc)
+Subscription Management Flow:
+  Settings → Subscription Section (current plan, usage bar)
+    → [Tap "Change Plan"] → Plan Picker (Bottom Sheet on mobile, Modal on desktop)
+        → [Select Plan] → Confirmation (inline in sheet, price delta highlighted)
+            → [Confirm] → Success State (new plan active, undo available 10s)
+            → [Cancel] → Back to Plan Picker
+        → [Downgrade with active features] → Warning with affected features listed
+    → [Tap "Cancel Subscription"] → Cancellation Flow (full-screen push, multi-step)
+        → Step 1: Reason selection (single-select, no free text required)
+        → Step 2: Retention offer (if eligible, skip if not)
+        → Step 3: Confirm cancellation (explicit "Cancel my subscription" button, not just "Confirm")
+            → [Confirm] → Success with end-date and reactivation path
+    → [Pull to Refresh] → Usage data update
 ```
 
 ## Screen Inventory
@@ -81,30 +85,31 @@ Loyalty Rewards Flow:
 For each screen, document the decisions you've made:
 
 ```markdown
-### Screen: Rewards Dashboard
+### Screen: Subscription Overview
 
-**Purpose:** Show the user their km balance and available rewards at a glance.
-**Why this is a separate screen:** It's the primary destination for the loyalty feature — combining it with the shop would dilute both experiences.
-**Entry points:** Tab bar item (mobile), sidebar link (desktop), push notification deep link
-**Layout decision:** Single column, balance card hero → rewards grid → history link. Not a dashboard grid — the balance is the hero, everything else supports it.
+**Purpose:** Show the user their current plan, usage, and actions they can take.
+**Why this is a separate screen:** It's accessed from Settings but complex enough to warrant its own view — combining it with general settings would bury it.
+**Entry points:** Settings row tap (mobile), sidebar link (desktop), upgrade prompt deep link
+**Layout decision:** Single column. Plan card hero → usage breakdown → action buttons. Not a dashboard — the current plan is the hero, everything else supports it.
 
 **Content (prioritized):**
-1. Must see: km balance (large number), progress to next reward
-2. Must see: Available rewards (2-column grid, showing 4 items)
-3. Should see: "View all rewards" if more than 4
-4. Can access: Redemption history (collapsed section or separate screen)
+1. Must see: Current plan name + price, renewal date
+2. Must see: Usage indicators (seats used, storage used) with visual bars
+3. Should see: Action buttons (Change Plan, Cancel)
+4. Can access: Billing history (link to separate screen)
 
-**Primary action:** Tap a reward to see detail / redeem
-**Secondary actions:** Pull-to-refresh, view history
+**Primary action:** Change plan
+**Secondary actions:** Cancel subscription, view billing history
 
 **States:**
-- Empty: New user, 0 km, no Strava connected → "Connect Strava" CTA
-- Empty with Strava: Connected, 0 km → Motivational first-ride prompt
-- Loading: Skeleton matching layout (balance block, 4 reward card skeletons)
+- Default: Active subscription with usage data
+- Trial: Trial badge, days remaining, "Upgrade" CTA replaces "Change Plan"
+- Cancelled: End date shown, "Reactivate" CTA, dimmed usage section
+- Loading: Skeleton matching layout (plan card block, 2 usage bar skeletons)
 - Error: Inline message with retry, not full-page error
-- Partial: Balance loaded but rewards API failed → show balance, error state in rewards section
+- Partial: Plan loaded but usage API failed → show plan, error in usage section
 
-**Exits:** Reward detail (sheet), History (push), Settings (nav), Shop (tab)
+**Exits:** Plan Picker (sheet/modal), Cancellation Flow (push), Billing History (push), Settings (back)
 ```
 
 ## Mobile-First Interaction Patterns
@@ -126,6 +131,21 @@ Design for mobile constraints first, then enhance for desktop. These are your de
 | Quick action (confirm, edit) | Bottom sheet (partial) | Modal or inline |
 | Long form/creation | Full-screen with fixed header/footer | Centered form (max-w-lg) |
 | Filterable list | Filter chips above list + bottom sheet for advanced | Sidebar filters + list |
+
+### Platform-Specific Patterns
+
+When designing for native or hybrid apps, respect platform conventions:
+
+| Pattern | iOS | Android | Web |
+|---------|-----|---------|-----|
+| Back navigation | Swipe from left edge, "< Back" in nav bar | System back button / gesture | Browser back, breadcrumbs |
+| Destructive actions | Swipe left → red action button | Long press → context menu | Inline button with confirmation |
+| Bottom sheets | Native UISheetPresentationController detents (.medium, .large) | Material BottomSheetBehavior (3 states) | Custom implementation, match OS feel |
+| Alerts / Confirmations | UIAlertController (centered) | Material AlertDialog (centered) | Modal or inline, never browser alert() |
+| Pull to refresh | UIRefreshControl (standard) | SwipeRefreshLayout (standard) | Custom, not expected by default |
+| Haptic feedback | UIImpactFeedbackGenerator for confirmations | HapticFeedbackConstants | Not available |
+
+**Rule of thumb:** If the app is web-only, follow web conventions. If it's a native or hybrid app, match the host platform. If it's cross-platform (React Native, Flutter), default to iOS patterns but respect Android back gesture.
 
 ### Gestures
 - **Swipe left on list item:** Destructive action (delete, archive). iOS convention. Use with undo.
@@ -157,7 +177,7 @@ Accessibility isn't an implementation detail — it's a UX decision that affects
 
 **Screen reader narrative:** Think about what a screen reader user hears. Is the page title announced? Are interactive elements labeled? Does the order make sense without seeing the layout?
 
-**Cognitive load:** Don't overload any single step. Multi-step flows > dense single-page forms. But: don't create so many steps that the flow feels bureaucratic. 3-5 steps is the sweet spot for most flows.
+**Cognitive load:** Don't overload any single step. Multi-step flows work better than dense single-page forms — but too many steps feel bureaucratic. 3-5 steps is the sweet spot because: below 3, steps tend to be overloaded; above 5, users lose the mental model of where they are in the flow and abandon rates spike.
 
 **Error recovery:** Every error state must explain (1) what happened, (2) why, and (3) what the user can do about it. "Something went wrong" is not an error message.
 
@@ -177,7 +197,7 @@ Present each section and get approval before moving to implementation planning.
 
 ## Hand Off
 
-After approval, invoke the `writing-plans` skill to create the implementation plan from the UX spec.
+After approval, create implementation tickets from the UX spec. Each screen or flow segment becomes a ticket (use the ticket-writer skill if available). Include the relevant UX spec sections in each ticket's context so developers don't have to read the full document.
 
 ## Principles (Summary)
 
@@ -187,3 +207,4 @@ After approval, invoke the `writing-plans` skill to create the implementation pl
 - **Decide, don't defer** — choose the pattern, explain the rationale, invite pushback on big calls only
 - **Accessibility shapes flows** — keyboard order, screen reader narrative, cognitive load are UX decisions
 - **Perceived performance is designed** — skeleton vs. spinner, optimistic updates, progress indicators are UX choices
+- **Respect the platform** — iOS, Android, and Web have different conventions; match them

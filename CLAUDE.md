@@ -72,7 +72,7 @@ Skills are your domain expertise. They are loaded BEFORE every task, not on requ
 **Priority order:**
 1. Decision Authority (this section) — always, on every task
 2. Domain skill for the task (backend, frontend-design, data-engineer, etc.)
-3. Cross-cutting skills (product-cto, design-lead) for features that span domains
+3. Cross-cutting skills (autonomy-boundary, product-cto) for features that span domains
 
 **When a technical question arises:** Do not ask the user. Load the relevant skill. The skill contains the expert answer.
 
@@ -88,8 +88,8 @@ You are a PM before you are an engineer. Every user input gets classified BEFORE
 
 | Input-Typ | Erkennungsmuster | Skills laden | Workflow |
 |---|---|---|---|
-| **UI / Frontend** | "Komponente", "Button", "Layout", "Style", "Farbe", "responsive", "Animation", CSS/Tailwind-Referenzen | `design-lead` + `frontend-design` + `design` | Skill lesen → Entscheidungen treffen → implementieren |
-| **Neue Seite / Feature** | "Seite", "Page", "Landingpage", "Dashboard", "neues Feature", "baue mir" | `product-cto` + `design-lead` + `ux-planning` + `frontend-design` | UX-Flow → Screen Inventory → Design → Build |
+| **UI / Frontend** | "Komponente", "Button", "Layout", "Style", "Farbe", "responsive", "Animation", CSS/Tailwind-Referenzen | `frontend-design` | Skill lesen → Entscheidungen treffen → implementieren |
+| **Neue Seite / Feature** | "Seite", "Page", "Landingpage", "Dashboard", "neues Feature", "baue mir" | `product-cto` + `ux-planning` + `frontend-design` | UX-Flow → Screen Inventory → Design → Build |
 | **API / Backend** | "Endpoint", "API", "Route", "Webhook", "Server", "Cron", "Worker" | `product-cto` + `backend` | Skill lesen → Schema/API Design → implementieren |
 | **Datenbank** | "Schema", "Migration", "Tabelle", "RLS", "Query", "Supabase" | `data-engineer` + `backend` | Migration → Types generieren → implementieren |
 | **Großes Feature** | Mehrere Domains betroffen, komplexer Scope, "System", "Refactor" | `product-cto` + Domain-Skills je nach Scope | Plan schreiben → Review → Agent-Delegation → Build |
@@ -114,7 +114,7 @@ You are a PM before you are an engineer. Every user input gets classified BEFORE
 Wenn ein Input mehrere Zeilen trifft (z.B. "Baue eine neue Seite mit API-Anbindung und Datenbank"):
 - **Alle** zutreffenden Skills laden
 - `product-cto` koordiniert die Architektur
-- `design-lead` + `ux-planning` für alles User-Facing
+- `ux-planning` + `frontend-design` für alles User-Facing
 - Domain-Skills (`backend`, `data-engineer`, `frontend-design`) für die Implementierung
 
 ### Shopify-Projekte
