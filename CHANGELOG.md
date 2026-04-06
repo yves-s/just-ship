@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **VPS Container Logs CLI**: New `vps/logs.sh` script fetches Docker container logs from the remote VPS via SSH — supports container listing, configurable tail lines (`-n`), follow mode (`-f`), and input validation against shell injection
+
 ### Fixed
 - **Command Injection via Branch Name**: Created `sanitizeBranchName()` in `pipeline/lib/sanitize.ts` with strict allowlist regex, `..` traversal rejection, and shell metacharacter denylist — validates branch names in `executePipeline`, `resumePipeline`, `WorktreeManager._createWorktree`, and `handleShip`; fixed unquoted `${branchName}` in 4 `execSync` calls in `run.ts`
 - **Health Endpoint Security**: Unauthenticated `/health` requests now return only `{"status": "ok"}` — running tickets, error details, uptime, project slugs, and drain status require valid `X-Pipeline-Key` header

@@ -56,6 +56,7 @@ After VPS setup, connect individual projects. The command copies local env vars,
 | `just-ship-updater.sh` | Update-Agent: watches for triggers, orchestrates zero-downtime updates |
 | `just-ship-updater.service` | systemd unit for Update-Agent (runs on host, outside Docker) |
 | `install-updater.sh` | Installs Update-Agent on a VPS host |
+| `logs.sh` | Fetch Docker container logs from VPS via SSH (list containers, tail logs, follow mode) |
 | `setup-vps.sh` | **DEPRECATED** — legacy bare-metal setup script |
 | `just-ship-pipeline@.service` | **DEPRECATED** — legacy systemd unit for polling worker |
 | `just-ship-server@.service` | **DEPRECATED** — legacy systemd unit for HTTP server |
@@ -158,6 +159,26 @@ docker exec -it caddy caddy hash-password --plaintext 'your-password'
 MONITORING_USER=admin
 MONITORING_HASH='$2a$14$...'  # output from caddy hash-password
 ```
+
+## CLI Logs
+
+Fetch container logs from the VPS without opening an SSH session manually:
+
+```bash
+# List all running containers
+bash vps/logs.sh --host <IP>
+
+# Show last 100 lines of a container
+bash vps/logs.sh --host <IP> pipeline
+
+# Show last 50 lines
+bash vps/logs.sh --host <IP> pipeline -n 50
+
+# Live tail (follow mode, Ctrl+C to stop)
+bash vps/logs.sh --host <IP> pipeline -f
+```
+
+Requires SSH key auth to `root@<IP>` (same as all other VPS scripts).
 
 ## Update
 
