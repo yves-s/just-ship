@@ -65,24 +65,41 @@ async function supabaseGet<T>(path: string): Promise<T | null> {
 }
 
 async function supabasePatch<T>(path: string, body: Record<string, unknown>): Promise<T | null> {
-  try {
-    const res = await fetch(`${SUPABASE_URL}${path}`, {
-      method: "PATCH",
-      headers: {
-        apikey: SUPABASE_SERVICE_KEY,
-        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-        "Content-Type": "application/json",
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as T;
-  } catch {
-    // Best-effort: Supabase PATCH failure handled by caller via null return
-    return null;
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(`${SUPABASE_URL}${path}`, {
+        method: "PATCH",
+        headers: {
+          apikey: SUPABASE_SERVICE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (res.ok) return (await res.json()) as T;
+      // 4xx client errors — don't retry
+      if (res.status >= 400 && res.status < 500) {
+        log(`supabasePatch 4xx (${res.status}) on ${path}, not retrying`);
+        return null;
+      }
+      // 5xx server error — retry
+      if (attempt < maxAttempts) {
+        log(`supabasePatch ${res.status} on ${path}, retry ${attempt}/${maxAttempts}...`);
+        await sleep(1000 * attempt);
+      }
+    } catch (err) {
+      // Network/timeout error — retry
+      if (attempt < maxAttempts) {
+        log(`supabasePatch error on ${path} (${err instanceof Error ? err.message : "unknown"}), retry ${attempt}/${maxAttempts}...`);
+        await sleep(1000 * attempt);
+      }
+    }
   }
+  log(`supabasePatch FAILED after ${maxAttempts} attempts on ${path}`);
+  return null;
 }
 
 // --- Complexity gate ---
@@ -125,17 +142,23 @@ async function claimTicket(number: number): Promise<boolean> {
 }
 
 async function completeTicket(number: number, branch: string, summary?: string): Promise<void> {
-  await supabasePatch(
+  const result = await supabasePatch(
     `/rest/v1/tickets?number=eq.${number}`,
     { pipeline_status: "done", status: "in_review", branch, ...(summary ? { summary } : {}) }
   );
+  if (!result) {
+    throw new Error(`Failed to update ticket T-${number} to in_review after 3 retries`);
+  }
 }
 
 async function failTicket(number: number, reason: string): Promise<void> {
-  await supabasePatch(
+  const result = await supabasePatch(
     `/rest/v1/tickets?number=eq.${number}`,
     { pipeline_status: "failed", status: "ready_to_develop", summary: reason }
   );
+  if (!result) {
+    log(`CRITICAL: Failed to update ticket T-${number} to failed status after 3 retries — ticket may be stuck`);
+  }
 }
 
 // Board API: known agent types that may have open events
@@ -330,47 +353,56 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
     if (slotId !== undefined) slotFailures.delete(slotId);
   } catch (error) {
     const errorObj = error instanceof Error ? error : new Error(String(error));
+    const isStatusUpdateFailure = errorObj.message.includes("Failed to update ticket") && errorObj.message.includes("after 3 retries");
     const isWatchdog = errorObj.message.startsWith("Watchdog timeout:");
 
-    // --- Watchdog timeout: abort subprocess, save WIP, send agent_failed ---
-    let watchdogHadWip = false;
-    if (isWatchdog) {
-      runAbortController.abort();
-      await sleep(5000);
-      if (slotId !== undefined) {
-        const worktreeDir = worktreeManager.getSlotDir(slotId);
-        if (worktreeDir) {
-          watchdogHadWip = saveWorktreeWIP(worktreeDir, ticket.number);
+    // --- Status update failure: pipeline succeeded but Supabase is unreachable ---
+    // Do NOT call failTicket (that would also fail). Log critically and let
+    // the startup recovery (line ~230) reset it on next worker restart.
+    if (isStatusUpdateFailure) {
+      log(`CRITICAL: T-${ticket.number} pipeline succeeded but status update to in_review failed after retries. Ticket stuck at in_progress — will be auto-recovered on next worker restart.`);
+      Sentry.captureException(error);
+    } else {
+      // --- Watchdog timeout: abort subprocess, save WIP, send agent_failed ---
+      let watchdogHadWip = false;
+      if (isWatchdog) {
+        runAbortController.abort();
+        await sleep(5000);
+        if (slotId !== undefined) {
+          const worktreeDir = worktreeManager.getSlotDir(slotId);
+          if (worktreeDir) {
+            watchdogHadWip = saveWorktreeWIP(worktreeDir, ticket.number);
+          }
+        }
+        // Send agent_failed event via Board API
+        if (config.pipeline.apiUrl && config.pipeline.apiKey) {
+          await sendAgentFailedEvent(config.pipeline.apiUrl, config.pipeline.apiKey, ticket.number, "timeout", watchdogHadWip);
         }
       }
-      // Send agent_failed event via Board API
-      if (config.pipeline.apiUrl && config.pipeline.apiKey) {
-        await sendAgentFailedEvent(config.pipeline.apiUrl, config.pipeline.apiKey, ticket.number, "timeout", watchdogHadWip);
-      }
-    }
 
-    // --- Error classification and ticket status update ---
-    const classification = classifyError({
-      error: errorObj,
-      ticketId: String(ticket.number),
-      exitCode: 1,
-      timedOut: false,
-      branch: branchName,
-      projectDir: PROJECT_DIR,
-    });
-
-    log(`Pipeline failed: T-${ticket.number} (${errorObj.message}) [${classification.action}]`);
-    Sentry.captureException(error);
-
-    if (watchdogHadWip) {
-      // Partial work saved — set crashed so recovery can resume instead of restart
-      await supabasePatch(`/rest/v1/tickets?number=eq.${ticket.number}`, {
-        pipeline_status: "crashed",
-        summary: `Watchdog timeout with partial work saved. Use /recover T-${ticket.number} to resume.`,
+      // --- Error classification and ticket status update ---
+      const classification = classifyError({
+        error: errorObj,
+        ticketId: String(ticket.number),
+        exitCode: 1,
+        timedOut: false,
+        branch: branchName,
+        projectDir: PROJECT_DIR,
       });
-      log(`T-${ticket.number}: watchdog timeout, WIP saved, set pipeline_status=crashed`);
-    } else {
-      await failTicket(ticket.number, `Pipeline error: ${errorObj.message}`);
+
+      log(`Pipeline failed: T-${ticket.number} (${errorObj.message}) [${classification.action}]`);
+      Sentry.captureException(error);
+
+      if (watchdogHadWip) {
+        // Partial work saved — set crashed so recovery can resume instead of restart
+        await supabasePatch(`/rest/v1/tickets?number=eq.${ticket.number}`, {
+          pipeline_status: "crashed",
+          summary: `Watchdog timeout with partial work saved. Use /recover T-${ticket.number} to resume.`,
+        });
+        log(`T-${ticket.number}: watchdog timeout, WIP saved, set pipeline_status=crashed`);
+      } else {
+        await failTicket(ticket.number, `Pipeline error: ${errorObj.message}`);
+      }
     }
 
     // Auto-heal: worker only logs the classification for now.
