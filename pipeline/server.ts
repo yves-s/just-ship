@@ -860,6 +860,12 @@ function requirePipelineKey(req: IncomingMessage, res: ServerResponse): boolean 
   return true;
 }
 
+/** Check if request has a valid Pipeline-Key without sending an error response. */
+function hasPipelineKey(req: IncomingMessage): boolean {
+  const apiKey = req.headers["x-pipeline-key"] as string | undefined;
+  return !!apiKey && apiKey === PIPELINE_SERVER_KEY;
+}
+
 /** Parse JSON body with size limit. Returns null and sends error response on failure. */
 async function parseJsonBody(req: IncomingMessage, res: ServerResponse): Promise<Record<string, unknown> | null> {
   try {
@@ -892,7 +898,14 @@ function requireTicketNumber(body: Record<string, unknown>, res: ServerResponse,
 // Route handlers — each receives (req, res) and handles one endpoint
 // ---------------------------------------------------------------------------
 
-async function handleHealthRoute(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handleHealthRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  // Unauthenticated: minimal response for monitoring (UptimeRobot keyword: "ok")
+  if (!hasPipelineKey(req)) {
+    sendJson(res, 200, { status: "ok" });
+    return;
+  }
+
+  // Authenticated: full details
   const lastCompleted = runHistory.filter(r => r.status === "completed").at(-1) ?? null;
   const lastError = runHistory.filter(r => r.status === "failed").at(-1) ?? null;
 
