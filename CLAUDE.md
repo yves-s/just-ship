@@ -78,6 +78,51 @@ Skills are your domain expertise. They are loaded BEFORE every task, not on requ
 
 ---
 
+## Organisation — Skill Routing
+
+You are a PM before you are an engineer. Every user input gets classified BEFORE any code is written. Classification determines which skills are loaded, and skills determine how you build.
+
+**NIEMALS direkt implementieren ohne vorher den relevanten Skill geladen zu haben.**
+
+### Routing-Tabelle
+
+| Input-Typ | Erkennungsmuster | Skills laden | Workflow |
+|---|---|---|---|
+| **UI / Frontend** | "Komponente", "Button", "Layout", "Style", "Farbe", "responsive", "Animation", CSS/Tailwind-Referenzen | `design-lead` + `frontend-design` + `design` | Skill lesen → Entscheidungen treffen → implementieren |
+| **Neue Seite / Feature** | "Seite", "Page", "Landingpage", "Dashboard", "neues Feature", "baue mir" | `product-cto` + `design-lead` + `ux-planning` + `frontend-design` | UX-Flow → Screen Inventory → Design → Build |
+| **API / Backend** | "Endpoint", "API", "Route", "Webhook", "Server", "Cron", "Worker" | `product-cto` + `backend` | Skill lesen → Schema/API Design → implementieren |
+| **Datenbank** | "Schema", "Migration", "Tabelle", "RLS", "Query", "Supabase" | `data-engineer` + `backend` | Migration → Types generieren → implementieren |
+| **Großes Feature** | Mehrere Domains betroffen, komplexer Scope, "System", "Refactor" | `product-cto` + Domain-Skills je nach Scope | Plan schreiben → Review → Agent-Delegation → Build |
+| **Bug / Fix** | "Bug", "Fehler", "kaputt", "geht nicht", "Fix", Error-Logs | `systematic-debugging` + Domain-Skill des betroffenen Bereichs | Reproduzieren → Root Cause → Fix → Verify |
+| **Testing** | "Test", "Coverage", "E2E", "Unit Test" | `test-driven-development` + `webapp-testing` | Test-Strategie → Tests schreiben → Green |
+| **Creative / Greenfield** | "Design von Scratch", "neues Produkt", "Prototyp", "MVP" | `creative-design` + `ux-planning` + `product-cto` | Brainstorm → UX Flow → Design → Build |
+
+### Routing-Logik
+
+```
+1. User-Input empfangen
+2. Klassifizieren: Welcher Input-Typ passt?
+   → Bei Überlappung: Alle zutreffenden Zeilen kombinieren
+   → Bei Unklarheit: `product-cto` als Default laden
+3. Skills laden (via Skill-Tool oder direkt aus skills/ lesen)
+4. Skill-Standards anwenden — Entscheidungen treffen, NICHT den User fragen
+5. Implementieren
+```
+
+### Mehrere Domains
+
+Wenn ein Input mehrere Zeilen trifft (z.B. "Baue eine neue Seite mit API-Anbindung und Datenbank"):
+- **Alle** zutreffenden Skills laden
+- `product-cto` koordiniert die Architektur
+- `design-lead` + `ux-planning` für alles User-Facing
+- Domain-Skills (`backend`, `data-engineer`, `frontend-design`) für die Implementierung
+
+### Shopify-Projekte
+
+Wenn das Projekt Shopify-Dateien enthält (`sections/`, `snippets/`, `layout/theme.liquid`, `shopify.app.toml`), zusätzlich die Shopify-Skills laden. Siehe `.claude/rules/shopify-skill-awareness.md` für die vollständige Zuordnung.
+
+---
+
 ## Agent Application
 
 **Orchestrator as Firewall:** The Orchestrator resolves ALL implementation questions before they reach the user. If an agent's output contains a technical question, the Orchestrator answers it and sends the decision back. Only product/vision questions pass through to the user.
