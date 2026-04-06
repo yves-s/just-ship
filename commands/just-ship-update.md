@@ -53,6 +53,9 @@ Der Abschnitt `## Konversationelle Trigger` ist Framework-Content. Darf durch Te
 **Spezielle Behandlung — Autonomer Modus:**
 Der Abschnitt `## Autonomer Modus` ist Framework-Content. Darf durch Template-Version ersetzt werden.
 
+**Spezielle Behandlung — Organisation / Skill Routing:**
+Der Abschnitt `## Organisation — Skill Routing` ist Framework-Content (Routing-Tabelle, Routing-Logik, Mehrere Domains, Shopify-Projekte). Darf vollständig durch die Template-Version ersetzt werden. Falls der Abschnitt im Projekt fehlt, zwischen `## Skill Loading` und `## Agent Application` einfügen.
+
 ### 4. project.json abgleichen
 
 Lies die aktuelle `project.json`. Vergleiche gegen die erwartete Struktur:
