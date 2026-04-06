@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { homedir } from "node:os";
+import { logger } from "./logger.ts";
 
 export interface PipelineConfig {
   projectId: string;
@@ -12,21 +13,45 @@ export interface PipelineConfig {
 export interface QaConfig {
   maxFixIterations: number;
   playwrightTimeoutMs: number;
-  previewProvider: "vercel" | "none";
+  previewProvider: "vercel" | "coolify" | "none";
   vercelProjectId: string;
   vercelTeamId: string;
   vercelPreviewPollIntervalMs: number;
   vercelPreviewMaxWaitMs: number;
+  coolifyUrl: string;
+  coolifyAppUuid: string;
+  coolifyPollIntervalMs: number;
+  coolifyMaxWaitMs: number;
+  shopifyEnabled?: boolean;
 }
 
 export interface ProjectConfig {
   name: string;
   description: string;
   conventions: { branch_prefix: string };
-  pipeline: PipelineConfig;
+  pipeline: PipelineConfig & {
+    skipAgents?: string[];
+    maxAutonomousComplexity?: string;
+    timeouts?: {
+      haiku?: number;
+      sonnet?: number;
+      opus?: number;
+    };
+  };
   maxWorkers: number;
   qa: QaConfig;
-  stack: { packageManager: string; buildCommand?: string; testCommand?: string };
+  stack: {
+    packageManager: string;
+    buildCommand?: string;
+    testCommand?: string;
+    verifyCommand?: string;
+    platform?: string;
+    variant?: string;
+  };
+  skills?: {
+    domain?: string[];
+    custom?: string[];
+  };
 }
 
 export interface TicketArgs {
@@ -53,6 +78,7 @@ function loadGlobalConfig(): GlobalConfig | null {
   try {
     return JSON.parse(readFileSync(configPath, "utf-8"));
   } catch {
+    logger.warn("Could not parse ~/.just-ship/config.json — continuing without global config");
     return null;
   }
 }
@@ -77,7 +103,7 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
       name: "project",
       description: "",
       conventions: { branch_prefix: "feature/" },
-      pipeline: buildPipelineConfig({}),
+      pipeline: { ...buildPipelineConfig({}), skipAgents: [], timeouts: undefined },
       maxWorkers: 1,
       qa: {
         maxFixIterations: 3,
@@ -87,8 +113,13 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
         vercelTeamId: "",
         vercelPreviewPollIntervalMs: 10000,
         vercelPreviewMaxWaitMs: 300000,
+        coolifyUrl: "",
+        coolifyAppUuid: "",
+        coolifyPollIntervalMs: 10000,
+        coolifyMaxWaitMs: 300000,
       },
       stack: { packageManager: "npm" },
+      skills: undefined,
     };
   }
   const raw = JSON.parse(readFileSync(configPath, "utf-8"));
@@ -102,9 +133,9 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
 
   if (rawPipeline.api_key) {
     // Old format: credentials in project.json
-    console.warn(
-      "\u26a0 api_key in project.json is deprecated.\n" +
-      "  Run 'just-ship connect' or '.claude/scripts/write-config.sh migrate' to upgrade."
+    logger.warn(
+      "api_key in project.json is deprecated. " +
+      "Run 'just-ship connect' or '.claude/scripts/write-config.sh migrate' to upgrade."
     );
     pipeline = buildPipelineConfig(rawPipeline, globalConfig);
     if (!pipeline.apiUrl) pipeline.apiUrl = (rawPipeline.api_url as string) ?? "";
@@ -115,19 +146,36 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
     const wsId = rawPipeline.workspace_id as string;
     if (!globalConfig) {
       // In multi-project mode (VPS), credentials come from server-config.json, not ~/.just-ship/config.json
-      if (!process.env.SERVER_CONFIG_PATH) {
-        console.warn(
-          `\u26a0 workspace_id '${wsId}' configured but ~/.just-ship/config.json not found.\n` +
-          `  Run 'just-ship connect' to set up the connection.`
+      if (process.env.SERVER_CONFIG_PATH) {
+        // Read board_url and api_key from server-config.json
+        const serverConfigPath = process.env.SERVER_CONFIG_PATH;
+        try {
+          const serverConfig = JSON.parse(readFileSync(serverConfigPath, "utf-8"));
+          const boardUrl = serverConfig?.workspace?.board_url ?? "";
+          const apiKey = serverConfig?.workspace?.api_key ?? "";
+          pipeline = {
+            projectId: (rawPipeline.project_id as string) ?? "",
+            workspaceId: wsId,
+            apiUrl: boardUrl,
+            apiKey: apiKey,
+          };
+        } catch {
+          logger.warn({ serverConfigPath }, "Could not read server-config.json");
+          pipeline = buildPipelineConfig(rawPipeline, null);
+        }
+      } else {
+        logger.warn(
+          { workspaceId: wsId },
+          "workspace_id configured but ~/.just-ship/config.json not found. Run 'just-ship connect' to set up the connection."
         );
+        pipeline = buildPipelineConfig(rawPipeline, null);
       }
-      pipeline = buildPipelineConfig(rawPipeline, null);
     } else {
       const ws = globalConfig.workspaces[wsId];
       if (!ws) {
-        console.error(
-          `Workspace '${wsId}' not found in ~/.just-ship/config.json.\n` +
-          `Run 'just-ship connect' to set up the connection.`
+        logger.error(
+          { workspaceId: wsId },
+          "Workspace not found in ~/.just-ship/config.json. Run 'just-ship connect' to set up the connection."
         );
         pipeline = buildPipelineConfig(rawPipeline, globalConfig);
       } else {
@@ -137,9 +185,8 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
 
   } else if (rawPipeline.workspace) {
     // Intermediate format: slug-based (deprecated)
-    console.warn(
-      `\u26a0 pipeline.workspace (slug) is deprecated.\n` +
-      `  Run '.claude/scripts/write-config.sh migrate' to upgrade.`
+    logger.warn(
+      "pipeline.workspace (slug) is deprecated. Run '.claude/scripts/write-config.sh migrate' to upgrade."
     );
     const slug = rawPipeline.workspace as string;
     let ws: WorkspaceEntry | undefined;
@@ -158,39 +205,77 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
   }
 
   const rawQa = rawPipeline.qa ?? {};
-  // Infer preview provider from pipeline.hosting if not explicitly set in qa config
-  const hosting = rawPipeline.hosting as string | undefined;
-  const inferredProvider = hosting === "vercel" ? "vercel" : "none";
+
+  // Read hosting config from root of project.json (new format)
+  // Supports both object format {provider, project_id, team_id} and legacy string format
+  const rawHosting = raw.hosting;
+  let hostingProvider: "vercel" | "coolify" | "none" = "none";
+  let vercelProjectId = "";
+  let vercelTeamId = "";
+  let coolifyUrl = "";
+  let coolifyAppUuid = "";
+
+  if (typeof rawHosting === "object" && rawHosting !== null) {
+    const h = rawHosting as { provider?: string; project_id?: string; team_id?: string; coolify_url?: string; coolify_app_uuid?: string };
+    if (h.provider === "vercel") {
+      hostingProvider = "vercel";
+      vercelProjectId = h.project_id ?? "";
+      vercelTeamId = h.team_id ?? "";
+    } else if (h.provider === "coolify") {
+      hostingProvider = "coolify";
+      coolifyUrl = h.coolify_url ?? "";
+      coolifyAppUuid = h.coolify_app_uuid ?? "";
+    }
+  } else if (typeof rawHosting === "string" && rawHosting === "vercel") {
+    // Legacy string format: "vercel" (backwards compatibility)
+    hostingProvider = "vercel";
+    vercelProjectId = (rawQa.vercel_project_id as string) ?? "";
+    vercelTeamId = (rawQa.vercel_team_id as string) ?? "";
+  }
+
   const qa: QaConfig = {
     maxFixIterations: Number(rawQa.max_fix_iterations ?? 3),
     playwrightTimeoutMs: Number(rawQa.playwright_timeout_ms ?? 60000),
-    previewProvider: (rawQa.preview_provider as "vercel" | "none") ?? inferredProvider,
-    vercelProjectId: (rawQa.vercel_project_id as string) ?? "",
-    vercelTeamId: (rawQa.vercel_team_id as string) ?? "",
+    previewProvider: (rawQa.preview_provider as "vercel" | "coolify" | "none") ?? hostingProvider,
+    vercelProjectId: vercelProjectId || ((rawQa.vercel_project_id as string) ?? ""),
+    vercelTeamId: vercelTeamId || ((rawQa.vercel_team_id as string) ?? ""),
     vercelPreviewPollIntervalMs: Number(rawQa.vercel_preview_poll_interval_ms ?? 10000),
     vercelPreviewMaxWaitMs: Number(rawQa.vercel_preview_max_wait_ms ?? 300000),
+    coolifyUrl: coolifyUrl || ((rawQa.coolify_url as string) ?? ""),
+    coolifyAppUuid: coolifyAppUuid || ((rawQa.coolify_app_uuid as string) ?? ""),
+    coolifyPollIntervalMs: Number(rawQa.coolify_poll_interval_ms ?? 10000),
+    coolifyMaxWaitMs: Number(rawQa.coolify_max_wait_ms ?? 300000),
+    shopifyEnabled: raw.stack?.platform === "shopify",
   };
 
   return {
     name: raw.name ?? "project",
     description: raw.description ?? "",
     conventions: { branch_prefix: raw.conventions?.branch_prefix ?? "feature/" },
-    pipeline,
+    pipeline: {
+      ...pipeline,
+      skipAgents: (rawPipeline.skip_agents as string[]) ?? [],
+      maxAutonomousComplexity: (rawPipeline.max_autonomous_complexity as string) ?? "medium",
+      timeouts: rawPipeline.timeouts as { haiku?: number; sonnet?: number; opus?: number } | undefined,
+    },
     maxWorkers: Number(rawPipeline.max_workers ?? 1),
     qa,
     stack: {
       packageManager: raw.stack?.package_manager ?? "npm",
       buildCommand: raw.build?.web as string | undefined,
       testCommand: raw.build?.test as string | undefined,
+      verifyCommand: raw.build?.verify as string | undefined,
+      platform: raw.stack?.platform as string | undefined,
+      variant: raw.stack?.variant as string | undefined,
     },
+    skills: raw.skills as { domain?: string[]; custom?: string[] } | undefined,
   };
 }
 
 export function parseCliArgs(args: string[]): TicketArgs {
   const [ticketId, title, description, labels] = args;
   if (!ticketId || !title) {
-    console.error("Usage: run.ts <TICKET_ID> <TITLE> [DESCRIPTION] [LABELS]");
-    process.exit(1);
+    throw new Error("Usage: run.ts <TICKET_ID> <TITLE> [DESCRIPTION] [LABELS]");
   }
   return {
     ticketId,

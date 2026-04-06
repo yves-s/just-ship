@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve, basename } from "node:path";
 import type { AgentDefinition } from "@anthropic-ai/claude-agent-sdk";
+import { logger } from "./logger.ts";
 
 export type { AgentDefinition };
 
@@ -40,7 +41,7 @@ export function loadAgents(projectDir: string): Record<string, AgentDefinition> 
   try {
     files = readdirSync(agentsDir).filter((f) => f.endsWith(".md"));
   } catch {
-    console.error(`No agents directory found at ${agentsDir}`);
+    logger.error({ agentsDir }, "No agents directory found");
     return agents;
   }
 
@@ -83,6 +84,19 @@ export function loadTriagePrompt(projectDir: string): string | null {
     const { body } = parseFrontmatter(content);
     return body.trim();
   } catch {
+    // Optional: triage agent definition may not exist in all projects
+    return null;
+  }
+}
+
+export function loadEnrichmentPrompt(projectDir: string): string | null {
+  const enrichmentPath = resolve(projectDir, ".claude", "agents", "triage-enrichment.md");
+  try {
+    const content = readFileSync(enrichmentPath, "utf-8");
+    const { body } = parseFrontmatter(content);
+    return body.trim();
+  } catch {
+    // Optional: enrichment agent definition may not exist in all projects
     return null;
   }
 }

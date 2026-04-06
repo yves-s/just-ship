@@ -3,19 +3,46 @@
   "description": "Portables Multi-Agent-Framework für autonome Softwareentwicklung mit Claude Code",
   "stack": {
     "language": "TypeScript / Bash",
-    "package_manager": "npm"
+    "framework": "",
+    "backend": "",
+    "package_manager": "npm",
+    "platform": "",
+    "variant": ""
   },
   "build": {
     "web": "echo 'No build step'",
-    "test": "echo 'No tests'"
+    "test": "echo 'No tests'",
+    "dev": "",
+    "dev_port": null,
+    "install": "",
+    "verify": ""
   },
-  "paths": {},
+  "hosting": {
+    "provider": "",
+    "project_id": "",
+    "team_id": "",
+    "coolify_url": "",
+    "coolify_app_uuid": ""
+  },
+  "shopify": {
+    "store": ""
+  },
+  "skills": {
+    "domain": [],
+    "custom": []
+  },
+  "paths": {
+    "src": "src/",
+    "tests": "tests/"
+  },
   "supabase": {
     "project_id": "wsmnutkobalfrceavpxs"
   },
   "pipeline": {
+    "workspace_id": "421dffa5-5f2e-44a8-bdc1-7e0f31a87149",
     "project_id": "f866f2ac-be4d-4481-97e4-4f213efe4534",
-    "workspace_id": "421dffa5-5f2e-44a8-bdc1-7e0f31a87149"
+    "skip_agents": [],
+    "timeouts": {}
   },
   "conventions": {
     "branch_prefix": "feature/",

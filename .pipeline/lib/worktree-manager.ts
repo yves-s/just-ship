@@ -1,6 +1,8 @@
 import { execSync } from "node:child_process";
 import { existsSync, readdirSync, rmSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { sanitizeBranchName } from "./sanitize.ts";
+import { logger } from "./logger.ts";
 
 interface Slot {
   slotId: number;
@@ -132,6 +134,7 @@ export class WorktreeManager {
         .filter((d) => d.isDirectory())
         .map((d) => d.name);
     } catch {
+      logger.warn("Could not read worktree base directory during prune");
       return;
     }
 
@@ -145,7 +148,7 @@ export class WorktreeManager {
           const paused = await isTicketPaused(branchName);
           if (paused) continue; // Skip -- ticket is paused, keep worktree
         } catch {
-          // If the check fails, be conservative and keep it
+          // Pause check failed (e.g. Supabase timeout) — conservatively keep the worktree
           continue;
         }
       }
@@ -176,6 +179,39 @@ export class WorktreeManager {
     return count;
   }
 
+  /**
+   * Returns the working directory for a given slot, or null if the slot doesn't exist.
+   */
+  getSlotDir(slotId: number): string | null {
+    const slot = this.slots.get(slotId);
+    return slot?.workDir ?? null;
+  }
+
+  /**
+   * Find a parked worktree whose branch name contains the given ticket number.
+   * Returns the workDir or null if no match is found.
+   */
+  findParkedForTicket(ticketNumber: number): string | null {
+    for (const [, slot] of this.slots) {
+      if (slot.status === "parked" && slot.branchName?.includes(String(ticketNumber))) {
+        return slot.workDir;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Release a worktree by its working directory path.
+   */
+  async releaseByDir(workDir: string): Promise<void> {
+    for (const [slotId, slot] of this.slots) {
+      if (slot.workDir === workDir) {
+        await this.release(slotId);
+        return;
+      }
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
@@ -185,6 +221,9 @@ export class WorktreeManager {
   }
 
   private _createWorktree(branchName: string): { slotId: number; workDir: string } {
+    // Validate branch name before any shell interpolation
+    sanitizeBranchName(branchName);
+
     const slotId = this._nextId();
     const workDir = join(this.worktreeBase, `worker-${slotId}`);
 
@@ -195,7 +234,7 @@ export class WorktreeManager {
 
     // Delete stale local branch if it exists (e.g. from a previous failed run)
     try {
-      this._git(`rev-parse --verify refs/heads/${branchName}`);
+      this._git(`rev-parse --verify "refs/heads/${branchName}"`);
       // Branch exists -- delete it so we can recreate from origin/main
       this._git(`branch -D "${branchName}"`);
     } catch {
@@ -226,7 +265,7 @@ export class WorktreeManager {
         this._git("worktree prune");
       } catch {
         // Best-effort cleanup -- log but don't throw
-        console.warn(`[WorktreeManager] Failed to clean up worktree: ${workDir}`);
+        logger.warn({ workDir }, "Failed to clean up worktree");
       }
     }
   }
@@ -243,6 +282,7 @@ export class WorktreeManager {
         .filter((d) => d.isDirectory())
         .map((d) => d.name);
     } catch {
+      logger.warn("Could not read worktree base directory during parked scan");
       return null;
     }
 

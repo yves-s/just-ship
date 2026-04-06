@@ -1,4 +1,5 @@
 import type { HookCallback, SubagentStartHookInput, SubagentStopHookInput, PostToolUseHookInput, HookCallbackMatcher, HookEvent } from "@anthropic-ai/claude-agent-sdk";
+import { estimateCost, parseTokenUsage } from "./cost.js";
 
 export interface EventConfig {
   apiUrl: string;
@@ -35,13 +36,15 @@ async function postEvent(config: EventConfig, payload: Record<string, unknown>):
 }
 
 interface EventHookOptions {
-  onPause?: (reason: string) => void;
+  onPause?: (reason: string, questionText?: string) => void;
+  getLastAssistantText?: () => string;
 }
 
 export function createEventHooks(
   config: EventConfig,
   options?: EventHookOptions,
-): Partial<Record<HookEvent, HookCallbackMatcher[]>> {
+): { hooks: Partial<Record<HookEvent, HookCallbackMatcher[]>>; getTotals: () => { inputTokens: number; outputTokens: number; estimatedCostUsd: number } } {
+  const tokenTotals = { inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0 };
   // Cache agent_id → agent_type mapping (SubagentStop doesn't include agent_type)
   const agentTypeByIdMap = new Map<string, string>();
   // Track agents that already received a "completed" event (prevent duplicates)
@@ -79,23 +82,28 @@ export function createEventHooks(
     const hookInput = input as PostToolUseHookInput;
     const toolInput = (hookInput.tool_input ?? {}) as Record<string, unknown>;
     const agentType = (toolInput.subagent_type ?? toolInput.name ?? "unknown") as string;
+    const model = (toolInput.model ?? "sonnet") as string;
 
-    // Extract token usage from agent response (<usage>total_tokens: N</usage>)
     const responseText = String(hookInput.tool_response ?? "");
-    const tokensMatch = responseText.match(/total_tokens:\s*(\d+)/);
-    const tokensUsed = tokensMatch ? parseInt(tokensMatch[1], 10) : 0;
+    const { inputTokens, outputTokens, totalTokens } = parseTokenUsage(responseText);
 
-    // Send token data if available (SubagentStop already sent the "completed" event,
-    // but the Board accumulates tokens from completed events with metadata.tokens_used)
-    if (tokensUsed > 0) {
+    if (totalTokens > 0) {
+      const costUsd = estimateCost(model, inputTokens, outputTokens);
+      tokenTotals.inputTokens += inputTokens;
+      tokenTotals.outputTokens += outputTokens;
+      tokenTotals.estimatedCostUsd += costUsd;
+
       await postEvent(config, {
         agent_type: agentType,
         event_type: "completed",
-        metadata: { tokens_used: tokensUsed },
+        metadata: { tokens_used: totalTokens },
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        model,
+        estimated_cost_usd: costUsd,
       });
     }
 
-    // Clean up the agent_id → agent_type cache (deferred from SubagentStop)
     const agentId = responseText.match(/agentId:\s*(\S+)/)?.[1];
     if (agentId) {
       agentTypeByIdMap.delete(agentId);
@@ -122,20 +130,23 @@ export function createEventHooks(
     const hookInput = input as PostToolUseHookInput;
     const toolResponse = String(hookInput.tool_response ?? "");
     if (toolResponse.includes("__WAITING_FOR_INPUT__")) {
-      options?.onPause?.("human_in_the_loop");
+      options?.onPause?.("human_in_the_loop", options?.getLastAssistantText?.());
       return { continue: false, stopReason: "human_in_the_loop" };
     }
     return { async: true as const };
   };
 
   return {
-    SubagentStart: [{ matcher: ".*", hooks: [onAgentStarted] }],
-    SubagentStop: [{ matcher: ".*", hooks: [onAgentCompleted] }],
-    PostToolUse: [
-      { matcher: "Write|Edit", hooks: [onFileChanged] },
-      { matcher: "Agent", hooks: [onSubagentDispatchCompleted] },
-      { matcher: "Bash", hooks: [onBashResult] },
-    ],
+    hooks: {
+      SubagentStart: [{ matcher: ".*", hooks: [onAgentStarted] }],
+      SubagentStop: [{ matcher: ".*", hooks: [onAgentCompleted] }],
+      PostToolUse: [
+        { matcher: "Write|Edit", hooks: [onFileChanged] },
+        { matcher: "Agent", hooks: [onSubagentDispatchCompleted] },
+        { matcher: "Bash", hooks: [onBashResult] },
+      ],
+    },
+    getTotals: () => ({ ...tokenTotals }),
   };
 }
 
@@ -149,5 +160,22 @@ export async function postPipelineEvent(
     agent_type: agentType,
     event_type: eventType,
     ...(metadata ? { metadata } : {}),
+  });
+}
+
+export async function postPipelineSummary(
+  config: EventConfig,
+  totals: {
+    inputTokens: number;
+    outputTokens: number;
+    estimatedCostUsd: number;
+  },
+): Promise<void> {
+  await postEvent(config, {
+    agent_type: "orchestrator",
+    event_type: "pipeline_completed",
+    input_tokens: totals.inputTokens,
+    output_tokens: totals.outputTokens,
+    estimated_cost_usd: totals.estimatedCostUsd,
   });
 }

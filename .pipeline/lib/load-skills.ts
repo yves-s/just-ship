@@ -21,10 +21,6 @@ export type AgentRole =
 
 /** Which skills each agent role receives */
 const SKILL_AGENT_MAP: Record<string, AgentRole[]> = {
-  // Cross-cutting skills — loaded for every project
-  "product-cto":            ["orchestrator", "backend", "data-engineer", "devops"],
-  "design-lead":            ["orchestrator", "frontend"],
-  // Shopify domain skills
   "shopify-liquid":         ["frontend", "orchestrator"],
   "shopify-theme":          ["frontend", "qa", "devops", "orchestrator"],
   "shopify-metafields":     ["data-engineer", "backend", "orchestrator"],
@@ -53,13 +49,8 @@ export interface LoadedSkills {
  * Load domain and custom skills based on project config.
  * Returns skill content mapped per agent role.
  */
-/** Cross-cutting skills loaded for every project */
-const CROSS_CUTTING_SKILLS = ["product-cto", "design-lead"];
-
 export function loadSkills(projectDir: string, config: ProjectConfig): LoadedSkills {
-  const domainSkills = resolveSkillNames(config);
-  // Always include cross-cutting skills, deduplicated
-  const skillNames = [...new Set([...CROSS_CUTTING_SKILLS, ...domainSkills])];
+  const skillNames = resolveSkillNames(config);
   const skillContents = new Map<string, string>();
 
   const frameworkSkillsDir = resolve(projectDir, "skills");

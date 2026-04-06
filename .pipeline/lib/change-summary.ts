@@ -23,6 +23,7 @@ export function generateChangeSummary(opts: ChangeSummaryOptions): string {
   try {
     diffStat = execSync(`git diff --stat ${mergeBase}..HEAD`, { cwd: workDir, encoding: "utf-8" }).trim();
   } catch {
+    // Best-effort: diff stat is supplementary — summary can be generated without it
     diffStat = "";
   }
 
@@ -30,6 +31,7 @@ export function generateChangeSummary(opts: ChangeSummaryOptions): string {
   try {
     nameStatus = execSync(`git diff --name-status ${mergeBase}..HEAD`, { cwd: workDir, encoding: "utf-8" }).trim();
   } catch {
+    // Best-effort: name-status is supplementary — summary degrades gracefully
     nameStatus = "";
   }
 
@@ -38,6 +40,7 @@ export function generateChangeSummary(opts: ChangeSummaryOptions): string {
   try {
     commitLog = execSync(`git log --oneline ${mergeBase}..HEAD`, { cwd: workDir, encoding: "utf-8" }).trim();
   } catch {
+    // Best-effort: commit log is supplementary — summary degrades gracefully
     commitLog = "";
   }
 

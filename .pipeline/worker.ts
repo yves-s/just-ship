@@ -1,7 +1,13 @@
+import { initSentry, Sentry } from "./lib/sentry.ts";
+initSentry();
 import { resolve } from "node:path";
 import { mkdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { executePipeline } from "./run.ts";
+import { toBranchName, sleep, log } from "./lib/utils.ts";
+import { logger } from "./lib/logger.ts";
+import { classifyError } from "./lib/error-handler.ts";
+import { withWatchdog, saveWorktreeWIP, sendAgentFailedEvent } from "./lib/watchdog.ts";
 import { WorktreeManager } from "./lib/worktree-manager.ts";
 import { loadProjectConfig } from "./lib/config.ts";
 import { generateChangeSummary } from "./lib/change-summary.ts";
@@ -18,7 +24,7 @@ const required = [
 
 for (const key of required) {
   if (!process.env[key]) {
-    console.error(`ERROR: ${key} must be set`);
+    logger.error(`ERROR: ${key} must be set`);
     process.exit(1);
   }
 }
@@ -37,11 +43,7 @@ const config = loadProjectConfig(PROJECT_DIR);
 const MAX_WORKERS = config.maxWorkers;
 const worktreeManager = new WorktreeManager(PROJECT_DIR, MAX_WORKERS);
 
-// --- Logging ---
-function log(msg: string) {
-  const ts = new Date().toISOString().replace("T", " ").slice(0, 19);
-  console.log(`[${ts}] ${msg}`);
-}
+// log() imported from ./lib/utils.ts
 
 // --- Supabase helpers ---
 async function supabaseGet<T>(path: string): Promise<T | null> {
@@ -57,6 +59,7 @@ async function supabaseGet<T>(path: string): Promise<T | null> {
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {
+    // Best-effort: Supabase GET failure handled by caller via null return
     return null;
   }
 }
@@ -77,8 +80,16 @@ async function supabasePatch<T>(path: string, body: Record<string, unknown>): Pr
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {
+    // Best-effort: Supabase PATCH failure handled by caller via null return
     return null;
   }
+}
+
+// --- Complexity gate ---
+function getAllowedComplexities(maxLevel: string): string[] {
+  const levels = ["low", "medium", "high", "critical"];
+  const idx = levels.indexOf(maxLevel);
+  return idx >= 0 ? levels.slice(0, idx + 1) : ["low", "medium"];
 }
 
 // --- Ticket functions ---
@@ -88,6 +99,7 @@ interface Ticket {
   body: string | null;
   priority: string;
   tags: string[] | null;
+  complexity: string | null;
 }
 
 async function checkConnectivity(): Promise<boolean> {
@@ -96,8 +108,10 @@ async function checkConnectivity(): Promise<boolean> {
 }
 
 async function getNextTicket(): Promise<Ticket | null> {
+  const maxComplexity = config.pipeline.maxAutonomousComplexity ?? "medium";
+  const allowedComplexities = getAllowedComplexities(maxComplexity);
   const tickets = await supabaseGet<Ticket[]>(
-    `/rest/v1/tickets?status=eq.ready_to_develop&project_id=eq.${SUPABASE_PROJECT_ID}&pipeline_status=is.null&order=priority.asc,created_at.asc&limit=1&select=number,title,body,priority,tags`
+    `/rest/v1/tickets?status=eq.ready_to_develop&project_id=eq.${SUPABASE_PROJECT_ID}&pipeline_status=is.null&complexity=in.(${allowedComplexities.join(",")})&order=priority.asc,created_at.asc&limit=1&select=number,title,body,priority,tags,complexity`
   );
   return tickets?.[0] ?? null;
 }
@@ -110,10 +124,10 @@ async function claimTicket(number: number): Promise<boolean> {
   return (result?.length ?? 0) > 0;
 }
 
-async function completeTicket(number: number, branch: string, summary?: string, reviewUrl?: string): Promise<void> {
+async function completeTicket(number: number, branch: string, summary?: string): Promise<void> {
   await supabasePatch(
     `/rest/v1/tickets?number=eq.${number}`,
-    { pipeline_status: "done", status: "in_review", branch, ...(summary ? { summary } : {}), ...(reviewUrl ? { review_url: reviewUrl } : {}) }
+    { pipeline_status: "done", status: "in_review", branch, ...(summary ? { summary } : {}) }
   );
 }
 
@@ -165,11 +179,25 @@ process.on("SIGINT", () => {
   log("SIGINT received, cancelling pipeline and stopping...");
   running = false;
   abortController.abort();
+  Sentry.close(2000);
 });
 process.on("SIGTERM", () => {
   log("SIGTERM received, cancelling pipeline and stopping...");
   running = false;
   abortController.abort();
+  Sentry.close(2000);
+});
+
+process.on("unhandledRejection", (reason) => {
+  log(`Unhandled rejection: ${reason}`);
+  Sentry.captureException(reason instanceof Error ? reason : new Error(String(reason)));
+});
+
+process.on("uncaughtException", (err) => {
+  log(`Uncaught exception: ${err.message}`);
+  Sentry.captureException(err);
+  // Give Sentry time to flush, then exit
+  setTimeout(() => process.exit(1), 2000);
 });
 
 // --- Main loop ---
@@ -181,7 +209,7 @@ log(`  Poll-Interval: ${POLL_INTERVAL / 1000}s`);
 log(`  Max Workers: ${MAX_WORKERS}`);
 log("==========================================");
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+// sleep() imported from ./lib/utils.ts
 
 // Wrap in async IIFE — top-level await not supported in CJS
 (async () => {
@@ -224,14 +252,17 @@ log("Cleanup done.");
 const slotFailures = new Map<number, number>();
 
 async function runWorkerSlot(ticket: Ticket): Promise<void> {
-  const branchSlug = ticket.title
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 40);
-  const branchName = `${config.conventions.branch_prefix}${ticket.number}-${branchSlug}`;
+  const branchName = toBranchName(config.conventions.branch_prefix, ticket.number, ticket.title);
 
   let slotId: number | undefined;
+  const runAbortController = new AbortController();
+  // Forward module-level abort to per-run controller
+  if (abortController.signal.aborted) {
+    runAbortController.abort();
+  } else {
+    abortController.signal.addEventListener("abort", () => runAbortController.abort(), { once: true });
+  }
+
   try {
     const slot = await worktreeManager.allocate(branchName);
     slotId = slot.slotId;
@@ -249,18 +280,21 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
 
     log(`Starting pipeline: T-${ticket.number} — ${ticket.title} (slot ${slotId})`);
 
-    const result = await executePipeline({
-      projectDir: PROJECT_DIR,
-      workDir: slot.workDir,
-      branchName,
-      ticket: {
-        ticketId: String(ticket.number),
-        title: ticket.title,
-        description: ticket.body ?? "No description provided",
-        labels: Array.isArray(ticket.tags) ? ticket.tags.join(",") : "",
-      },
-      abortSignal: abortController.signal,
-    });
+    const result = await withWatchdog(
+      executePipeline({
+        projectDir: PROJECT_DIR,
+        workDir: slot.workDir,
+        branchName,
+        ticket: {
+          ticketId: String(ticket.number),
+          title: ticket.title,
+          description: ticket.body ?? "No description provided",
+          labels: Array.isArray(ticket.tags) ? ticket.tags.join(",") : "",
+        },
+        abortSignal: runAbortController.signal,
+      }),
+      `T-${ticket.number}`
+    );
 
     if (result.status === "paused") {
       await supabasePatch(
@@ -280,19 +314,78 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
     // Generate change summary before completing
     let summary: string | undefined;
     try {
-      summary = generateChangeSummary({ workDir: slot.workDir, baseBranch: "main", prUrl: result.prUrl });
+      let prUrl: string | undefined;
+      try {
+        prUrl = execSync(`gh pr view --json url -q .url`, { cwd: slot.workDir, encoding: "utf-8", timeout: 10000 }).trim();
+      } catch { /* no PR yet */ }
+
+      summary = generateChangeSummary({ workDir: slot.workDir, baseBranch: "main", prUrl });
     } catch {
       // Summary generation is best-effort
     }
 
-    await completeTicket(ticket.number, result.branch, summary, result.prUrl);
-    log(`Pipeline completed: T-${ticket.number} → ${result.branch} (slot ${slotId})${result.prUrl ? ` — PR: ${result.prUrl}` : ""}`);
+    await completeTicket(ticket.number, result.branch, summary);
+    log(`Pipeline completed: T-${ticket.number} → ${result.branch} (slot ${slotId})`);
 
     if (slotId !== undefined) slotFailures.delete(slotId);
   } catch (error) {
-    const reason = error instanceof Error ? error.message : "Unknown error";
-    log(`Pipeline failed: T-${ticket.number} (${reason})`);
-    await failTicket(ticket.number, `Pipeline error: ${reason}`);
+    const errorObj = error instanceof Error ? error : new Error(String(error));
+    const isStatusUpdateFailure = errorObj.message.includes("Failed to update ticket") && errorObj.message.includes("after 3 retries");
+    const isWatchdog = errorObj.message.startsWith("Watchdog timeout:");
+
+    // --- Status update failure: pipeline succeeded but Supabase is unreachable ---
+    // Do NOT call failTicket (that would also fail). Log critically and let
+    // the startup recovery (line ~230) reset it on next worker restart.
+    if (isStatusUpdateFailure) {
+      log(`CRITICAL: T-${ticket.number} pipeline succeeded but status update to in_review failed after retries. Ticket stuck at in_progress — will be auto-recovered on next worker restart.`);
+      Sentry.captureException(error);
+    } else {
+      // --- Watchdog timeout: abort subprocess, save WIP, send agent_failed ---
+      let watchdogHadWip = false;
+      if (isWatchdog) {
+        runAbortController.abort();
+        await sleep(5000);
+        if (slotId !== undefined) {
+          const worktreeDir = worktreeManager.getSlotDir(slotId);
+          if (worktreeDir) {
+            watchdogHadWip = saveWorktreeWIP(worktreeDir, ticket.number);
+          }
+        }
+        // Send agent_failed event via Board API
+        if (config.pipeline.apiUrl && config.pipeline.apiKey) {
+          await sendAgentFailedEvent(config.pipeline.apiUrl, config.pipeline.apiKey, ticket.number, "timeout", watchdogHadWip);
+        }
+      }
+
+      // --- Error classification and ticket status update ---
+      const classification = classifyError({
+        error: errorObj,
+        ticketId: String(ticket.number),
+        exitCode: 1,
+        timedOut: false,
+        branch: branchName,
+        projectDir: PROJECT_DIR,
+      });
+
+      log(`Pipeline failed: T-${ticket.number} (${errorObj.message}) [${classification.action}]`);
+      Sentry.captureException(error);
+
+      if (watchdogHadWip) {
+        // Partial work saved — set crashed so recovery can resume instead of restart
+        await supabasePatch(`/rest/v1/tickets?number=eq.${ticket.number}`, {
+          pipeline_status: "crashed",
+          summary: `Watchdog timeout with partial work saved. Use /recover T-${ticket.number} to resume.`,
+        });
+        log(`T-${ticket.number}: watchdog timeout, WIP saved, set pipeline_status=crashed`);
+      } else {
+        await failTicket(ticket.number, `Pipeline error: ${errorObj.message}`);
+      }
+    }
+
+    // Auto-heal: worker only logs the classification for now.
+    // Full auto-heal (ticket creation + fix) runs via server.ts which has Board REST API access.
+    // The worker talks to Supabase directly and lacks a POST helper for ticket creation.
+    // Future: add supabasePost to worker.ts or route auto-heal through the server.
 
     if (slotId !== undefined) {
       const count = (slotFailures.get(slotId) ?? 0) + 1;
@@ -301,6 +394,65 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
   } finally {
     if (slotId !== undefined) {
       await worktreeManager.release(slotId);
+    }
+  }
+}
+
+// --- Lifecycle timeout runner (runs every poll cycle) ---
+async function runLifecycleChecks(): Promise<void> {
+  const now = new Date();
+
+  // 1. Failed tickets > 1h → auto-reset (max 3 retries)
+  const failedTickets = await supabaseGet<Array<{ number: number; pipeline_retry_count: number; updated_at: string }>>(
+    `/rest/v1/tickets?pipeline_status=eq.failed&project_id=eq.${SUPABASE_PROJECT_ID}&select=number,pipeline_retry_count,updated_at`
+  );
+  if (failedTickets) {
+    for (const t of failedTickets) {
+      const age = now.getTime() - new Date(t.updated_at).getTime();
+      if (age < 60 * 60_000) continue; // < 1h, skip
+      const retries = t.pipeline_retry_count ?? 0;
+      if (retries >= 3) {
+        // Max retries reached → move to backlog
+        await supabasePatch(`/rest/v1/tickets?number=eq.${t.number}`, {
+          pipeline_status: null,
+          status: "backlog",
+          summary: `Blocked after ${retries} failed autonomous attempts. Requires manual intervention.`,
+        });
+        log(`T-${t.number}: moved to backlog after ${retries} failed retries`);
+      } else {
+        // Auto-reset for retry
+        await supabasePatch(`/rest/v1/tickets?number=eq.${t.number}`, {
+          pipeline_status: null,
+          status: "ready_to_develop",
+          pipeline_retry_count: retries + 1,
+        });
+        log(`T-${t.number}: auto-reset for retry (attempt ${retries + 1}/3)`);
+      }
+      await clearBoardAgentEvents(t.number);
+    }
+  }
+
+  // 2. Paused tickets > 24h → auto-cancel
+  const pausedTickets = await supabaseGet<Array<{ number: number; updated_at: string }>>(
+    `/rest/v1/tickets?pipeline_status=eq.paused&project_id=eq.${SUPABASE_PROJECT_ID}&select=number,updated_at`
+  );
+  if (pausedTickets) {
+    for (const t of pausedTickets) {
+      const age = now.getTime() - new Date(t.updated_at).getTime();
+      if (age < 24 * 60 * 60_000) continue; // < 24h, skip
+      // Try to save WIP from parked worktree
+      const worktreeDir = worktreeManager.findParkedForTicket(t.number);
+      if (worktreeDir) {
+        saveWorktreeWIP(worktreeDir, t.number);
+        await worktreeManager.releaseByDir(worktreeDir);
+      }
+      await supabasePatch(`/rest/v1/tickets?number=eq.${t.number}`, {
+        pipeline_status: null,
+        status: "ready_to_develop",
+        summary: "Auto-cancelled after 24h without answer. Branch may contain partial work.",
+      });
+      await clearBoardAgentEvents(t.number);
+      log(`T-${t.number}: auto-cancelled after 24h pause`);
     }
   }
 }
@@ -338,6 +490,13 @@ while (running) {
   if (totalFailures >= MAX_FAILURES) {
     log(`CRITICAL: ${totalFailures} total failures across slots. Worker stopping.`);
     process.exit(1);
+  }
+
+  // Run lifecycle checks each poll cycle
+  try {
+    await runLifecycleChecks();
+  } catch (e) {
+    log(`Lifecycle check error: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   await sleep(POLL_INTERVAL);

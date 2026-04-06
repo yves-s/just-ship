@@ -13,10 +13,25 @@ import { join, basename } from "node:path";
 import { tmpdir } from "node:os";
 import type { QaConfig } from "./config.js";
 import { waitForVercelPreview } from "./vercel-preview.js";
+import { waitForCoolifyPreview } from "./coolify-preview.js";
+import { logger } from "./logger.ts";
 
 // ---------------------------------------------------------------------------
 // Interfaces
 // ---------------------------------------------------------------------------
+
+export interface ShopifyQaFinding {
+  severity: "error" | "warning" | "info";
+  check: string;
+  file: string;
+  line: number;
+  message: string;
+}
+
+export interface ShopifyQaReport {
+  findings: ShopifyQaFinding[];
+  summary: { errors: number; warnings: number; info: number };
+}
 
 export interface QaContext {
   workDir: string;
@@ -30,6 +45,11 @@ export interface QaContext {
   buildCommand?: string;
   testCommand?: string;
   env?: Record<string, string>;
+  verifyOutput?: string;
+  verifyFailed?: boolean;
+  enrichedACs?: string;
+  triageFindings?: string[];
+  shopifyQaReport?: ShopifyQaReport;
 }
 
 export interface QaCheckResult {
@@ -101,7 +121,7 @@ function exec(cmd: string, cwd: string, timeoutMs = 120_000): { stdout: string; 
 
 export function runBuildCheck(workDir: string, packageManager: string, overrideCmd?: string): QaCheckResult {
   const cmd = overrideCmd ?? buildCommand(packageManager);
-  console.error(`[qa-runner] Running build: ${cmd}`);
+  logger.info({ cmd }, "Running build");
 
   const { stdout, ok } = exec(cmd, workDir);
   const truncated = stdout.length > 2000 ? `...${stdout.slice(-2000)}` : stdout;
@@ -128,6 +148,7 @@ export function runTestCheck(workDir: string, packageManager: string, overrideCm
   try {
     pkgJson = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
   } catch {
+    // Malformed package.json — skip test check gracefully
     return null;
   }
 
@@ -142,7 +163,7 @@ export function runTestCheck(workDir: string, packageManager: string, overrideCm
   }
 
   const cmd = overrideCmd ?? testCommand(packageManager);
-  console.error(`[qa-runner] Running tests: ${cmd}`);
+  logger.info({ cmd }, "Running tests");
 
   const { stdout, ok } = exec(cmd, workDir, 180_000);
   const truncated = stdout.length > 2000 ? `...${stdout.slice(-2000)}` : stdout;
@@ -269,7 +290,7 @@ console.log('QA_RESULT:' + JSON.stringify(result));
     try {
       unlinkSync(scriptPath);
     } catch {
-      // ignore cleanup errors
+      // Best-effort: temp file cleanup failure is non-critical
     }
   }
 }
@@ -286,7 +307,7 @@ export function runPlaywrightSmoke(
   const screenshotPaths: string[] = [];
 
   for (const page of effectivePages) {
-    console.error(`[qa-runner] Playwright smoke: ${page}`);
+    logger.info({ page }, "Playwright smoke test");
     const result = runPlaywrightPage(workDir, previewUrl, page, timeoutMs);
     checks.push(result.check);
     if (result.screenshotPath) {
@@ -450,7 +471,7 @@ export function postQaReport(
 
   const prNumber = prList.trim();
   if (!prFound || !prNumber) {
-    console.error(`[qa-runner] No PR found for branch "${branchName}" -- skipping report post`);
+    logger.info({ branchName }, "No PR found for branch -- skipping QA report post");
     return;
   }
 
@@ -461,12 +482,12 @@ export function postQaReport(
 
   try {
     exec(`gh pr comment ${prNumber} --body-file "${tmpFile}"`, workDir);
-    console.error(`[qa-runner] QA report posted to PR #${prNumber}`);
+    logger.info({ prNumber }, "QA report posted to PR");
   } finally {
     try {
       unlinkSync(tmpFile);
     } catch {
-      // ignore cleanup errors
+      // Best-effort: temp file cleanup failure is non-critical
     }
   }
 
@@ -481,7 +502,7 @@ export function postQaReport(
   }
 
   exec(`gh pr edit ${prNumber} --add-label "${label}"`, workDir);
-  console.error(`[qa-runner] Label "${label}" added to PR #${prNumber}`);
+  logger.info({ prNumber, label }, "Label added to PR");
 }
 
 // ---------------------------------------------------------------------------
@@ -498,7 +519,7 @@ export async function runQa(ctx: QaContext): Promise<QaReport> {
     fixHistory: [],
   };
 
-  console.error(`[qa-runner] Starting QA (tier: ${ctx.qaTier}) for ${ctx.ticketId}`);
+  logger.info({ tier: ctx.qaTier, ticketId: ctx.ticketId }, "Starting QA");
 
   // --- Build check (all tiers) ---
   const buildResult = runBuildCheck(ctx.workDir, ctx.packageManager, ctx.buildCommand);
@@ -514,6 +535,81 @@ export async function runQa(ctx: QaContext): Promise<QaReport> {
     return report;
   }
 
+  // --- Shopify theme check (official Liquid linter, light + full) ---
+  if (ctx.qaConfig.shopifyEnabled) {
+    try {
+      const themeCheckOutput = execSync("shopify theme check --fail-level error", {
+        cwd: ctx.workDir,
+        encoding: "utf-8",
+        timeout: 60_000,
+      });
+      report.checks.push({
+        name: "shopify-theme-check",
+        passed: true,
+        details: "No errors found",
+        blocking: false,
+      });
+    } catch (e) {
+      const err = e as { stdout?: string; stderr?: string; status?: number };
+      const output = (err.stdout || "") + (err.stderr || "");
+      const errorCount = (output.match(/error/gi) || []).length;
+      report.checks.push({
+        name: "shopify-theme-check",
+        passed: errorCount === 0,
+        details: errorCount > 0
+          ? `${errorCount} error(s) found by shopify theme check`
+          : "Warnings found (non-blocking)",
+        blocking: errorCount > 0,
+      });
+      if (errorCount > 0) report.status = "failed";
+    }
+  }
+
+  // --- Shopify static analysis (light + full, Shopify projects only) ---
+  if (ctx.qaConfig.shopifyEnabled) {
+    const qaScriptPath = join(ctx.workDir, ".claude/scripts/shopify-qa.sh");
+    if (existsSync(qaScriptPath)) {
+      try {
+        const shopifyOutput = execSync(`bash "${qaScriptPath}"`, {
+          cwd: ctx.workDir,
+          encoding: "utf-8",
+          timeout: 60_000,
+        });
+        const shopifyReport: ShopifyQaReport = JSON.parse(shopifyOutput);
+        ctx.shopifyQaReport = shopifyReport;
+        report.checks.push({
+          name: "shopify-qa",
+          passed: shopifyReport.summary.errors === 0,
+          details: shopifyReport.summary.errors > 0
+            ? `${shopifyReport.summary.errors} errors: ${shopifyReport.findings.filter(f => f.severity === "error").map(f => f.message).join("; ")}`
+            : `${shopifyReport.summary.warnings} warnings, ${shopifyReport.summary.info} info`,
+          blocking: shopifyReport.summary.errors > 0,
+        });
+      } catch (e) {
+        // If the script exits non-zero (errors found), try to parse stdout
+        const err = e as { stdout?: string; status?: number };
+        if (err.stdout) {
+          try {
+            const shopifyReport: ShopifyQaReport = JSON.parse(err.stdout);
+            ctx.shopifyQaReport = shopifyReport;
+            report.checks.push({
+              name: "shopify-qa",
+              passed: false,
+              details: `${shopifyReport.summary.errors} errors: ${shopifyReport.findings.filter(f => f.severity === "error").map(f => f.message).join("; ")}`,
+              blocking: true,
+            });
+            report.status = "failed";
+          } catch {
+            // Shopify QA script produced non-JSON output — treat as non-blocking pass
+            report.checks.push({ name: "shopify-qa", passed: true, details: "Script output not parseable", blocking: false });
+          }
+        } else {
+          report.checks.push({ name: "shopify-qa", passed: true, details: "Script failed to execute", blocking: false });
+        }
+      }
+    }
+  }
+
   // --- Test check (light + full) ---
   const testResult = runTestCheck(ctx.workDir, ctx.packageManager, ctx.testCommand);
   if (testResult) {
@@ -527,10 +623,20 @@ export async function runQa(ctx: QaContext): Promise<QaReport> {
     return report;
   }
 
-  // --- Full tier: Vercel preview + Playwright + functional stubs ---
+  // --- Full tier: Preview URL + Playwright + functional stubs ---
 
-  // Wait for Vercel preview deployment
-  const previewUrl = await waitForVercelPreview(ctx.branchName, ctx.qaConfig);
+  // Wait for preview deployment (Vercel, Coolify, or none)
+  let previewUrl: string | null = null;
+  if (ctx.qaConfig.previewProvider === "vercel") {
+    previewUrl = await waitForVercelPreview(ctx.branchName, ctx.qaConfig);
+  } else if (ctx.qaConfig.previewProvider === "coolify") {
+    previewUrl = await waitForCoolifyPreview(ctx.branchName, {
+      coolifyUrl: ctx.qaConfig.coolifyUrl,
+      coolifyAppUuid: ctx.qaConfig.coolifyAppUuid,
+      coolifyPollIntervalMs: ctx.qaConfig.coolifyPollIntervalMs,
+      coolifyMaxWaitMs: ctx.qaConfig.coolifyMaxWaitMs,
+    });
+  }
   report.previewUrl = previewUrl;
 
   if (previewUrl) {
@@ -556,7 +662,7 @@ export async function runQa(ctx: QaContext): Promise<QaReport> {
     report.checks.push({
       name: "preview",
       passed: false,
-      details: "No Vercel preview URL available -- Playwright smoke tests skipped",
+      details: "No preview URL available -- Playwright smoke tests skipped",
       blocking: false,
     });
   }

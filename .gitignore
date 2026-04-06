@@ -62,3 +62,6 @@ scripts/*
 
 # Git worktrees
 .worktrees/
+
+# Pipeline dependencies (auto-installed)
+.pipeline/node_modules
