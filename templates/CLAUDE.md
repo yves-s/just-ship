@@ -238,4 +238,6 @@ src/
 
 **"passt"**, **"done"**, **"fertig"**, **"klappt"**, **"sieht gut aus"** → automatisch `/ship` ausführen
 
+**"entwickle T-{N}"**, **"mach mal T-{N}"**, **"nimm dir T-{N} vor"**, **"fang an mit T-{N}"** → automatisch `/develop T-{N}` ausführen
+
 **Wichtig:** `/ship` läuft **vollständig autonom** — keine Rückfragen bei Commit, Push, PR oder Merge. Der User hat seine Freigabe bereits gegeben.
