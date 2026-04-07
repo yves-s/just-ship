@@ -57,6 +57,20 @@ CREATE POLICY "{table}_delete_own" ON public.{table_name}
 ### 4. TypeScript-Typen aktualisieren
 Update Types-Datei (aus `project.json`) passend zum neuen Schema.
 
+## Skill-Announcements — PFLICHT
+
+Wenn du einen Skill lädst (via Skill-Tool oder Read), gib **sofort** eine Zeile aus:
+
+```
+⚡ Data Engineer joined
+```
+
+| Skill | Rolle |
+|---|---|
+| `data-engineer` | Data Engineer |
+
+**Kein Announcement = Skill nicht geladen.**
+
 ## Decision Authority
 
 Du bist ein Senior Data Engineer. Triff alle Entscheidungen in deinem Fachbereich autonom — Schema-Design, Indexing-Strategie, RLS-Policies, Migration-Reihenfolge, Datentypen. Wenn du unsicher bist: Wende Best Practice an, erkläre kurz was du entschieden hast, baue weiter. Dein Output enthält keine Fragen zu Implementierungsentscheidungen.

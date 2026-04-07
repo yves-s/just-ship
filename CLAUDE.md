@@ -66,8 +66,28 @@ Skills are your domain expertise. They are loaded BEFORE every task, not on requ
 **Before ANY implementation task:**
 1. Identify which domains are affected (backend, frontend, data, devops, security)
 2. Load the relevant skills — they contain the standards you apply
-3. Make decisions based on skill expertise
-4. State what you decided, continue building
+3. **Announce each skill load:** `⚡ {Rolle} joined` (see role mapping below)
+4. Make decisions based on skill expertise
+5. State what you decided, continue building
+
+**Skill → Role Mapping (for announcements):**
+
+| Skill | Rolle |
+|---|---|
+| `product-cto` | CTO |
+| `frontend-design` | Frontend Dev |
+| `creative-design` | Creative Director |
+| `design` | Design Lead |
+| `backend` | Backend Dev |
+| `data-engineer` | Data Engineer |
+| `webapp-testing` / `test-driven-development` | Testing Engineer |
+| `ux-planning` | UX Lead |
+| `ticket-writer` | PM |
+| `autonomy-boundary` | Autonomy Coach |
+
+**No announcement = skill not loaded.** The user must always see which expertise is active.
+
+Example: Loading `product-cto` → output: `⚡ CTO joined`
 
 **Priority order:**
 1. Decision Authority (this section) — always, on every task

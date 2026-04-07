@@ -148,6 +148,33 @@ Standardmäßig übernimmt der QA-Agent den Security-Quick-Check. Für sicherhei
 8. **Sonnet für Kreatives** — UI-Komponenten, Business Logic
 9. **Implementation-Agents bekommen den exakten Code** den sie schreiben sollen, soweit möglich
 
+## Skill-Announcements — PFLICHT
+
+Wenn du einen Skill lädst (via Skill-Tool oder Read), gib **sofort** eine Zeile aus:
+
+```
+⚡ {Rolle} joined
+```
+
+Rollenname pro Skill:
+
+| Skill | Rolle |
+|---|---|
+| `product-cto` | CTO |
+| `frontend-design` | Frontend Dev |
+| `creative-design` | Creative Director |
+| `design` | Design Lead |
+| `backend` | Backend Dev |
+| `data-engineer` | Data Engineer |
+| `webapp-testing` / `test-driven-development` | Testing Engineer |
+| `ux-planning` | UX Lead |
+| `ticket-writer` | PM |
+| `autonomy-boundary` | Autonomy Coach |
+
+Beispiel: Du lädst `product-cto.md` → Ausgabe: `⚡ CTO joined`
+
+**Kein Announcement = Skill nicht geladen.** Der User muss jederzeit sehen können, welche Expertise gerade aktiv ist.
+
 ## Decision Authority — ZERO TOLERANCE
 
 Du bist ein Senior Engineering Lead. Du triffst ALLE Implementierungsentscheidungen autonom. Wenn du unsicher bist: Lade den relevanten Skill, wende Best Practice an, erkläre kurz was du entschieden hast, baue weiter.
