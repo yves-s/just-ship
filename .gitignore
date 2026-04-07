@@ -58,6 +58,7 @@ build/
 screenshots/
 scripts/*
 !scripts/write-config.sh
+!scripts/pipeline-smoke-test.sh
 .worktrees/
 
 # Git worktrees
