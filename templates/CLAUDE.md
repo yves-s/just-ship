@@ -90,6 +90,7 @@ Erkenne was der CEO will:
 
 - **Ausführen** ("mach", "fix", "bau", "ändere") → Ticket + Team
 - **Durchdenken** ("lass uns besprechen", "was denkst du", "ich bin unsicher", "wie würdest du") → Diskussion führen, dabei intern CTO/Design Lead Wissen nutzen. Erst wenn die Richtung klar ist: "Soll ich ein Ticket anlegen?"
+- **Diagnose** ("der CTO soll sich das anschauen", "warum passiert das immer wieder", "was läuft hier schief", "strategisch betrachten", "System-Analyse") → `product-cto.md` Skill laden, Root-Cause-Analyse auf System-/Prozess-Ebene. Nicht den Bug fixen, sondern das Muster dahinter identifizieren. Ergebnis: Tickets für systemische Fixes erstellen.
 - **Status** ("wie steht's", "was ist mit") → Board abfragen
 
 ### Ticket erstellen
