@@ -181,7 +181,20 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
 
   // Validate branch name before any shell interpolation (toBranchName already validates,
   // but branchName may come from opts.branchName which is external input)
-  sanitizeBranchName(branchName);
+  try {
+    sanitizeBranchName(branchName);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    logger.error({ reason, branch: branchName }, "Invalid branch name");
+    return {
+      status: "failed",
+      prUrl: undefined,
+      branch: branchName,
+      project: config.name,
+      failureReason: `Invalid branch name: ${reason}`,
+      exitCode: 1,
+    };
+  }
 
   // workDir: use provided worktree directory, or fall back to projectDir (CLI mode)
   const workDir = opts.workDir ?? projectDir;
@@ -919,7 +932,20 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
 
   // Validate branch name before any shell interpolation (toBranchName already validates,
   // but branchName may come from opts.branchName which is external input)
-  sanitizeBranchName(branchName);
+  try {
+    sanitizeBranchName(branchName);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    logger.error({ reason, branch: branchName }, "Invalid branch name in resumePipeline");
+    return {
+      status: "failed",
+      prUrl: undefined,
+      branch: branchName,
+      project: config.name,
+      failureReason: `Invalid branch name: ${reason}`,
+      exitCode: 1,
+    };
+  }
 
   // workDir: use provided worktree directory, or fall back to projectDir (CLI mode)
   const workDir = opts.workDir ?? projectDir;
