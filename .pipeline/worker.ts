@@ -478,6 +478,27 @@ async function runLifecycleChecks(): Promise<void> {
       log(`T-${t.number}: auto-cancelled after 24h pause`);
     }
   }
+
+  // 3. Stale running tickets > 90min → auto-reset
+  // Handles hung workers: the watchdog fires after 35min, but if the worker process
+  // itself hangs (not crashes), systemd restart never triggers and no cleanup runs.
+  // This check ensures stuck tickets are recovered on the next poll cycle.
+  const staleRunningTickets = await supabaseGet<Array<{ number: number; updated_at: string }>>(
+    `/rest/v1/tickets?pipeline_status=eq.running&project_id=eq.${SUPABASE_PROJECT_ID}&select=number,updated_at`
+  );
+  if (staleRunningTickets) {
+    for (const t of staleRunningTickets) {
+      const age = now.getTime() - new Date(t.updated_at).getTime();
+      if (age < 90 * 60_000) continue; // < 90min — watchdog may still be active, skip
+      await supabasePatch(`/rest/v1/tickets?number=eq.${t.number}`, {
+        pipeline_status: null,
+        status: "ready_to_develop",
+        summary: `Auto-reset: pipeline_status was stuck at running for ${Math.round(age / 60_000)}min. Worker may have hung without crashing.`,
+      });
+      await clearBoardAgentEvents(t.number);
+      log(`T-${t.number}: auto-reset from stale running (age: ${Math.round(age / 60_000)}min)`);
+    }
+  }
 }
 
 // --- Main loop: fetch tickets sequentially, run pipelines in parallel ---
