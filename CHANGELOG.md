@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- **loadAgents reads from worktree instead of project root**: `loadAgents()`, `loadOrchestratorPrompt()`, `loadTriagePrompt()`, and `loadEnrichmentPrompt()` were called with `workDir` (the worktree path) in both `executePipeline` and `resumePipeline`. Because `.claude/agents/` is gitignored it does not exist in worktrees, causing `agents: []` and the orchestrator never delegating to sub-agents. All four calls now correctly use `projectDir` (the main repo root).
+
+
 - **Pipeline push recovery**: Push failures due to non-fast-forward (stale remote branch from prior run) now recover via `git pull --rebase` instead of failing permanently. Root cause of T-467.
 - **Remote branch cleanup on retry**: `_createWorktree()` now deletes stale remote branches before creating new worktree, preventing branch conflicts on pipeline retries.
 - **Ship handler status rollback**: `handleShip()` in server.ts now correctly sets `pipeline_status: "failed"` on merge errors and PR-not-found — previously left tickets stuck in `in_review` with no status indicator.

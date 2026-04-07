@@ -213,7 +213,7 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
   }
 
   // --- Load agents + orchestrator prompt ---
-  const agents = loadAgents(workDir);
+  const agents = loadAgents(projectDir);
   const loadedSkills = loadSkills(projectDir, config);
   if (loadedSkills.skillNames.length > 0) {
     logger.info({ skills: loadedSkills.skillNames }, "Skills loaded");
@@ -237,7 +237,7 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
   }
 
   // Build orchestrator prompt with skills
-  let orchestratorPrompt = loadOrchestratorPrompt(workDir);
+  let orchestratorPrompt = loadOrchestratorPrompt(projectDir);
   const orchestratorSkills = loadedSkills.byRole.get("orchestrator");
   if (orchestratorSkills) {
     orchestratorPrompt += `\n\n${orchestratorSkills}`;
@@ -269,7 +269,7 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
   // --- Triage: analyze ticket quality before orchestrator ---
   let ticketDescription = ticket.description;
   let triageResult: TriageResult | undefined;
-  const triagePrompt = loadTriagePrompt(workDir);
+  const triagePrompt = loadTriagePrompt(projectDir);
   if (triagePrompt) {
     triageResult = await runTriage(workDir, ticket, triagePrompt, eventConfig, hasPipeline, opts.env);
     ticketDescription = triageResult.description;
@@ -283,7 +283,7 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
 
   if (needsEnrichment && triageResult) {
     try {
-      const enrichmentPrompt = loadEnrichmentPrompt(workDir);
+      const enrichmentPrompt = loadEnrichmentPrompt(projectDir);
       if (enrichmentPrompt) {
         const enrichmentInput = JSON.stringify({
           title: ticket.title,
@@ -914,7 +914,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
     logger.warn("Could not write .active-ticket");
   }
 
-  const agents = loadAgents(workDir);
+  const agents = loadAgents(projectDir);
   const loadedSkills = loadSkills(projectDir, config);
 
   // Filter agents by skipAgents config
