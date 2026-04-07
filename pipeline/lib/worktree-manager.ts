@@ -241,6 +241,14 @@ export class WorktreeManager {
       // Branch doesn't exist -- good
     }
 
+    // Delete stale remote branch if it exists (e.g. from a previous failed push)
+    try {
+      this._git(`push origin --delete "${branchName}"`);
+      logger.info({ branch: branchName }, "Deleted stale remote branch");
+    } catch {
+      // Remote branch doesn't exist — good
+    }
+
     // Fetch latest main
     this._git("fetch origin main");
 
@@ -388,10 +396,11 @@ export class WorktreeManager {
     }
   }
 
-  private _git(command: string): string {
+  private _git(command: string, timeoutMs = 30_000): string {
     return execSync(`git ${command}`, {
       cwd: this.projectDir,
       encoding: "utf-8",
+      timeout: timeoutMs,
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
   }
