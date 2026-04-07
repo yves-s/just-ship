@@ -6,10 +6,40 @@
  * arbitrary commands. This function rejects anything outside the safe character set.
  *
  * Allowed: alphanumeric, `/`, `_`, `.`, `-`
+ * Must start and end with an alphanumeric character (single-char names also valid).
+ * Explicitly rejects: empty strings, `..` (git traversal), shell metacharacters.
  */
-export function sanitizeBranchName(name: string): string {
-  if (!/^[a-zA-Z0-9\/_.\-]+$/.test(name)) {
-    throw new Error(`Invalid branch name contains unsafe characters: ${name}`);
+export function sanitizeBranchName(branchName: string): string {
+  if (!branchName) {
+    throw new Error("Branch name must not be empty");
   }
-  return name;
+
+  // Reject git traversal sequence
+  if (branchName.includes("..")) {
+    throw new Error(
+      `Invalid branch name contains git traversal sequence "..": ${branchName}`
+    );
+  }
+
+  // Reject shell metacharacters and unsafe characters
+  const shellMetachars = /[;$`()|&><!\~{}\[\]*?'"\\\ \t\n]/;
+  if (shellMetachars.test(branchName)) {
+    throw new Error(
+      `Invalid branch name contains shell metacharacters: ${branchName}`
+    );
+  }
+
+  // Strict allowlist: letters, digits, dots, underscores, slashes, hyphens.
+  // Single-char names must be alphanumeric.
+  // Multi-char names must start and end with alphanumeric.
+  const singleChar = /^[a-zA-Z0-9]$/;
+  const multiChar = /^[a-zA-Z0-9][a-zA-Z0-9._/\-]*[a-zA-Z0-9]$/;
+
+  if (!singleChar.test(branchName) && !multiChar.test(branchName)) {
+    throw new Error(
+      `Invalid branch name "${branchName}": must start and end with alphanumeric and contain only letters, digits, dots, underscores, slashes, or hyphens`
+    );
+  }
+
+  return branchName;
 }

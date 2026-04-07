@@ -41,6 +41,7 @@
   "pipeline": {
     "workspace_id": "421dffa5-5f2e-44a8-bdc1-7e0f31a87149",
     "project_id": "f866f2ac-be4d-4481-97e4-4f213efe4534",
+    "project_name": null,
     "skip_agents": [],
     "timeouts": {}
   },

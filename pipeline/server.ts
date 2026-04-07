@@ -196,6 +196,44 @@ async function patchTicket(ticketNumber: number, body: Record<string, unknown>, 
   return false;
 }
 
+/**
+ * Send a SaaS callback with retry logic (3 attempts, exponential backoff).
+ * The callback is the most critical network call — without it, the board
+ * never learns the pipeline finished, causing permanent stuck state.
+ */
+async function sendCallbackWithRetry(
+  callbackUrl: string,
+  runToken: string,
+  payload: Record<string, unknown>,
+  maxRetries = 3,
+): Promise<boolean> {
+  const body = JSON.stringify(payload);
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(callbackUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Run-Token": runToken,
+        },
+        body,
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (res.ok) return true;
+      log(`[SaaS] Callback attempt ${attempt}/${maxRetries} failed: HTTP ${res.status}`);
+      if (res.status >= 400 && res.status < 500) return false; // Client error — don't retry
+    } catch (err) {
+      log(`[SaaS] Callback attempt ${attempt}/${maxRetries} error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (attempt < maxRetries) {
+      await new Promise((r) => setTimeout(r, 1000 * attempt)); // Backoff: 1s, 2s
+    }
+  }
+  log(`[SaaS] Callback failed after ${maxRetries} attempts`);
+  Sentry.captureMessage(`SaaS callback failed after ${maxRetries} attempts`, { level: "error", extra: { callbackUrl, payload } });
+  return false;
+}
+
 // --- HTTP helpers ---
 function sendJson(res: ServerResponse, status: number, data: Record<string, unknown>) {
   res.writeHead(status, { "Content-Type": "application/json" });
@@ -362,30 +400,18 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
 
         log(`[SaaS] Pipeline finished: T-${ticketNumber} -> ${result.status}`);
 
-        // 6. Send callback
-        try {
-          await fetch(callbackUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Run-Token": runToken,
-            },
-            body: JSON.stringify({
-              run_id: runId,
-              status: result.status === "completed" ? "completed" : "failed",
-              pr_url: result.prUrl ?? (result.branch ? `check PR from branch ${result.branch}` : undefined),
-              tokens_used: {
-                input: result.tokens?.input ?? 0,
-                output: result.tokens?.output ?? 0,
-              },
-              duration_seconds: Math.floor((Date.now() - startTime) / 1000),
-              error_message: result.failureReason,
-            }),
-            signal: AbortSignal.timeout(15_000),
-          });
-        } catch (cbErr) {
-          log(`[SaaS] Callback failed: ${cbErr instanceof Error ? cbErr.message : String(cbErr)}`);
-        }
+        // 6. Send callback (with retry — most critical network call)
+        await sendCallbackWithRetry(callbackUrl, runToken, {
+          run_id: runId,
+          status: result.status === "completed" ? "completed" : "failed",
+          pr_url: result.prUrl ?? (result.branch ? `check PR from branch ${result.branch}` : undefined),
+          tokens_used: {
+            input: result.tokens?.input ?? 0,
+            output: result.tokens?.output ?? 0,
+          },
+          duration_seconds: Math.floor((Date.now() - startTime) / 1000),
+          error_message: result.failureReason,
+        });
 
         recordRun({
           ticketNumber,
@@ -399,23 +425,14 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
         log(`[SaaS] Pipeline crashed: T-${ticketNumber} -- ${reason}`);
         Sentry.captureException(error);
 
-        // Best-effort callback on crash
-        try {
-          await fetch(callbackUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Run-Token": runToken,
-            },
-            body: JSON.stringify({
-              run_id: runId,
-              status: "failed",
-              duration_seconds: Math.floor((Date.now() - startTime) / 1000),
-              error_message: reason,
-            }),
-            signal: AbortSignal.timeout(15_000),
-          });
-        } catch { /* Best-effort: callback delivery on crash is non-critical */ }
+        // Crash callback (with retry — critical to avoid stuck runs)
+        await sendCallbackWithRetry(callbackUrl, runToken, {
+          run_id: runId,
+          status: "failed",
+          tokens_used: { input: 0, output: 0 },
+          duration_seconds: Math.floor((Date.now() - startTime) / 1000),
+          error_message: reason,
+        });
 
         recordRun({
           ticketNumber,
