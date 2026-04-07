@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **Diagnose Intent**: New fourth intent type in Organisation — triggers `product-cto.md` Skill for system-level root-cause analysis instead of jumping into ticket work. Phrases: "der CTO soll sich das anschauen", "warum passiert das immer wieder", "was läuft hier schief"
 - **VPS Container Logs CLI**: New `vps/logs.sh` script fetches Docker container logs from the remote VPS via SSH — supports container listing, configurable tail lines (`-n`), follow mode (`-f`), and input validation against shell injection
 
 ### Fixed
