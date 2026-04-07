@@ -8,6 +8,11 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Added
+- **VPS config sync on deploy**: `just-ship-updater.sh` now syncs `project.json` from `origin/main` after each project update, preventing config drift between local and VPS
+- **Container startup validation**: `entrypoint.sh` validates all project configs at container start — checks for `project.json` presence, required pipeline fields, and logs hosting provider per project
+- **Server startup config validation**: `server.ts` logs config completeness per project at startup (missing fields, hosting provider) via structured pino logger
+
 ### Fixed
 - **Branch name truncation trailing dash**: `toBranchName()` in `pipeline/lib/utils.ts` now strips leading and trailing non-alphanumeric characters after `.slice(0, 40)`, preventing branch names that end with `-` from being rejected by `sanitizeBranchName`
 - **Unhandled branch name errors in server launch/answer handlers**: `toBranchName()` calls in `server.ts` (`handleLaunch` and the answer/resume handler) are now wrapped in try/catch — on failure, the ticket is immediately rolled back to `pipeline_status: "failed"` / `status: "ready_to_develop"` instead of being left stuck in `running`

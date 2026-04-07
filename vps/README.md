@@ -50,10 +50,10 @@ After VPS setup, connect individual projects. The command copies local env vars,
 | File | Purpose |
 |------|---------|
 | `Dockerfile` | Docker image: Node.js 20, git, gh, Claude Code, pipeline SDK, framework files |
-| `entrypoint.sh` | Container startup: configures git identity and gh auth |
+| `entrypoint.sh` | Container startup: configures git identity, gh auth, validates project configs |
 | `Caddyfile` | Caddy reverse proxy config: security headers, basicauth for monitoring, auto-TLS |
 | `docker-compose.yml` | Caddy (HTTPS) + pipeline-server (GHCR image) + Bugsink + Dozzle containers |
-| `just-ship-updater.sh` | Update-Agent: watches for triggers, orchestrates zero-downtime updates |
+| `just-ship-updater.sh` | Update-Agent: watches for triggers, orchestrates zero-downtime updates, syncs project.json from git |
 | `just-ship-updater.service` | systemd unit for Update-Agent (runs on host, outside Docker) |
 | `install-updater.sh` | Installs Update-Agent on a VPS host |
 | `logs.sh` | Fetch Docker container logs from VPS via SSH (list containers, tail logs, follow mode) |

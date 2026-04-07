@@ -99,6 +99,7 @@ function buildPipelineConfig(
 export function loadProjectConfig(projectDir: string): ProjectConfig {
   const configPath = resolve(projectDir, "project.json");
   if (!existsSync(configPath)) {
+    logger.error({ configPath }, "project.json NOT FOUND — using defaults. Pipeline will not work correctly!");
     return {
       name: "project",
       description: "",
