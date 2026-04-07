@@ -50,11 +50,22 @@ if (isMultiProjectMode) {
     config = loadProjectConfig("/tmp");
   }
 
-  // Initialize a WorktreeManager per project
+  // Initialize WorktreeManagers and validate project configs at startup
   for (const [slug, project] of Object.entries(serverConfig.projects)) {
     const projectCfg = loadProjectConfig(project.project_dir);
     projectWorktreeManagers.set(slug, new WorktreeManager(project.project_dir, projectCfg.maxWorkers));
-    log(`WorktreeManager initialized for project '${slug}' (max ${projectCfg.maxWorkers} workers)`);
+
+    // Validate config completeness
+    const issues: string[] = [];
+    if (!projectCfg.pipeline.projectId) issues.push("missing pipeline.project_id");
+    if (!projectCfg.pipeline.workspaceId) issues.push("missing pipeline.workspace_id");
+    if (projectCfg.qa.previewProvider === "none") issues.push("no hosting provider configured");
+
+    if (issues.length > 0) {
+      logger.warn({ slug, issues }, `Project '${slug}' has config issues: ${issues.join(", ")}`);
+    } else {
+      logger.info({ slug, hosting: projectCfg.qa.previewProvider, maxWorkers: projectCfg.maxWorkers }, `Project '${slug}' config OK`);
+    }
   }
 } else {
   const required = ["ANTHROPIC_API_KEY", "GH_TOKEN", "PROJECT_DIR", "PIPELINE_SERVER_KEY"] as const;

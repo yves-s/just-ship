@@ -91,6 +91,24 @@ get_current_image() {
   docker inspect vps-pipeline-server-1 --format='{{.Config.Image}}' 2>/dev/null || echo ""
 }
 
+# Sync project.json from git remote (prevents config drift)
+sync_project_config() {
+  local project_dir="$1"
+  local slug="$2"
+
+  # Fetch latest from origin (inside container, git is available)
+  if docker exec "$CONTAINER_NAME" git -C "$project_dir" fetch origin main --quiet 2>/dev/null; then
+    # Extract just project.json from latest main without changing the working tree
+    if docker exec "$CONTAINER_NAME" git -C "$project_dir" checkout origin/main -- project.json 2>/dev/null; then
+      log "  project.json synced from origin/main for $slug"
+    else
+      log "  Warning: could not sync project.json for $slug (file may not exist in repo)"
+    fi
+  else
+    log "  Warning: git fetch failed for $slug — project.json not synced"
+  fi
+}
+
 # Process a single update trigger
 process_update() {
   local trigger_content="$1"
@@ -223,6 +241,9 @@ process_update() {
           '. + [{"slug": $s, "status": "failed", "error": $e, "duration_ms": $d}]')
         log_error "Project $slug update failed"
       fi
+
+      # Sync project.json from git
+      sync_project_config "$project_dir" "$slug"
     done
 
     # Callback to Board: success
