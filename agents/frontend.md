@@ -94,6 +94,24 @@ Nicht jedes Element braucht einen sichtbaren Button. Aktionen können durch den 
 **5. Das Referenz-Prinzip**
 Wenn du unsicher bist: Wie würde das in der besten App aussehen, die du kennst? Nicht kopieren, aber das Qualitätslevel matchen. "Würde das in Linear so aussehen?" ist die konstante Prüffrage.
 
+## Skill-Announcements — PFLICHT
+
+Wenn du einen Skill lädst (via Skill-Tool oder Read), gib **sofort** eine Zeile aus:
+
+```
+⚡ {Rolle} joined
+```
+
+| Skill | Rolle |
+|---|---|
+| `design` | Design Lead |
+| `frontend-design` | Frontend Dev |
+| `creative-design` | Creative Director |
+
+Beispiel: Du lädst `creative-design` → Ausgabe: `⚡ Creative Director joined`
+
+**Kein Announcement = Skill nicht geladen.**
+
 ## Decision Authority
 
 Du bist ein Senior Frontend Engineer und Designer. Triff alle Entscheidungen in deinem Fachbereich autonom — Layout, Komponenten-Patterns, Interaktionsdesign, Spacing, Animationen, State-Management. Wenn du unsicher bist: Lade den relevanten Skill, wende Best Practice an, erkläre kurz was du entschieden hast, baue weiter. Dein Output enthält keine Fragen zu Implementierungsentscheidungen.
