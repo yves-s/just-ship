@@ -643,7 +643,17 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
 
   log(`Pipeline started: T-${ticketNumber} -- ${title}`);
 
-  const branchName = toBranchName(projectConfig.conventions.branch_prefix, ticketNumber, title);
+  let branchName: string;
+  try {
+    branchName = toBranchName(projectConfig.conventions.branch_prefix, ticketNumber, title);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    logger.error({ reason, ticketNumber }, "Invalid branch name in launch handler");
+    runningTickets.delete(ticketNumber);
+    if (isMultiProjectMode) runningTicketInfo.delete(ticketNumber);
+    void patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Pipeline error: ${reason}` });
+    return;
+  }
 
   // Track running ticket metadata for observability
   if (isMultiProjectMode) {
@@ -1112,7 +1122,16 @@ async function handleAnswerRoute(req: IncomingMessage, res: ServerResponse): Pro
 
   log(`Pipeline resuming: T-${ticketNumber} -- answer received`);
 
-  const branchName = toBranchName(answerProjectConfig.conventions.branch_prefix, ticketNumber, title);
+  let branchName: string;
+  try {
+    branchName = toBranchName(answerProjectConfig.conventions.branch_prefix, ticketNumber, title);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    logger.error({ reason, ticketNumber }, "Invalid branch name in answer handler");
+    runningTickets.delete(ticketNumber);
+    void patchTicket(ticketNumber, { pipeline_status: "failed", status: "ready_to_develop", summary: `Pipeline error: ${reason}`, session_id: null });
+    return;
+  }
 
   (async () => {
     let slotId: number | undefined;

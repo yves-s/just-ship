@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- **Branch name truncation trailing dash**: `toBranchName()` in `pipeline/lib/utils.ts` now strips leading and trailing non-alphanumeric characters after `.slice(0, 40)`, preventing branch names that end with `-` from being rejected by `sanitizeBranchName`
+- **Unhandled branch name errors in server launch/answer handlers**: `toBranchName()` calls in `server.ts` (`handleLaunch` and the answer/resume handler) are now wrapped in try/catch — on failure, the ticket is immediately rolled back to `pipeline_status: "failed"` / `status: "ready_to_develop"` instead of being left stuck in `running`
+- **Unhandled branch name errors in run.ts**: `sanitizeBranchName()` calls in `executePipeline` and `resumePipeline` are now wrapped in try/catch — on failure, the function returns a typed `PipelineResult` with `status: "failed"` and a descriptive `failureReason` instead of throwing an unhandled exception
 - **loadAgents reads from worktree instead of project root**: `loadAgents()`, `loadOrchestratorPrompt()`, `loadTriagePrompt()`, and `loadEnrichmentPrompt()` now use `projectDir` instead of `workDir`. Because `.claude/agents/` is gitignored it doesn't exist in worktrees, causing `agents: []` and the orchestrator never delegating.
 - **Preview URL always resolved**: `qa-runner.ts` now resolves the Vercel/Coolify preview URL for all QA tiers (light + full), not only `full`.
 - **Preview URL patched to ticket**: `run.ts` now patches `preview_url` onto the ticket via the Board API after a successful PR push.
