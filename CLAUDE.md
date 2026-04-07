@@ -207,6 +207,16 @@ Dieses Repo nutzt ein Multi-Agent-System. Ob lokal oder auf dem Server:
 4. **Commit + PR** am Ende des Workflows → Board-Status "in_review"
 5. **Merge erst nach Freigabe** — User sagt "passt"/"ship it" oder `/ship`
 
+### Definition of Done — Pipeline-Tickets
+
+Tickets die `pipeline/`, `commands/develop.md`, `commands/ship.md`, oder `.claude/scripts/` ändern, dürfen NICHT als done markiert werden ohne dass der E2E Smoke Test passed:
+
+```bash
+bash scripts/pipeline-smoke-test.sh
+```
+
+Der Test verifiziert den Board-API-Round-Trip end-to-end (Ticket erstellen → Status-Cycle → Verification). Ein FAIL bedeutet: der Fix ist nicht verifiziert und darf nicht gemergt werden.
+
 ## Ticket-Workflow (Just Ship Board)
 
 > Nur aktiv wenn `pipeline.workspace_id` und `pipeline.project_id` in `project.json` gesetzt sind. Ohne Pipeline-Config werden diese Schritte übersprungen.

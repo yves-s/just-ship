@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **Pipeline E2E Smoke Test**: `scripts/pipeline-smoke-test.sh` verifies Board API round-trip end-to-end (create ticket → cycle through all statuses → verify). Runs automatically during QA when pipeline files are changed. Pipeline tickets cannot be marked done without a passing smoke test.
+
 ### Changed
 - **QA Agent → Testing Engineer**: Upgraded QA agent from pure AC verifier to full Testing Engineer — test writing is now mandatory (not optional), agent autonomously decides unit/integration/E2E strategy per ticket, TDD skill added alongside webapp-testing
 - **webapp-testing Skill**: Expanded from Playwright-only visual testing to full testing strategy covering test pyramid guidance, framework decision tree (Vitest/Jest/Testing Library by stack), and mocking boundaries (what to mock vs test for real)

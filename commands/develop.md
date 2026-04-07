@@ -499,11 +499,25 @@ Ausgabe: `▶ qa-auto — Automatisierte QA ({qa_tier} tier)`
 | **light** | Build + Tests (falls konfiguriert) |
 | **skip** | Nur Build-Check |
 
-#### 10a. Build + Tests (alle Tiers)
+#### 10a. Pipeline Smoke Test (wenn Pipeline-Dateien geändert)
+
+Prüfe ob Pipeline-relevante Dateien auf diesem Branch geändert wurden:
+```bash
+PIPELINE_CHANGED=$(git diff --name-only $(git merge-base main HEAD) HEAD | grep -E '^(pipeline/|commands/(develop|ship)\.md|\.claude/scripts/)' | head -1)
+```
+
+Falls `$PIPELINE_CHANGED` nicht leer: Pipeline E2E Smoke Test ausführen:
+```bash
+bash scripts/pipeline-smoke-test.sh
+```
+
+Bei FAIL: Dies ist ein **blocking** Fehler. Der PR darf NICHT als ready markiert werden. Label `qa:needs-review` setzen und im QA-Report dokumentieren.
+
+#### 10b. Build + Tests (alle Tiers)
 
 Lies Build- und Test-Commands aus `project.json` und führe sie aus (identisch zu Schritt 6, aber als erneute Verification nach PR-Push).
 
-#### 10b. Playwright Smoke Tests (nur `full` tier + Preview URL)
+#### 10c. Playwright Smoke Tests (nur `full` tier + Preview URL)
 
 **Voraussetzung:** `qa_tier === "full"` UND `$PREVIEW_URL` aus Schritt 9f ist nicht leer.
 
@@ -551,12 +565,12 @@ Ergebnis auswerten:
 
 Screenshots per `Read`-Tool inspizieren und im QA-Report referenzieren.
 
-#### 10c. Fix-Loop (bei Fehlern)
+#### 10d. Fix-Loop (bei Fehlern)
 
 **Bei Fehlern:** Automatisch fixen (max 3 Versuche). Jeder Fix als eigener Commit: `fix(qa): address QA failures (attempt {N})`.
 Nach 3 gescheiterten Versuchen: trotzdem weitermachen, Fehler im PR-Kommentar dokumentieren.
 
-#### 10d. QA-Report als PR-Kommentar + Labels
+#### 10e. QA-Report als PR-Kommentar + Labels
 
 ```bash
 gh pr comment --body-file /tmp/qa-report-{N}.md
