@@ -51,7 +51,7 @@ Every component is optimized to minimize API token consumption:
 - **No Spec Files** -- Instructions go directly into agent prompts, avoiding the write-read-interpret round-trip.
 - **Model Tiering** -- Expensive models (Opus) only for orchestration; Sonnet for creative work; Haiku for routine tasks.
 - **Bash over Agents** -- Build checks run as shell commands; agents are only spawned on failure.
-- **Combined Reviews** -- One QA agent handles both acceptance criteria and security checks.
+- **Combined Reviews** -- One QA agent (Testing Engineer) handles test strategy, test writing, acceptance criteria, and security checks.
 
 ### Portable and Non-Invasive
 
@@ -124,7 +124,7 @@ just-ship/                         # Framework repository
 |   +-- frontend.md                # UI components, design-aware (Sonnet)
 |   +-- data-engineer.md           # Migrations, RLS, types (Haiku)
 |   +-- devops.md                  # Build checks, fixes (Haiku)
-|   +-- qa.md                      # AC verification, security review (Haiku)
+|   +-- qa.md                      # Testing Engineer: test strategy, tests, AC verification (Haiku)
 |   +-- security.md                # Security review (Haiku)
 +-- commands/                      # Slash commands
 |   +-- ticket.md                  # Write a ticket (/ticket)
@@ -142,7 +142,7 @@ just-ship/                         # Framework repository
 |   +-- ux-planning.md             # UX planning
 |   +-- backend.md                 # Backend patterns
 |   +-- data-engineer.md           # Database patterns
-|   +-- webapp-testing.md          # Testing patterns (Playwright)
+|   +-- webapp-testing.md          # Testing strategy (pyramid, frameworks, mocking) + Playwright
 +-- pipeline/                      # SDK pipeline runner (TypeScript)
 |   +-- run.ts                     # Single execution (CLI or imported by worker)
 |   +-- run.sh                     # Bash wrapper for run.ts
@@ -228,7 +228,7 @@ The `load-agents.ts` module parses these definitions at runtime, extracting tool
 | **Frontend** | UI components, pages (design-aware) | Sonnet | UI changes |
 | **Data Engineer** | DB migrations, RLS policies, TypeScript types | Haiku | Schema changes |
 | **DevOps** | Build checks, lint fixes, TypeScript compilation | Haiku | Only on build failure |
-| **QA** | Acceptance criteria verification, security check | Haiku | Always (review phase) |
+| **QA (Testing Engineer)** | Test strategy, test writing, AC verification, security check | Haiku | Always (review phase) |
 | **Security** | Deep security review (Auth, RLS, input validation) | Haiku | Security-critical changes |
 
 ### Orchestrator Workflow
@@ -357,7 +357,7 @@ Shipped with the framework and updated via `setup.sh --update`:
 | **ux-planning** | UX planning and user flow design |
 | **backend** | Backend patterns and API design |
 | **data-engineer** | Database migration and RLS patterns |
-| **webapp-testing** | Testing patterns including Playwright |
+| **webapp-testing** | Testing strategy (test pyramid, framework selection, mocking) + Playwright visual testing |
 
 ### Superpowers Plugin
 

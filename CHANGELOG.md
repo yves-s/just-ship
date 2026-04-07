@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+- **QA Agent → Testing Engineer**: Upgraded QA agent from pure AC verifier to full Testing Engineer — test writing is now mandatory (not optional), agent autonomously decides unit/integration/E2E strategy per ticket, TDD skill added alongside webapp-testing
+- **webapp-testing Skill**: Expanded from Playwright-only visual testing to full testing strategy covering test pyramid guidance, framework decision tree (Vitest/Jest/Testing Library by stack), and mocking boundaries (what to mock vs test for real)
+- **Orchestrator Routing**: Testing tickets now explicitly route to QA Agent (Testing Engineer) with both webapp-testing and TDD skills
+
 ### Added
 - **Diagnose Intent**: New fourth intent type in Organisation — triggers `product-cto.md` Skill for system-level root-cause analysis instead of jumping into ticket work. Phrases: "der CTO soll sich das anschauen", "warum passiert das immer wieder", "was läuft hier schief"
 - **VPS Container Logs CLI**: New `vps/logs.sh` script fetches Docker container logs from the remote VPS via SSH — supports container listing, configurable tail lines (`-n`), follow mode (`-f`), and input validation against shell injection

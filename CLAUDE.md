@@ -126,7 +126,7 @@ Der Orchestrator aktiviert die richtigen Skills automatisch:
 | Neue Seite/Feature | `creative-design.md` + `ux-planning.md` |
 | API/Backend | `backend.md` |
 | Datenbank | `data-engineer.md` |
-| Testing | `webapp-testing.md` |
+| Testing | `webapp-testing.md` + `test-driven-development.md` → QA Agent (Testing Engineer) |
 
 ### Was du als PM tust
 

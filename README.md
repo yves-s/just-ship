@@ -96,7 +96,7 @@ just-ship self-update
 | **Frontend** | Sonnet | UI components and pages (design-aware) |
 | **Data Engineer** | Haiku | DB migrations, RLS policies, TypeScript types |
 | **DevOps** | Haiku | Build checks and fixes (only on failure) |
-| **QA** | Haiku | Acceptance criteria + security review |
+| **QA (Testing Engineer)** | Haiku | Test strategy, test writing, acceptance criteria + security review |
 | **Security** | Haiku | Deep security review for critical changes |
 
 Sub-agents run in parallel where possible (e.g., backend + frontend simultaneously), saving 50%+ execution time. Model selection is cost-optimized: Opus only for orchestration, Haiku for routine tasks.
@@ -180,7 +180,7 @@ Shipped with the pipeline:
 | **ux-planning** | UX planning and user flow design |
 | **backend** | Backend patterns and API design |
 | **data-engineer** | Database migration and RLS patterns |
-| **webapp-testing** | Testing patterns including Playwright |
+| **webapp-testing** | Testing strategy (test pyramid, framework selection, mocking) + Playwright visual testing |
 
 ### Shopify Domain Skills
 
