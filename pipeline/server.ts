@@ -831,6 +831,8 @@ async function handleShip(ticketNumber: number, res: ServerResponse, projectId?:
       if (!prListOutput) {
         log(`Ship failed: T-${ticketNumber} -- no PR found for branch ${branch}`);
         await patchTicket(ticketNumber, {
+          pipeline_status: "failed",
+          status: "ready_to_develop",
           summary: `Ship failed: No PR found for branch ${branch}`,
         });
         return;
@@ -854,6 +856,8 @@ async function handleShip(ticketNumber: number, res: ServerResponse, projectId?:
       log(`Ship failed: T-${ticketNumber} -- ${reason}`);
       Sentry.captureException(err);
       await patchTicket(ticketNumber, {
+        pipeline_status: "failed",
+        status: "ready_to_develop",
         summary: `Ship error: ${reason}`,
       });
     }

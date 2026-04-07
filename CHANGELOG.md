@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Fixed
+- **Pipeline push recovery**: Push failures due to non-fast-forward (stale remote branch from prior run) now recover via `git pull --rebase` instead of failing permanently. Root cause of T-467.
+- **Remote branch cleanup on retry**: `_createWorktree()` now deletes stale remote branches before creating new worktree, preventing branch conflicts on pipeline retries.
+- **Ship handler status rollback**: `handleShip()` in server.ts now correctly sets `pipeline_status: "failed"` on merge errors and PR-not-found — previously left tickets stuck in `in_review` with no status indicator.
+- **Shell injection in PR creation**: Replaced inline shell-interpolated `--body` with `--body-file` temp file for `gh pr create` calls.
+- **Git timeout protection**: `_git()` helper now has a 30s default timeout, preventing hung git operations from blocking worker slots indefinitely.
 - **Stale running tickets auto-reset**: `runLifecycleChecks()` in worker now detects tickets stuck at `pipeline_status=running` for >90min and resets them to `ready_to_develop` — handles hung worker processes that don't crash (and thus don't trigger systemd restart cleanup)
 
 ### Changed
