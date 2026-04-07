@@ -619,13 +619,9 @@ export async function runQa(ctx: QaContext): Promise<QaReport> {
     }
   }
 
-  if (ctx.qaTier === "light") {
-    return report;
-  }
-
-  // --- Full tier: Preview URL + Playwright + functional stubs ---
-
-  // Wait for preview deployment (Vercel, Coolify, or none)
+  // --- Preview URL: always resolved when a provider is configured ---
+  // This runs for both light and full tiers so the preview_url is available
+  // for the PR description and ticket patch regardless of QA tier.
   let previewUrl: string | null = null;
   if (ctx.qaConfig.previewProvider === "vercel") {
     previewUrl = await waitForVercelPreview(ctx.branchName, ctx.qaConfig);
@@ -638,6 +634,12 @@ export async function runQa(ctx: QaContext): Promise<QaReport> {
     });
   }
   report.previewUrl = previewUrl;
+
+  if (ctx.qaTier === "light") {
+    return report;
+  }
+
+  // --- Full tier: Playwright smoke tests + functional stubs ---
 
   if (previewUrl) {
     // Playwright smoke tests

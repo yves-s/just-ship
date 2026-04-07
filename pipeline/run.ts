@@ -638,6 +638,9 @@ WICHTIG: Push, PR-Erstellung und Status-Updates werden automatisch von der Pipel
     }
   }
 
+  // Captured from QA phase — used in Ship phase to patch ticket
+  let qaPreviewUrl: string | null = null;
+
   // --- Phase 3: QA with Fix Loops ---
   if (exitCode === 0 && !timedOut) {
     if (checkpointConfig) {
@@ -703,6 +706,11 @@ WICHTIG: Push, PR-Erstellung und Status-Updates werden automatisch von der Pipel
 
     const { finalReport, iterations } = await runQaWithFixLoop(qaContext);
     logger.info({ tier: finalReport.tier, status: finalReport.status, fixLoops: iterations }, "QA complete");
+
+    // Capture preview URL for ticket patch in Ship phase
+    if (finalReport.previewUrl) {
+      qaPreviewUrl = finalReport.previewUrl;
+    }
 
     if (hasPipeline) {
       await postPipelineEvent(eventConfig, "completed", "qa", {
@@ -813,6 +821,25 @@ WICHTIG: Push, PR-Erstellung und Status-Updates werden automatisch von der Pipel
               try { unlinkSync(bodyFile); } catch { /* ignore */ }
             }
             logger.info({ prUrl }, "PR created");
+          }
+
+          // Patch ticket with preview_url if available from QA phase
+          if (hasPipeline && qaPreviewUrl) {
+            try {
+              await fetch(`${config.pipeline.apiUrl}/api/tickets/${ticket.ticketId}`, {
+                method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-Pipeline-Key": config.pipeline.apiKey,
+                },
+                body: JSON.stringify({ preview_url: qaPreviewUrl }),
+                signal: AbortSignal.timeout(8000),
+              });
+              logger.info({ previewUrl: qaPreviewUrl }, "preview_url patched to ticket");
+            } catch {
+              // Best-effort: preview_url patch is non-critical
+              logger.warn("Could not patch preview_url to ticket");
+            }
           }
         }
       }
