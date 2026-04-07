@@ -209,13 +209,25 @@ Dieses Repo nutzt ein Multi-Agent-System. Ob lokal oder auf dem Server:
 
 ### Definition of Done — Pipeline-Tickets
 
-Tickets die `pipeline/`, `commands/develop.md`, `commands/ship.md`, oder `.claude/scripts/` ändern, dürfen NICHT als done markiert werden ohne dass der E2E Smoke Test passed:
+Tickets die `pipeline/`, `commands/develop.md`, `commands/ship.md`, oder `.claude/scripts/` ändern, dürfen NICHT als done markiert werden ohne:
 
+**1. Smoke-Test lokal passed:**
 ```bash
 bash scripts/pipeline-smoke-test.sh
 ```
+Der Test verifiziert Board-API-Round-Trip und Stuck-Recovery-Pfad. Ein FAIL bedeutet: der Fix ist nicht verifiziert und darf nicht gemergt werden.
 
-Der Test verifiziert den Board-API-Round-Trip end-to-end (Ticket erstellen → Status-Cycle → Verification). Ein FAIL bedeutet: der Fix ist nicht verifiziert und darf nicht gemergt werden.
+**2. VPS-Verification durchgeführt:**
+Der reale Ablauf muss auf der VPS beobachtet worden sein — kein Merge ohne VPS-Bestätigung. Was zu verifizieren ist hängt vom Ticket ab:
+
+| Änderung | VPS-Verifikation |
+|---|---|
+| Worker-Logik (lifecycle, recovery, retry) | Worker-Log zeigt erwartetes Verhalten; ggf. Ticket-State manuell manipulieren und Recovery beobachten |
+| Pipeline-Phase (triage, orchestrator, qa) | Ein echtes Ticket autonom durchlaufen lassen und Phasen-Output prüfen |
+| Status-Updates / Board-Events | Board-UI zeigt korrekten Status ohne Hänger nach Ticket-Durchlauf |
+| Scripts / Config | Script auf VPS ausführen, Output verifizieren |
+
+**Warum:** Code kann lokal korrekt aussehen und den Smoke-Test bestehen, aber auf der VPS trotzdem brechen — unterschiedliche Node-Version, fehlende Env-Vars, echte Supabase-Latenz, systemd-Eigenheiten. Nur VPS-Verification schließt diese Lücke.
 
 ## Ticket-Workflow (Just Ship Board)
 

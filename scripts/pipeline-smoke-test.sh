@@ -5,6 +5,7 @@
 #   1. Creating a test ticket
 #   2. Cycling through all pipeline statuses (in_progress → in_review → done)
 #   3. Verifying each status update via a GET call
+#   4. Stuck-recovery path: simulating a stuck ticket and verifying reset via Board API
 #
 # Exit codes:
 #   0 — All checks passed
@@ -44,8 +45,9 @@ fi
 # ─── Helpers ───────────────────────────────────────────────────────────────────
 PASS_COUNT=0
 FAIL_COUNT=0
-TOTAL=6
+TOTAL=8
 TICKET_ID=""
+STUCK_TICKET_ID=""
 
 print_header() {
   echo ""
@@ -192,6 +194,45 @@ if [ "$FINAL_STATUS" = "done" ]; then
   pass
 else
   fail "done" "$FINAL_STATUS"
+fi
+
+# Step 7: Stuck-recovery — simulate running ticket then reset via Board API
+# This tests the API path that the lifecycle check exercises:
+# pipeline sets a ticket to in_progress, then recovery resets it to ready_to_develop.
+print_step 7 "Stuck-recovery: create stuck ticket..."
+STUCK_RESPONSE=$(bash "$BOARD_API" post tickets \
+  "{\"title\":\"[SMOKE TEST] Stuck Recovery Verification\",\"body\":\"Automated smoke test — verifies stuck ticket recovery path.\",\"status\":\"in_progress\",\"priority\":\"low\",\"tags\":[\"smoke-test\"],\"project_id\":\"$PROJECT_ID\",\"complexity\":\"low\"}" \
+  2>/dev/null) || STUCK_RESPONSE=""
+
+STUCK_NUM=$(extract_ticket_field "$STUCK_RESPONSE" "number")
+
+if [ -z "$STUCK_NUM" ]; then
+  fail "No ticket number in stuck-recovery response"
+else
+  STUCK_STATUS=$(extract_ticket_field "$STUCK_RESPONSE" "status")
+  if [ "$STUCK_STATUS" = "in_progress" ]; then
+    pass "T-$STUCK_NUM stuck at in_progress"
+  else
+    fail "in_progress" "$STUCK_STATUS"
+  fi
+fi
+
+# Step 8: Stuck-recovery — reset stuck ticket to ready_to_develop and verify
+print_step 8 "Stuck-recovery: reset to ready_to_develop..."
+if [ -n "$STUCK_NUM" ]; then
+  RESET_RESPONSE=$(bash "$BOARD_API" patch "tickets/$STUCK_NUM" '{"status":"ready_to_develop"}' 2>/dev/null) || RESET_RESPONSE=""
+  RESET_STATUS=$(extract_ticket_field "$RESET_RESPONSE" "status")
+
+  if [ "$RESET_STATUS" = "ready_to_develop" ]; then
+    # Cleanup: mark done so it doesn't pollute the backlog
+    bash "$BOARD_API" patch "tickets/$STUCK_NUM" '{"status":"done"}' >/dev/null 2>&1 || true
+    pass
+  else
+    bash "$BOARD_API" patch "tickets/$STUCK_NUM" '{"status":"done"}' >/dev/null 2>&1 || true
+    fail "ready_to_develop" "$RESET_STATUS"
+  fi
+else
+  fail "Skipped — no ticket from step 7"
 fi
 
 # ─── Result ────────────────────────────────────────────────────────────────────

@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Stale running tickets auto-reset**: `runLifecycleChecks()` in worker now detects tickets stuck at `pipeline_status=running` for >90min and resets them to `ready_to_develop` — handles hung worker processes that don't crash (and thus don't trigger systemd restart cleanup)
+
+### Changed
+- **Pipeline Definition of Done**: Extended to require VPS verification in addition to smoke test — includes a per-category table of what must be verified on the VPS before merge
+- **Smoke Test**: Added steps 7-8 covering the stuck-recovery Board API round-trip (create ticket at `in_progress` → reset to `ready_to_develop` → verify)
+
 ### Added
 - **Pipeline E2E Smoke Test**: `scripts/pipeline-smoke-test.sh` verifies Board API round-trip end-to-end (create ticket → cycle through all statuses → verify). Runs automatically during QA when pipeline files are changed. Pipeline tickets cannot be marked done without a passing smoke test.
 
