@@ -1,5 +1,11 @@
 # Changelog
 
+## [T-625] VPS Integration Test — Pipeline Merge Gate — 2026-04-07
+
+**Bereiche:** Pipeline, Quality
+
+Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS durch die Pipeline schickt und end-to-end verifiziert: Agent-Ausführung, PR-Erstellung, Ticket-Status `in_review`. Ersetzt die bisherige manuelle VPS-Verifikation als primäres Merge-Gate für Pipeline-Tickets. Definition of Done in CLAUDE.md aktualisiert um den automatisierten VPS-Test zu referenzieren.
+
 ## [Unreleased]
 
 ### Fixed

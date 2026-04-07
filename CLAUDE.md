@@ -237,8 +237,13 @@ bash scripts/pipeline-smoke-test.sh
 ```
 Der Test verifiziert Board-API-Round-Trip und Stuck-Recovery-Pfad. Ein FAIL bedeutet: der Fix ist nicht verifiziert und darf nicht gemergt werden.
 
-**2. VPS-Verification durchgeführt:**
-Der reale Ablauf muss auf der VPS beobachtet worden sein — kein Merge ohne VPS-Bestätigung. Was zu verifizieren ist hängt vom Ticket ab:
+**2. VPS-Integration-Test passed:**
+```bash
+bash scripts/pipeline-vps-test.sh --host <vps-host>
+```
+Der Test erstellt ein echtes Ticket, schickt es durch die VPS-Pipeline und verifiziert: Agents liefen, PR wurde erstellt, Ticket-Status ist `in_review`. Ein FAIL bedeutet: die Pipeline funktioniert nicht end-to-end auf dem VPS.
+
+Für manuelle Verifikation spezifischer Bereiche gilt zusätzlich:
 
 | Änderung | VPS-Verifikation |
 |---|---|
@@ -247,7 +252,7 @@ Der reale Ablauf muss auf der VPS beobachtet worden sein — kein Merge ohne VPS
 | Status-Updates / Board-Events | Board-UI zeigt korrekten Status ohne Hänger nach Ticket-Durchlauf |
 | Scripts / Config | Script auf VPS ausführen, Output verifizieren |
 
-**Warum:** Code kann lokal korrekt aussehen und den Smoke-Test bestehen, aber auf der VPS trotzdem brechen — unterschiedliche Node-Version, fehlende Env-Vars, echte Supabase-Latenz, systemd-Eigenheiten. Nur VPS-Verification schließt diese Lücke.
+**Warum:** Code kann lokal korrekt aussehen und den Smoke-Test bestehen, aber auf der VPS trotzdem brechen — unterschiedliche Node-Version, fehlende Env-Vars, echte Supabase-Latenz, systemd-Eigenheiten. Der VPS-Integration-Test automatisiert die wichtigste Verifikation; manuelle Checks decken Spezialfälle ab.
 
 ## Ticket-Workflow (Just Ship Board)
 
