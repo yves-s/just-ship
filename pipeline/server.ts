@@ -3,7 +3,7 @@ initSentry();
 import { logger } from "./lib/logger.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { execSync } from "node:child_process";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { loadProjectConfig, type ProjectConfig } from "./lib/config.ts";
 import { sanitizeBranchName } from "./lib/sanitize.ts";
@@ -19,6 +19,7 @@ import {
   type ServerConfig,
 } from "./lib/server-config.ts";
 import { checkBudget } from "./lib/budget.ts";
+import { loadGitHubAppConfig, resolveGitHubToken, type GitHubAppConfig } from "./lib/github-app.ts";
 import type { PipelineCheckpoint } from "./lib/checkpoint.ts";
 import { decideResume } from "./lib/resume.ts";
 import { toBranchName, log } from "./lib/utils.ts";
@@ -68,17 +69,39 @@ if (isMultiProjectMode) {
     }
   }
 } else {
-  const required = ["ANTHROPIC_API_KEY", "GH_TOKEN", "PROJECT_DIR", "PIPELINE_SERVER_KEY"] as const;
+  const required = ["ANTHROPIC_API_KEY", "PROJECT_DIR", "PIPELINE_SERVER_KEY"] as const;
   for (const key of required) {
     if (!process.env[key]) {
       logger.error(`ERROR: ${key} must be set`);
       process.exit(1);
     }
   }
+  if (!process.env.GH_TOKEN && !process.env.GITHUB_APP_ID) {
+    logger.error("ERROR: Either GH_TOKEN or GITHUB_APP_ID must be set");
+    process.exit(1);
+  }
   PROJECT_DIR = process.env.PROJECT_DIR!;
   PIPELINE_SERVER_KEY = process.env.PIPELINE_SERVER_KEY!;
   config = loadProjectConfig(PROJECT_DIR);
   worktreeManager = new WorktreeManager(PROJECT_DIR, config.maxWorkers);
+}
+
+// --- GitHub App config (optional — falls back to GH_TOKEN PAT) ---
+let githubAppConfig: GitHubAppConfig | null = null;
+if (isMultiProjectMode && serverConfig?.workspace.github_app) {
+  const ga = serverConfig.workspace.github_app;
+  try {
+    const privateKey = readFileSync(ga.private_key_path, "utf-8");
+    githubAppConfig = { appId: ga.app_id, privateKey };
+    logger.info({ appId: ga.app_id }, "GitHub App config loaded");
+  } catch (err) {
+    logger.error(
+      { path: ga.private_key_path, err: err instanceof Error ? err.message : String(err) },
+      "Failed to load GitHub App private key",
+    );
+  }
+} else {
+  githubAppConfig = loadGitHubAppConfig();
 }
 
 const PORT = Number(process.env.PORT ?? serverConfig?.server.port ?? "3001");
@@ -326,6 +349,7 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
   const repoUrl = launchBody?.repo_url as string | undefined;
   if (repoUrl) {
     const githubToken = launchBody!.github_token as string | undefined;
+    const installationId = launchBody!.installation_id as number | undefined;
     const runId = launchBody!.run_id as string;
     const runToken = launchBody!.run_token as string;
     const callbackUrl = launchBody!.callback_url as string;
@@ -356,10 +380,18 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
       const startTime = Date.now();
       const tempDir = `/tmp/run-${runId}`;
       try {
-        // 1. Clone repo
+        // 1. Clone repo — resolve token via GitHub App chain (installation > explicit > env)
         const repoUrlWithoutProtocol = repoUrl.replace(/^https?:\/\//, "");
-        const cloneUrl = githubToken
-          ? `https://x-access-token:${githubToken}@${repoUrlWithoutProtocol}`
+        let effectiveToken = githubToken;
+        if (!effectiveToken && installationId && githubAppConfig) {
+          try {
+            effectiveToken = await resolveGitHubToken({ installationId, appConfig: githubAppConfig }) ?? undefined;
+          } catch (err) {
+            log(`[SaaS] Failed to generate installation token: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+        const cloneUrl = effectiveToken
+          ? `https://x-access-token:${effectiveToken}@${repoUrlWithoutProtocol}`
           : repoUrl;
         log(`[SaaS] Cloning ${repoUrlWithoutProtocol} to ${tempDir}`);
         execSync(`git clone --depth 1 "${cloneUrl}" "${tempDir}"`, {
@@ -405,6 +437,7 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
           executePipeline({
             projectDir: tempDir,
             ticket: { ticketId: String(ticketNumber), title, description: ticketBody, labels: tags },
+            env: effectiveToken ? { GH_TOKEN: effectiveToken } : undefined,
           }),
           `T-${ticketNumber} SaaS executePipeline`,
         );
@@ -495,6 +528,17 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
     projectDir = match.project.project_dir;
     projectEnv = loadProjectEnv(match.project.env_file);
     projectConfig = loadProjectConfig(projectDir);
+
+    // Resolve GitHub token (installation token > project env > server env)
+    const projectInstallationId = match.project.installation_id ?? serverConfig?.workspace.github_app?.installation_id;
+    if (projectInstallationId && githubAppConfig) {
+      try {
+        const token = await resolveGitHubToken({ installationId: projectInstallationId, appConfig: githubAppConfig });
+        if (token) projectEnv.GH_TOKEN = token;
+      } catch (err) {
+        log(`GitHub App token generation failed for project ${projectSlug}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
   }
 
   // 2. Fetch ticket from Board API

@@ -9,13 +9,12 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 ## [Unreleased]
 
 ### Added
+- **GitHub App Integration**: Pipeline now supports GitHub App Installation Tokens as an alternative to static PATs. New `pipeline/lib/github-app.ts` module generates short-lived tokens via JWT → GitHub API, with in-memory caching and 5-minute refresh margin. Both `server.ts` and `worker.ts` accept `GITHUB_APP_ID` + `GITHUB_APP_PRIVATE_KEY_PATH` env vars. SaaS launch payload accepts `installation_id` for per-run token generation. PAT flow remains fully functional as fallback
 - **Automated Code Review Agent**: New step 6.5 in `/develop` flow between Build-Check and QA — a `code-review` agent reviews the diff against main for code quality, patterns, edge cases, error handling, performance and security smells, then fixes issues directly as commits instead of leaving comments
 
 ### Fixed
 - **Local cost tracking in worktree scenarios**: `detect-ticket-post.sh` and `on-session-end.sh` now resolve the main project root via `git rev-parse --git-common-dir` instead of using the Bash event CWD directly — fixes `.active-ticket` being written to worktree dir while `on-session-end` reads from project root
 - **Model ID recognition for cost calculation**: Added `claude-opus-4-6` and `claude-sonnet-4-6` to pricing tables in `calculate-session-cost.sh` and `pipeline/lib/cost.ts` — sessions using current model IDs are now correctly matched instead of falling through to the fallback
-
-### Added
 - **VPS provisioning script** (`scripts/provision-pipeline.sh`): One-command setup of isolated pipeline instances on Hostinger VPS — creates Docker Compose stack (pipeline-server + Bugsink + Dozzle), auto-allocates ports, extends shared Caddy config with HTTPS, generates pipeline key, and includes full rollback on failure
 - **Preview URL as ticket comment**: After a successful preview deploy, the pipeline now posts a comment (`type: "preview"`) to the ticket via the Board Comments API. The Board's upsert dedup ensures re-deploys overwrite the existing preview comment instead of creating duplicates. Implemented in both `pipeline/run.ts` (VPS mode) and `commands/develop.md` (local mode via `post-comment.sh`)
 - **Sparring skill for strategic discussions**: New `skills/sparring.md` with automatic domain triage — recognizes which experts (CTO, Design Lead, UX Lead, etc.) to bring to the table based on topic signals. CLAUDE.md "Durchdenken" intent now references the sparring skill instead of ad-hoc behavior

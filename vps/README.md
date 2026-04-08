@@ -39,7 +39,7 @@ Use the `/just-ship-vps` command in Claude Code. It handles everything:
 |---|------|-----|
 | 1 | VPS IP | Hostinger Dashboard → VPS → copy IP |
 | 2 | SSH key auth | `ssh-copy-id root@<IP>` |
-| 3 | GitHub Token | https://github.com/settings/tokens/new → scopes: `repo` + `workflow` |
+| 3 | GitHub Auth | **Option A:** PAT — https://github.com/settings/tokens/new → scopes: `repo` + `workflow`. **Option B:** GitHub App — register app with `contents:write`, `pull_requests:write`, `metadata:read` permissions, set `GITHUB_APP_ID` + `GITHUB_APP_PRIVATE_KEY_PATH` env vars |
 
 ### Provisioning New Pipeline Instances
 

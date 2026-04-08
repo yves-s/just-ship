@@ -17,6 +17,15 @@ if [ -n "$GH_TOKEN" ]; then
   gh auth setup-git 2>/dev/null || true
 fi
 
+# GitHub App mode (if configured — tokens are generated dynamically per pipeline run)
+if [ -n "$GITHUB_APP_ID" ] && [ -n "$GITHUB_APP_PRIVATE_KEY_PATH" ]; then
+  echo "[startup] GitHub App configured (App ID: $GITHUB_APP_ID)"
+  echo "[startup] Installation tokens will be generated per pipeline run"
+  # No static gh auth — tokens are generated dynamically by pipeline/lib/github-app.ts
+elif [ -z "$GH_TOKEN" ]; then
+  echo "[startup] WARNING: Neither GH_TOKEN nor GITHUB_APP_ID set — git operations will fail" >&2
+fi
+
 # Validate project configs at startup
 echo "[startup] Validating project configs..."
 VALIDATION_ERRORS=0
