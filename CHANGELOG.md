@@ -9,6 +9,7 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 ## [Unreleased]
 
 ### Added
+- **Sparring skill for strategic discussions**: New `skills/sparring.md` with automatic domain triage — recognizes which experts (CTO, Design Lead, UX Lead, etc.) to bring to the table based on topic signals. CLAUDE.md "Durchdenken" intent now references the sparring skill instead of ad-hoc behavior
 - **Coolify preview URL support in /develop**: Step 9f now includes a `coolify` branch that polls the Coolify Deployments API via `get-preview-url.sh` (60s timeout) and writes the application FQDN as preview URL to the ticket
 
 ### Fixed

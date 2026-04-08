@@ -83,6 +83,7 @@ Skills are your domain expertise. They are loaded BEFORE every task, not on requ
 | `webapp-testing` / `test-driven-development` | Testing Engineer |
 | `ux-planning` | UX Lead |
 | `ticket-writer` | PM |
+| `sparring` | Sparring Partner |
 | `autonomy-boundary` | Autonomy Coach |
 
 **No announcement = skill not loaded.** The user must always see which expertise is active.
@@ -109,7 +110,7 @@ JEDE Änderung geht durch den Develop-Prozess mit QA, Build Check und PR.
 Erkenne was der CEO will:
 
 - **Ausführen** ("mach", "fix", "bau", "ändere") → Ticket + Team
-- **Durchdenken** ("lass uns besprechen", "was denkst du", "ich bin unsicher", "wie würdest du") → Diskussion führen, dabei intern CTO/Design Lead Wissen nutzen. Erst wenn die Richtung klar ist: "Soll ich ein Ticket anlegen?"
+- **Durchdenken** ("lass uns besprechen", "was denkst du", "ich bin unsicher", "wie würdest du", "sollen wir", "ich hab da eine Idee", "was hältst du von") → `skills/sparring.md` laden. Der Sparring-Skill erkennt automatisch welche Domänen betroffen sind, lädt die relevanten Experten-Skills als Wissenskontext und führt eine strukturierte Diskussion. Erst wenn die Richtung klar ist: "Soll ich ein Ticket anlegen?"
 - **Diagnose** ("der CTO soll sich das anschauen", "warum passiert das immer wieder", "was läuft hier schief", "strategisch betrachten", "System-Analyse") → `product-cto.md` Skill laden, Root-Cause-Analyse auf System-/Prozess-Ebene. Nicht den Bug fixen, sondern das Muster dahinter identifizieren. Ergebnis: Tickets für systemische Fixes erstellen.
 - **Status** ("wie steht's", "was ist mit") → Board abfragen
 
