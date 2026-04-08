@@ -477,6 +477,13 @@ if [ -n "$PREVIEW_URL" ]; then
 fi
 ```
 
+**Preview-Comment posten (non-blocking):**
+```bash
+if [ -n "$PREVIEW_URL" ]; then
+  bash .claude/scripts/post-comment.sh {N} "Preview: $PREVIEW_URL" preview
+fi
+```
+
 **Legacy Supabase MCP (Fallback):**
 ```bash
 if [ -n "$PREVIEW_URL" ]; then
