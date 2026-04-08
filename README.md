@@ -180,6 +180,7 @@ Shipped with the pipeline:
 | **ux-planning** | UX planning and user flow design |
 | **backend** | Backend patterns and API design |
 | **data-engineer** | Database migration and RLS patterns |
+| **sparring** | Strategic discussion partner with automatic domain expert triage |
 | **webapp-testing** | Testing strategy (test pyramid, framework selection, mocking) + Playwright visual testing |
 
 ### Shopify Domain Skills
