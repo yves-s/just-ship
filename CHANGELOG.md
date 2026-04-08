@@ -9,6 +9,7 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 ## [Unreleased]
 
 ### Added
+- **Preview URL as ticket comment**: After a successful preview deploy, the pipeline now posts a comment (`type: "preview"`) to the ticket via the Board Comments API. The Board's upsert dedup ensures re-deploys overwrite the existing preview comment instead of creating duplicates. Implemented in both `pipeline/run.ts` (VPS mode) and `commands/develop.md` (local mode via `post-comment.sh`)
 - **Sparring skill for strategic discussions**: New `skills/sparring.md` with automatic domain triage — recognizes which experts (CTO, Design Lead, UX Lead, etc.) to bring to the table based on topic signals. CLAUDE.md "Durchdenken" intent now references the sparring skill instead of ad-hoc behavior
 - **Shopify App deploy in /ship**: After merge, `/ship` runs `shopify app deploy --force` for `variant: "remix"` projects — deploys extensions (Theme App Extensions, Checkout UI, Functions) and app config to Shopify. Retry on transient errors, non-blocking on failure with manual fallback hint
 - **shopify-app-deploy.sh**: New script handling Shopify App deployment with variant detection, retry logic (exit 1 → retry, exit >1 → abort), and `.env`-based auth (`SHOPIFY_CLI_PARTNERS_TOKEN`)
