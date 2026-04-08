@@ -8,6 +8,10 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Fixed
+- **Local cost tracking in worktree scenarios**: `detect-ticket-post.sh` and `on-session-end.sh` now resolve the main project root via `git rev-parse --git-common-dir` instead of using the Bash event CWD directly — fixes `.active-ticket` being written to worktree dir while `on-session-end` reads from project root
+- **Model ID recognition for cost calculation**: Added `claude-opus-4-6` and `claude-sonnet-4-6` to pricing tables in `calculate-session-cost.sh` and `pipeline/lib/cost.ts` — sessions using current model IDs are now correctly matched instead of falling through to the fallback
+
 ### Added
 - **Sparring skill for strategic discussions**: New `skills/sparring.md` with automatic domain triage — recognizes which experts (CTO, Design Lead, UX Lead, etc.) to bring to the table based on topic signals. CLAUDE.md "Durchdenken" intent now references the sparring skill instead of ad-hoc behavior
 - **Shopify App deploy in /ship**: After merge, `/ship` runs `shopify app deploy --force` for `variant: "remix"` projects — deploys extensions (Theme App Extensions, Checkout UI, Functions) and app config to Shopify. Retry on transient errors, non-blocking on failure with manual fallback hint
