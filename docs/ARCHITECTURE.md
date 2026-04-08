@@ -1117,7 +1117,11 @@ VPS (Ubuntu 22.04)
 | Variable | Purpose |
 |----------|---------|
 | `ANTHROPIC_API_KEY` | Claude API authentication |
-| `GH_TOKEN` | GitHub operations (PR, push) |
+| `GH_TOKEN` | GitHub operations (PR, push) — optional if GitHub App configured |
+| `GITHUB_APP_ID` | GitHub App ID (alternative to `GH_TOKEN`) |
+| `GITHUB_APP_PRIVATE_KEY_PATH` | Path to GitHub App private key PEM file |
+| `GITHUB_APP_PRIVATE_KEY` | GitHub App private key PEM content (alternative to path) |
+| `GITHUB_APP_INSTALLATION_ID` | Default GitHub App installation ID for token generation |
 | `SUPABASE_URL` | Ticket queue endpoint |
 | `SUPABASE_SERVICE_KEY` | Supabase service role key |
 | `SUPABASE_PROJECT_ID` | Filter tickets by project |
