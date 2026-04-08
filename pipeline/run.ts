@@ -700,6 +700,7 @@ WICHTIG: Push, PR-Erstellung und Status-Updates werden automatisch von der Pipel
       variant: config.stack.variant,
       packageJsonScripts,
       shopifyCliAvailable,
+      workDir,
     });
 
     if (verifyCommands.length > 0) {
