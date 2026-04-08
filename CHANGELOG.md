@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Fixed
+- **Permission prompts in local pipeline runs**: Broadened `PermissionRequest` hook matcher from `Write(.claude/**)|Edit(.claude/**)` to `Write(**)|Edit(**)`, preventing permission dialogs for Write/Edit operations in worktrees during local runs
+
 ### Added
 - **Local cost tracking**: SessionEnd hook now reads token usage from Claude Code session JSONL files and writes `total_tokens` + `estimated_cost` to the Board ticket — costs accumulate across multiple sessions per ticket
 - **Session cost calculator**: New `calculate-session-cost.sh` script parses Claude Code session data, detects model (Opus/Sonnet/Haiku), and calculates estimated USD cost using the same pricing as the VPS pipeline

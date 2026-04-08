@@ -16,7 +16,7 @@
   "hooks": {
     "PermissionRequest": [
       {
-        "matcher": "Write(.claude/**)|Edit(.claude/**)",
+        "matcher": "Write(**)|Edit(**)",
         "hooks": [
           {
             "type": "command",
