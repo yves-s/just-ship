@@ -462,6 +462,10 @@ else
 fi
 ```
 
+Falls kein Hosting-Provider konfiguriert ist (`$HOSTING_PROVIDER` leer), direkt ausgeben:
+Ausgabe: `✓ preview — übersprungen (kein Preview-Deployment konfiguriert)`
+Dann den Rest von Schritt 9f überspringen und zu Schritt 10 weitergehen.
+
 Falls eine URL gefunden wurde (`$PREVIEW_URL` nicht leer), ins Ticket schreiben:
 
 **Board API:**
@@ -480,9 +484,10 @@ fi
 
 Ausgabe:
 - `✓ preview — {PREVIEW_URL}` (falls URL gefunden)
-- `✓ preview — kein Deployment gefunden, übersprungen` (falls keine URL)
+- `✓ preview — kein Deployment gefunden, übersprungen` (falls Deployment-Script keine URL lieferte)
+- `✓ preview — übersprungen (kein Preview-Deployment konfiguriert)` (falls kein Hosting-Provider gesetzt)
 
-**Kein Fehler wenn keine URL gefunden wird.** Die Scripts exiten immer mit Code 0. Projekte ohne Vercel- oder Shopify-Integration überspringen diesen Schritt automatisch.
+**Kein Fehler wenn keine URL gefunden wird.** Die Scripts exiten immer mit Code 0. Projekte ohne Vercel- oder Shopify-Integration überspringen diesen Schritt automatisch. **Keine internen Details (Provider-Namen, Script-Pfade, Implementierungshinweise) in der Ausgabe.**
 
 ### 10. Automated QA
 
