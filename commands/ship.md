@@ -200,17 +200,35 @@ git branch -d {branch} 2>/dev/null || true
 
 SOFORT WEITER ZU SCHRITT 5a.
 
-### 5a. Shopify Theme Cleanup (falls Shopify-Projekt)
+### 5a. Shopify Post-Merge (falls Shopify-Projekt)
+
+Bestimme Shopify-Variant und führe den passenden Post-Merge-Step aus:
 
 ```bash
-HOSTING=$(node -e "
-  const c = require('./project.json');
-  const h = c.hosting || (c.stack?.framework === 'shopify' ? 'shopify' : '');
-  process.stdout.write(h);
-")
+PLATFORM=$(node -e "process.stdout.write(require('./project.json').stack?.platform || '')" 2>/dev/null || echo "")
+VARIANT=$(node -e "process.stdout.write(require('./project.json').stack?.variant || '')" 2>/dev/null || echo "")
+```
 
-if [ "$HOSTING" = "shopify" ]; then
-  # Falls Worktree: Theme-ID-Datei liegt dort
+**App-Variant (`variant: "remix"`):** Extensions und App-Config deployen:
+```bash
+if [ "$PLATFORM" = "shopify" ] && [ "$VARIANT" = "remix" ]; then
+  bash .claude/scripts/shopify-app-deploy.sh
+fi
+```
+
+Das Script:
+- Führt `shopify app deploy --force` aus
+- Retry 1x bei Exit-Code 1 (transient), sofort abbrechen bei Exit-Code >1 (auth/validation)
+- Gibt Warnung aus bei Fehler — blockiert NICHT den Merge
+- Auth via `SHOPIFY_CLI_PARTNERS_TOKEN` (VPS) oder CLI-Session (lokal)
+
+Ausgabe:
+- `✓ shopify — Extensions und App-Config deployed` (bei Erfolg)
+- `⚠ shopify — App Deploy fehlgeschlagen, manuell deployen` (bei Fehler)
+
+**Theme-Variant (default):** Unpublished Preview-Theme löschen:
+```bash
+if [ "$PLATFORM" = "shopify" ] && [ "$VARIANT" != "remix" ]; then
   THEME_ID_FILE=".worktrees/T-${N}/.claude/.shopify-theme-id"
   [ ! -f "$THEME_ID_FILE" ] && THEME_ID_FILE=".claude/.shopify-theme-id"
   SHOPIFY_THEME_ID_FILE="$THEME_ID_FILE" bash .claude/scripts/shopify-preview.sh cleanup
@@ -219,7 +237,7 @@ fi
 
 Ausgabe:
 - `✓ shopify — Theme gelöscht` (falls Theme-ID vorhanden)
-- Still überspringen falls kein Shopify-Projekt oder keine Theme-ID
+- Still überspringen falls kein Shopify-Projekt
 
 SOFORT WEITER ZU SCHRITT 5b.
 
