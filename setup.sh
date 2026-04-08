@@ -253,12 +253,12 @@ check_prereq "git" || MISSING=1
 check_prereq "gh" || MISSING=1
 check_prereq "node" || MISSING=1
 
-# Shopify CLI check (optional — only for Shopify theme projects)
-if [ -d "$PROJECT_DIR/sections" ] && [ -f "$PROJECT_DIR/layout/theme.liquid" ]; then
+# Shopify CLI check (optional — for any Shopify project)
+if [ -f "$PROJECT_DIR/shopify.app.toml" ] || { [ -d "$PROJECT_DIR/sections" ] && [ -f "$PROJECT_DIR/layout/theme.liquid" ]; } || [ -f "$PROJECT_DIR/hydrogen.config.ts" ] || (grep -q '"@shopify/hydrogen"' "$PROJECT_DIR/package.json" 2>/dev/null); then
   echo ""
-  echo "Shopify theme detected:"
+  echo "Shopify project detected:"
   check_prereq "shopify" || {
-    echo "  ⚠ Shopify CLI recommended for theme development"
+    echo "  ⚠ Shopify CLI recommended for Shopify development"
     echo "  Install: npm install -g @shopify/cli"
   }
 fi
@@ -765,12 +765,97 @@ elif command -v md5sum &>/dev/null; then
   md5sum "$FRAMEWORK_DIR/templates/CLAUDE.md" 2>/dev/null | cut -d' ' -f1 > "$PROJECT_DIR/.claude/.template-hash" || true
 fi
 
+# --- Shopify project detection ---
+echo "Detecting project type..."
+DETECT_RESULT=$("$FRAMEWORK_DIR/scripts/detect-shopify.sh" 2>/dev/null || echo '{"detected":false}')
+SHOPIFY_DETECTED=$(echo "$DETECT_RESULT" | node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).detected))" 2>/dev/null || echo "false")
+
+if [ "$SHOPIFY_DETECTED" = "true" ]; then
+  SHOPIFY_VARIANT=$(echo "$DETECT_RESULT" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).variant)" 2>/dev/null)
+  echo "  ✓ Shopify project detected: $SHOPIFY_VARIANT"
+
+  # Merge detected values into project.json (only fill empty fields)
+  node -e "
+    const fs = require('fs');
+    const pjPath = process.env.PJ_PATH;
+    const detected = JSON.parse(process.env.DETECT_JSON);
+
+    let pj = {};
+    try { pj = JSON.parse(fs.readFileSync(pjPath, 'utf-8')); } catch(e) {}
+
+    // Only fill empty values
+    if (!pj.stack) pj.stack = {};
+    if (!pj.stack.platform) pj.stack.platform = 'shopify';
+    if (!pj.stack.variant) pj.stack.variant = detected.variant;
+
+    if (!pj.build) pj.build = {};
+    if (!pj.build.dev) pj.build.dev = detected.build.dev || '';
+    if (!pj.build.web) pj.build.web = detected.build.web || '';
+    if (!pj.build.install) pj.build.install = detected.build.install || '';
+    if (!pj.build.test) pj.build.test = detected.build.test || '';
+
+    if (!pj.shopify) pj.shopify = {};
+    if (!pj.shopify.store && detected.store) pj.shopify.store = detected.store;
+
+    if (!pj.skills) pj.skills = {};
+    if (!pj.skills.domain || pj.skills.domain.length === 0) {
+      pj.skills.domain = detected.skills;
+    }
+
+    fs.writeFileSync(pjPath, JSON.stringify(pj, null, 2) + '\n');
+  " PJ_PATH="$PROJECT_DIR/project.json" DETECT_JSON="$DETECT_RESULT"
+  echo "  ✓ project.json updated with Shopify config"
+else
+  echo "  ~ No Shopify project detected"
+fi
+
 echo ""
 echo "================================================"
 echo "  Setup complete → $FRAMEWORK_VERSION"
 echo "================================================"
 echo ""
-echo "Nächster Schritt:"
-echo "  Öffne Claude Code und führe /setup-just-ship aus"
-echo "  (erkennt Stack, füllt project.json, verbindet Board, installiert Sidekick)"
+
+if [ "$SHOPIFY_DETECTED" = "true" ]; then
+  VARIANT_LABEL=""
+  case "$SHOPIFY_VARIANT" in
+    remix)    VARIANT_LABEL="Shopify App (Remix)" ;;
+    liquid)   VARIANT_LABEL="Shopify Theme" ;;
+    hydrogen) VARIANT_LABEL="Hydrogen Storefront" ;;
+  esac
+
+  echo "Detected: $VARIANT_LABEL"
+  echo "Platform config written to project.json."
+  echo ""
+  echo "Next steps:"
+
+  case "$SHOPIFY_VARIANT" in
+    remix)
+      echo "  1. Verify shopify.store in project.json"
+      echo "     (source: shopify.app.toml)"
+      echo "  2. Run: npm install"
+      echo "  3. Connect board: /add-project"
+      echo "  4. Start: /develop [ticket-id]"
+      [ ! -f "$PROJECT_DIR/.env" ] && echo "" && echo "  Note: Create .env with your Shopify app credentials before first run."
+      ;;
+    liquid)
+      echo "  1. Verify shopify.store in project.json"
+      echo "     (source: shopify.theme.toml)"
+      echo "  2. Connect board: /add-project"
+      echo "  3. Start: /develop [ticket-id]"
+      ;;
+    hydrogen)
+      echo "  1. Set Shopify Storefront API credentials in .env"
+      echo "  2. Run: npm install"
+      echo "  3. Connect board: /add-project"
+      echo "  4. Start: /develop [ticket-id]"
+      ;;
+  esac
+
+  echo ""
+  echo "Need help? Run: bash .claude/scripts/shopify-env-check.sh"
+else
+  echo "Nächster Schritt:"
+  echo "  Öffne Claude Code und führe /setup-just-ship aus"
+  echo "  (erkennt Stack, füllt project.json, verbindet Board, installiert Sidekick)"
+fi
 print_banner
