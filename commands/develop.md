@@ -32,7 +32,7 @@ Lies `project.json` für Konventionen.
 
 ## WICHTIGSTE REGEL
 
-**STOPPE NICHT ZWISCHEN DEN SCHRITTEN.** Nach Build-Check (Schritt 6) kommt Review (Schritt 7), dann Docs-Check (Schritt 8), dann Ship (Schritt 9). Du darfst NICHT nach dem Build dem User die Ergebnisse zeigen und auf Antwort warten. ALLES durchlaufen bis Schritt 9 fertig ist.
+**STOPPE NICHT ZWISCHEN DEN SCHRITTEN.** Nach Build-Check (Schritt 6) kommt Code Review (Schritt 6.5), dann QA Review (Schritt 7), dann Docs-Check (Schritt 8), dann Ship (Schritt 9). Du darfst NICHT nach dem Build dem User die Ergebnisse zeigen und auf Antwort warten. ALLES durchlaufen bis Schritt 9 fertig ist.
 
 ## Ausführung
 
@@ -253,7 +253,49 @@ Nach DevOps-Agent:
 bash .claude/scripts/send-event.sh {N} devops completed
 ```
 
-**NICHT STOPPEN.** Zeige dem User NICHT die Build-Ergebnisse und warte NICHT auf Antwort. SOFORT weiter zu Schritt 7.
+**NICHT STOPPEN.** Zeige dem User NICHT die Build-Ergebnisse und warte NICHT auf Antwort. SOFORT weiter zu Schritt 6.5.
+
+### 6.5. Code Review (ein Agent)
+
+```bash
+bash .claude/scripts/send-event.sh {N} code-review agent_started
+```
+Ausgabe: `▶ code-review — Diff gegen main reviewen`
+
+Ein Code-Review-Agent mit `model: "sonnet"` und `subagent_type: "code-reviewer"`:
+- Reviewt `git diff main..HEAD` auf Code-Qualität, Patterns, Edge Cases, Error Handling, Performance, Security
+- Fixt gefundene Issues direkt als Commits (`chore(code-review): ...`)
+- Kein Kommentar, sondern Code-Änderung
+
+Prompt-Muster:
+```
+Du bist der Code Review Agent. Lies agents/code-review.md für deine Rolle.
+
+Arbeitsverzeichnis: {WORKTREE_DIR oder CWD}
+Branch: {aktueller Branch}
+Ticket: T-{N}
+
+Reviewe den Diff auf diesem Branch gegen main. Lies agents/code-review.md für Review-Kriterien und Workflow.
+Lies CLAUDE.md für Projekt-Konventionen.
+Lies project.json für Stack und Build-Commands.
+
+Fixe gefundene Issues direkt. Jeder Fix als eigener Commit: chore(code-review): {beschreibung}
+```
+
+Verarbeite das Ergebnis:
+- Falls Fixes committed wurden: Build-Check erneut ausführen (Schritt 6 wiederholen), um sicherzustellen dass Review-Fixes den Build nicht brechen
+- Falls keine Issues gefunden: still weiterlaufen
+
+```bash
+bash .claude/scripts/send-event.sh {N} code-review completed
+```
+Ausgabe nach Abschluss:
+- `✓ code-review abgeschlossen ({N} issues gefixt)` (bei Findings)
+- `✓ code-review abgeschlossen (clean)` (bei keinen Findings)
+
+Falls Review-Fixes den Build brechen: DevOps-Agent spawnen (wie in Schritt 6), dann weiterlaufen.
+
+**NICHT STOPPEN.** SOFORT weiter zu Schritt 7.
 
 ### 7. Review (ein Agent)
 

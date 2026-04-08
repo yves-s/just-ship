@@ -228,6 +228,7 @@ The `load-agents.ts` module parses these definitions at runtime, extracting tool
 | **Frontend** | UI components, pages (design-aware) | Sonnet | UI changes |
 | **Data Engineer** | DB migrations, RLS policies, TypeScript types | Haiku | Schema changes |
 | **DevOps** | Build checks, lint fixes, TypeScript compilation | Haiku | Only on build failure |
+| **Code Review** | Reviews diff against main, fixes code quality / patterns / edge cases / performance | Sonnet | Always (after build check) |
 | **QA (Testing Engineer)** | Test strategy, test writing, AC verification, security check | Haiku | Always (review phase) |
 | **Security** | Deep security review (Auth, RLS, input validation) | Haiku | Security-critical changes |
 
@@ -243,6 +244,7 @@ Every `/develop` run executes a strict 10-step pipeline. No step is optional, no
  4  Planning             Orchestrator reads 5-10 affected files, formulates agent instructions
  5  Implementation       Sub-agents in parallel (data-engineer first if schema changes)
  6  Build Check          Run build commands -- DevOps agent only on failure
+ 6½ Code Review          Review diff against main -- fix quality/pattern/security issues directly
  7  Review               QA agent checks acceptance criteria + security
  8  Docs Check           Auto-update CHANGELOG, README, ARCHITECTURE, VPS docs, CONTRIBUTING
  9  Ship (no merge)      Commit → Push → PR → status "in_review" → Preview URL (Vercel/Coolify/Shopify)

@@ -96,6 +96,7 @@ just-ship self-update
 | **Frontend** | Sonnet | UI components and pages (design-aware) |
 | **Data Engineer** | Haiku | DB migrations, RLS policies, TypeScript types |
 | **DevOps** | Haiku | Build checks and fixes (only on failure) |
+| **Code Review** | Sonnet | Reviews diff against main for code quality, patterns, edge cases, performance -- fixes issues directly |
 | **QA (Testing Engineer)** | Haiku | Test strategy, test writing, acceptance criteria + security review |
 | **Security** | Haiku | Deep security review for critical changes |
 

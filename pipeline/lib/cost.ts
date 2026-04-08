@@ -1,13 +1,15 @@
 /** Token pricing per 1K tokens (input/output) in USD */
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  "claude-opus-4-6":              { input: 0.015, output: 0.075 },
   "claude-opus-4-20250514":       { input: 0.015, output: 0.075 },
+  "claude-sonnet-4-6":            { input: 0.003, output: 0.015 },
   "claude-sonnet-4-20250514":     { input: 0.003, output: 0.015 },
   "claude-haiku-4-5-20251001":    { input: 0.0008, output: 0.004 },
 };
 
 const MODEL_ALIASES: Record<string, string> = {
-  opus:   "claude-opus-4-20250514",
-  sonnet: "claude-sonnet-4-20250514",
+  opus:   "claude-opus-4-6",
+  sonnet: "claude-sonnet-4-6",
   haiku:  "claude-haiku-4-5-20251001",
 };
 
@@ -21,7 +23,7 @@ export function estimateCost(
   outputTokens: number,
 ): number {
   const resolvedModel = MODEL_ALIASES[model] ?? model;
-  const pricing = MODEL_PRICING[resolvedModel] ?? MODEL_PRICING["claude-sonnet-4-20250514"];
+  const pricing = MODEL_PRICING[resolvedModel] ?? MODEL_PRICING["claude-sonnet-4-6"];
   return (inputTokens / 1000) * pricing.input + (outputTokens / 1000) * pricing.output;
 }
 
