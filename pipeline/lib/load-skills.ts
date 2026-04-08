@@ -35,6 +35,7 @@ const SKILL_AGENT_MAP: Record<string, AgentRole[]> = {
 /** Default skills per platform+variant when skills.domain is not set */
 const VARIANT_DEFAULTS: Record<string, string[]> = {
   liquid:   ["shopify-liquid", "shopify-theme"],
+  remix:    ["shopify-apps", "shopify-admin-api"],
   hydrogen: ["shopify-hydrogen", "shopify-storefront-api"],
 };
 
