@@ -14,6 +14,7 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 - **Server startup config validation**: `server.ts` logs config completeness per project at startup (missing fields, hosting provider) via structured pino logger
 
 ### Fixed
+- **Preview-Check leaking internal details**: The else-branch in `/develop` step 9f now has an explicit, neutral output instruction instead of a code comment — prevents executing agents from inventing messages that expose provider names or script paths
 - **Branch name truncation trailing dash**: `toBranchName()` in `pipeline/lib/utils.ts` now strips leading and trailing non-alphanumeric characters after `.slice(0, 40)`, preventing branch names that end with `-` from being rejected by `sanitizeBranchName`
 - **Unhandled branch name errors in server launch/answer handlers**: `toBranchName()` calls in `server.ts` (`handleLaunch` and the answer/resume handler) are now wrapped in try/catch — on failure, the ticket is immediately rolled back to `pipeline_status: "failed"` / `status: "ready_to_develop"` instead of being left stuck in `running`
 - **Unhandled branch name errors in run.ts**: `sanitizeBranchName()` calls in `executePipeline` and `resumePipeline` are now wrapped in try/catch — on failure, the function returns a typed `PipelineResult` with `status: "failed"` and a descriptive `failureReason` instead of throwing an unhandled exception
