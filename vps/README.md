@@ -76,6 +76,9 @@ After VPS setup (or instance provisioning), connect individual projects. The com
 | `just-ship-updater.service` | systemd unit for Update-Agent (runs on host, outside Docker) |
 | `install-updater.sh` | Installs Update-Agent on a VPS host |
 | `logs.sh` | Fetch Docker container logs from VPS via SSH (list containers, tail logs, follow mode) |
+| `pipeline-container-monitor.sh` | Health monitoring for pipeline containers: cron-based checks, Telegram alerts, auto-restart |
+| `install-monitor.sh` | Install pipeline container monitor on VPS via SSH (copies script, installs cron + logrotate) |
+| `pipeline-containers.example.json` | Example config for container monitor (name, domain, health_url per container) |
 | `setup-vps.sh` | **DEPRECATED** — legacy bare-metal setup script |
 | `just-ship-pipeline@.service` | **DEPRECATED** — legacy systemd unit for polling worker |
 | `just-ship-server@.service` | **DEPRECATED** — legacy systemd unit for HTTP server |
@@ -198,6 +201,49 @@ bash vps/logs.sh --host <IP> pipeline -f
 ```
 
 Requires SSH key auth to `root@<IP>` (same as all other VPS scripts).
+
+## Container Monitoring
+
+Health monitoring for pipeline containers with Telegram alerts and auto-restart. Install on the Pipeline-VPS:
+
+```bash
+bash vps/install-monitor.sh --vps 187.124.9.221
+```
+
+This installs a cron job that runs every minute and:
+1. Reads container config from `/root/pipeline-containers.json`
+2. HTTP health-checks each container's `/health` endpoint (5s timeout)
+3. After 3 consecutive failures: sends Telegram alert + attempts `docker restart` (max 3 times with backoff)
+4. Sends recovery notification when container comes back online
+
+### Container Config
+
+Edit `/root/pipeline-containers.json` on the VPS:
+
+```json
+[
+  {
+    "name": "pipeline-aime",
+    "domain": "aime.pipeline.just-ship.io",
+    "health_url": "https://aime.pipeline.just-ship.io/health"
+  }
+]
+```
+
+If the config file is empty or missing, the monitor falls back to discovering Docker containers with the `pipeline=true` label.
+
+### Environment Variables
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `TELEGRAM_BOT_TOKEN` | Yes | Telegram bot token (same as hosting monitoring) |
+| `TELEGRAM_OPERATOR_CHAT_ID` | Yes | Chat ID for alert messages |
+
+Set in `/root/.env` on the VPS. The monitor sources this file automatically.
+
+### Log File
+
+`/var/log/pipeline-container-monitor.log` — rotated daily, 7-day retention (logrotate installed by `install-monitor.sh`).
 
 ## Update
 
