@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Fixed
+- **Permission prompts in local pipeline runs**: Broadened `PermissionRequest` hook matcher from `Write(.claude/**)|Edit(.claude/**)` to `Write(**)|Edit(**)`, preventing permission dialogs for Write/Edit operations in worktrees during local runs
+
 ### Added
 - **VPS config sync on deploy**: `just-ship-updater.sh` now syncs `project.json` from `origin/main` after each project update, preventing config drift between local and VPS
 - **Container startup validation**: `entrypoint.sh` validates all project configs at container start — checks for `project.json` presence, required pipeline fields, and logs hosting provider per project
