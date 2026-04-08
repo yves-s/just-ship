@@ -23,7 +23,18 @@ cd "$CWD" || exit 0
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || exit 0
 TICKET_NUMBER=$(echo "$BRANCH" | /usr/bin/sed -n 's|^[a-z]*/T\{0,1\}-\{0,1\}\([0-9][0-9]*\)-.*|\1|p')
 
-ACTIVE_TICKET_FILE="$CWD/.claude/.active-ticket"
+# Resolve the main project root (not the worktree root).
+# In a worktree, git-common-dir points to main-repo/.git, so its parent is the project root.
+# In the main repo, git-common-dir returns ".git", so we fall back to CWD.
+GIT_COMMON=$(git rev-parse --git-common-dir 2>/dev/null) || exit 0
+if [ "$GIT_COMMON" = ".git" ]; then
+  PROJECT_ROOT="$CWD"
+else
+  # git-common-dir returns absolute path like /path/to/main-repo/.git
+  PROJECT_ROOT=$(cd "$GIT_COMMON/.." && pwd)
+fi
+
+ACTIVE_TICKET_FILE="$PROJECT_ROOT/.claude/.active-ticket"
 CURRENT=$(cat "$ACTIVE_TICKET_FILE" 2>/dev/null | tr -d '[:space:]') || true
 
 # Only write if value changed

@@ -8,6 +8,10 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Fixed
+- **Local cost tracking in worktree scenarios**: `detect-ticket-post.sh` and `on-session-end.sh` now resolve the main project root via `git rev-parse --git-common-dir` instead of using the Bash event CWD directly — fixes `.active-ticket` being written to worktree dir while `on-session-end` reads from project root
+- **Model ID recognition for cost calculation**: Added `claude-opus-4-6` and `claude-sonnet-4-6` to pricing tables in `calculate-session-cost.sh` and `pipeline/lib/cost.ts` — sessions using current model IDs are now correctly matched instead of falling through to the fallback
+
 ### Added
 - **VPS provisioning script** (`scripts/provision-pipeline.sh`): One-command setup of isolated pipeline instances on Hostinger VPS — creates Docker Compose stack (pipeline-server + Bugsink + Dozzle), auto-allocates ports, extends shared Caddy config with HTTPS, generates pipeline key, and includes full rollback on failure
 - **Preview URL as ticket comment**: After a successful preview deploy, the pipeline now posts a comment (`type: "preview"`) to the ticket via the Board Comments API. The Board's upsert dedup ensures re-deploys overwrite the existing preview comment instead of creating duplicates. Implemented in both `pipeline/run.ts` (VPS mode) and `commands/develop.md` (local mode via `post-comment.sh`)

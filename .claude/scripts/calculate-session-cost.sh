@@ -34,8 +34,11 @@ let outputTokens = 0;
 let detectedModel = null;
 
 // Model pricing (must match pipeline/lib/cost.ts)
+// Keys: exact model IDs as reported by Claude Code sessions
 const modelPricing = {
+  'claude-opus-4-6':              { input: 0.015, output: 0.075 },
   'claude-opus-4-20250514':       { input: 0.015, output: 0.075 },
+  'claude-sonnet-4-6':            { input: 0.003, output: 0.015 },
   'claude-sonnet-4-20250514':     { input: 0.003, output: 0.015 },
   'claude-haiku-4-5-20251001':    { input: 0.0008, output: 0.004 },
 };
@@ -64,7 +67,7 @@ if (inputTokens === 0 && outputTokens === 0) {
 }
 
 // Use detected model pricing, fall back to Opus if unknown
-const finalModel = detectedModel || 'claude-opus-4-20250514';
+const finalModel = detectedModel || 'claude-opus-4-6';
 const pricing = modelPricing[finalModel];
 const costUsd = (inputTokens / 1000) * pricing.input + (outputTokens / 1000) * pricing.output;
 
