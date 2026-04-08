@@ -426,11 +426,11 @@ UPDATE public.tickets SET status = 'in_review', review_url = '$REVIEW_URL' WHERE
 
 Der PR bleibt offen bis der User ihn freigibt (via `/ship` oder "passt").
 
-### 9f. Preview URL (Vercel oder Shopify)
+### 9f. Preview URL (Vercel, Shopify oder Coolify)
 
 **Nur ausführen wenn `hosting.provider` gesetzt ist.** Die Scripts prüfen selbst ob ein Hosting-Provider konfiguriert ist und exiten graceful wenn nicht. Bei nicht gesetztem `hosting`-Feld wird dieser gesamte Schritt übersprungen — kein API-Call, kein Warten.
 
-**WICHTIG:** Die Preview-URL MUSS eine Deployment-URL sein (z.B. `https://<project>-<hash>.vercel.app` oder `https://<store>.myshopify.com/?preview_theme_id=...`). NIEMALS einen GitHub-Link, PR-URL oder Repository-URL als `preview_url` setzen. Das `preview_url`-Feld ist ausschließlich für die live deployete Vorschau.
+**WICHTIG:** Die Preview-URL MUSS eine Deployment-URL sein (z.B. `https://<project>-<hash>.vercel.app`, `https://<store>.myshopify.com/?preview_theme_id=...` oder `https://<app>.coolify-domain.tld`). NIEMALS einen GitHub-Link, PR-URL oder Repository-URL als `preview_url` setzen. Das `preview_url`-Feld ist ausschließlich für die live deployete Vorschau.
 
 ```bash
 # Read hosting provider from project.json (supports object and legacy string format)
@@ -456,6 +456,8 @@ if [ "$HOSTING_PROVIDER" = "shopify" ]; then
   PREVIEW_URL=$(bash .claude/scripts/shopify-dev.sh start "T-${N}" "${TITLE}")
 elif [ "$HOSTING_PROVIDER" = "vercel" ]; then
   PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)
+elif [ "$HOSTING_PROVIDER" = "coolify" ]; then
+  PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 60)
 else
   # No hosting provider configured — skip preview URL entirely
   PREVIEW_URL=""
@@ -487,7 +489,7 @@ Ausgabe:
 - `✓ preview — kein Deployment gefunden, übersprungen` (falls Deployment-Script keine URL lieferte)
 - `✓ preview — übersprungen (kein Preview-Deployment konfiguriert)` (falls kein Hosting-Provider gesetzt)
 
-**Kein Fehler wenn keine URL gefunden wird.** Die Scripts exiten immer mit Code 0. Projekte ohne Vercel- oder Shopify-Integration überspringen diesen Schritt automatisch. **Keine internen Details (Provider-Namen, Script-Pfade, Implementierungshinweise) in der Ausgabe.**
+**Kein Fehler wenn keine URL gefunden wird.** Die Scripts exiten immer mit Code 0. Projekte ohne Vercel-, Shopify- oder Coolify-Integration überspringen diesen Schritt automatisch. **Keine internen Details (Provider-Namen, Script-Pfade, Implementierungshinweise) in der Ausgabe.**
 
 ### 10. Automated QA
 
@@ -500,7 +502,7 @@ Ausgabe: `▶ qa-auto — Automatisierte QA ({qa_tier} tier)`
 
 | Tier | Was passiert |
 |------|-------------|
-| **full** | Build + Tests + Playwright Smoke Tests gegen Preview URL (falls `$PREVIEW_URL` aus Schritt 9f vorhanden — egal ob Vercel oder Shopify) |
+| **full** | Build + Tests + Playwright Smoke Tests gegen Preview URL (falls `$PREVIEW_URL` aus Schritt 9f vorhanden — egal ob Vercel, Shopify oder Coolify) |
 | **light** | Build + Tests (falls konfiguriert) |
 | **skip** | Nur Build-Check |
 
