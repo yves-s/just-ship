@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Added
+- **Automated Code Review Agent**: New step 6.5 in `/develop` flow between Build-Check and QA — a `code-review` agent reviews the diff against main for code quality, patterns, edge cases, error handling, performance and security smells, then fixes issues directly as commits instead of leaving comments
+
 ### Fixed
 - **Local cost tracking in worktree scenarios**: `detect-ticket-post.sh` and `on-session-end.sh` now resolve the main project root via `git rev-parse --git-common-dir` instead of using the Bash event CWD directly — fixes `.active-ticket` being written to worktree dir while `on-session-end` reads from project root
 - **Model ID recognition for cost calculation**: Added `claude-opus-4-6` and `claude-sonnet-4-6` to pricing tables in `calculate-session-cost.sh` and `pipeline/lib/cost.ts` — sessions using current model IDs are now correctly matched instead of falling through to the fallback
