@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Added
+- **Coolify preview URL support in /develop**: Step 9f now includes a `coolify` branch that polls the Coolify Deployments API via `get-preview-url.sh` (60s timeout) and writes the application FQDN as preview URL to the ticket
+
 ### Fixed
 - **Permission prompts in local pipeline runs**: Broadened `PermissionRequest` hook matcher from `Write(.claude/**)|Edit(.claude/**)` to `Write(**)|Edit(**)`, preventing permission dialogs for Write/Edit operations in worktrees during local runs
 
