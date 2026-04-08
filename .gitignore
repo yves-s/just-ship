@@ -61,6 +61,7 @@ scripts/*
 !scripts/pipeline-smoke-test.sh
 !scripts/pipeline-vps-test.sh
 !scripts/detect-shopify.sh
+!scripts/provision-pipeline.sh
 .worktrees/
 
 # Git worktrees

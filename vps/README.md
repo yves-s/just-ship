@@ -41,9 +41,28 @@ Use the `/just-ship-vps` command in Claude Code. It handles everything:
 | 2 | SSH key auth | `ssh-copy-id root@<IP>` |
 | 3 | GitHub Token | https://github.com/settings/tokens/new → scopes: `repo` + `workflow` |
 
+### Provisioning New Pipeline Instances
+
+Provision an isolated pipeline instance for a customer on an existing VPS:
+
+```bash
+bash scripts/provision-pipeline.sh \
+  --name kunde-xyz \
+  --domain kunde-xyz.pipeline.just-ship.io \
+  --vps 187.124.9.221
+```
+
+Each instance gets its own Docker Compose stack (pipeline-server + Bugsink + Dozzle), unique port range, and pipeline key. The shared Caddy instance routes the domain to the new stack.
+
+**Prerequisites:** DNS A-record for the domain must point to the VPS IP before running the script. The VPS must have the base stack (Caddy + global `.env`) already running.
+
+**Optional flags:**
+- `--ssh-key <path>` — SSH key path (default: `~/.ssh/id_rsa`)
+- `--image-tag <tag>` — Docker image tag (default: `latest`)
+
 ### Connecting Projects
 
-After VPS setup, connect individual projects. The command copies local env vars, clones the repo, and registers the project in the server config.
+After VPS setup (or instance provisioning), connect individual projects. The command copies local env vars, clones the repo, and registers the project in the server config.
 
 ## Files
 

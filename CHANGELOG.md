@@ -9,6 +9,7 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 ## [Unreleased]
 
 ### Added
+- **VPS provisioning script** (`scripts/provision-pipeline.sh`): One-command setup of isolated pipeline instances on Hostinger VPS — creates Docker Compose stack (pipeline-server + Bugsink + Dozzle), auto-allocates ports, extends shared Caddy config with HTTPS, generates pipeline key, and includes full rollback on failure
 - **Sparring skill for strategic discussions**: New `skills/sparring.md` with automatic domain triage — recognizes which experts (CTO, Design Lead, UX Lead, etc.) to bring to the table based on topic signals. CLAUDE.md "Durchdenken" intent now references the sparring skill instead of ad-hoc behavior
 - **Shopify App deploy in /ship**: After merge, `/ship` runs `shopify app deploy --force` for `variant: "remix"` projects — deploys extensions (Theme App Extensions, Checkout UI, Functions) and app config to Shopify. Retry on transient errors, non-blocking on failure with manual fallback hint
 - **shopify-app-deploy.sh**: New script handling Shopify App deployment with variant detection, retry logic (exit 1 → retry, exit >1 → abort), and `.env`-based auth (`SHOPIFY_CLI_PARTNERS_TOKEN`)
