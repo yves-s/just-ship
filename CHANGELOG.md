@@ -9,6 +9,8 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 ## [Unreleased]
 
 ### Added
+- **Local cost tracking**: SessionEnd hook now reads token usage from Claude Code session JSONL files and writes `total_tokens` + `estimated_cost` to the Board ticket — costs accumulate across multiple sessions per ticket
+- **Session cost calculator**: New `calculate-session-cost.sh` script parses Claude Code session data, detects model (Opus/Sonnet/Haiku), and calculates estimated USD cost using the same pricing as the VPS pipeline
 - **Coolify CLI wrapper**: New `coolify-api.sh` script for autonomous Coolify management — supports CRUD operations, deployment triggers, status checks, app logs, and app listing. Token stored securely in `~/.just-ship/config.json`, URL read from `project.json`
 - **VPS config sync on deploy**: `just-ship-updater.sh` now syncs `project.json` from `origin/main` after each project update, preventing config drift between local and VPS
 - **Container startup validation**: `entrypoint.sh` validates all project configs at container start — checks for `project.json` presence, required pipeline fields, and logs hosting provider per project
