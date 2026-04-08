@@ -53,6 +53,9 @@ fi
 # ---------------------------------------------------------------------------
 STORE=$(node -e "process.stdout.write(require('$PROJECT_ROOT/project.json').shopify?.store || '')" 2>/dev/null || echo "")
 
+# Read variant from project.json
+VARIANT=$(node -e "process.stdout.write(require('$PROJECT_ROOT/project.json').stack?.variant || '')" 2>/dev/null || echo "")
+
 # ---------------------------------------------------------------------------
 # Required checks
 # ---------------------------------------------------------------------------
@@ -81,30 +84,79 @@ else
   ERRORS=$((ERRORS + 1))
 fi
 
-# 4. shopify.store in project.json
-if [ -z "$STORE" ]; then
-  echo "ERROR: shopify.store not set in project.json. Add: { \"shopify\": { \"store\": \"your-store.myshopify.com\" } }"
-  ERRORS=$((ERRORS + 1))
-elif echo "$STORE" | grep -qE '\.myshopify\.com$'; then
-  echo "OK: Store $STORE"
-else
-  echo "ERROR: shopify.store \"$STORE\" does not match *.myshopify.com pattern"
-  ERRORS=$((ERRORS + 1))
-fi
+if [ "$VARIANT" = "remix" ]; then
+  # --- App-specific checks ---
 
-# 5. Shopify Auth
-if [ -n "${SHOPIFY_CLI_THEME_TOKEN:-}" ]; then
-  echo "OK: Shopify auth via SHOPIFY_CLI_THEME_TOKEN"
-elif [ -n "$STORE" ]; then
-  if shopify theme list --store="$STORE" >/dev/null 2>&1; then
-    echo "OK: Shopify auth via CLI session"
+  # 4. shopify.app.toml exists
+  if [ -f "$PROJECT_ROOT/shopify.app.toml" ]; then
+    echo "OK: shopify.app.toml found"
   else
-    echo "ERROR: Shopify not authenticated. Set SHOPIFY_CLI_THEME_TOKEN or run \`shopify auth login --store=$STORE\`"
+    echo "ERROR: shopify.app.toml not found in project root. This is required for Shopify apps."
     ERRORS=$((ERRORS + 1))
   fi
+
+  # 5. node_modules installed
+  if [ -d "$PROJECT_ROOT/node_modules" ]; then
+    echo "OK: node_modules installed"
+  else
+    echo "ERROR: node_modules not found. Run 'npm install' first."
+    ERRORS=$((ERRORS + 1))
+  fi
+
+  # 6. .env with SHOPIFY_API_KEY
+  if [ -f "$PROJECT_ROOT/.env" ] && grep -q 'SHOPIFY_API_KEY' "$PROJECT_ROOT/.env"; then
+    echo "OK: .env contains SHOPIFY_API_KEY"
+  elif [ -f "$PROJECT_ROOT/.env" ]; then
+    echo "ERROR: .env exists but missing SHOPIFY_API_KEY. Add SHOPIFY_API_KEY=your_key to .env"
+    ERRORS=$((ERRORS + 1))
+  else
+    echo "ERROR: .env file not found. Create .env with SHOPIFY_API_KEY=your_key"
+    ERRORS=$((ERRORS + 1))
+  fi
+
+  # 7. Generate .env.example if not present
+  if [ ! -f "$PROJECT_ROOT/.env.example" ]; then
+    cat > "$PROJECT_ROOT/.env.example" <<'ENVEOF'
+SHOPIFY_API_KEY=
+SHOPIFY_API_SECRET=
+SHOPIFY_APP_URL=
+SCOPES=
+ENVEOF
+    echo "OK: Generated .env.example with standard Shopify App vars"
+  fi
+
+  # Dev server hint
+  echo ""
+  echo "NOTE: Run \`shopify app dev\` in a separate terminal to test your changes."
+
 else
-  echo "ERROR: Cannot check Shopify auth without shopify.store in project.json"
-  ERRORS=$((ERRORS + 1))
+  # --- Theme-specific checks (existing behavior) ---
+
+  # 4. shopify.store in project.json
+  if [ -z "$STORE" ]; then
+    echo "ERROR: shopify.store not set in project.json. Add: { \"shopify\": { \"store\": \"your-store.myshopify.com\" } }"
+    ERRORS=$((ERRORS + 1))
+  elif echo "$STORE" | grep -qE '\.myshopify\.com$'; then
+    echo "OK: Store $STORE"
+  else
+    echo "ERROR: shopify.store \"$STORE\" does not match *.myshopify.com pattern"
+    ERRORS=$((ERRORS + 1))
+  fi
+
+  # 5. Shopify Auth
+  if [ -n "${SHOPIFY_CLI_THEME_TOKEN:-}" ]; then
+    echo "OK: Shopify auth via SHOPIFY_CLI_THEME_TOKEN"
+  elif [ -n "$STORE" ]; then
+    if shopify theme list --store="$STORE" >/dev/null 2>&1; then
+      echo "OK: Shopify auth via CLI session"
+    else
+      echo "ERROR: Shopify not authenticated. Set SHOPIFY_CLI_THEME_TOKEN or run \`shopify auth login --store=$STORE\`"
+      ERRORS=$((ERRORS + 1))
+    fi
+  else
+    echo "ERROR: Cannot check Shopify auth without shopify.store in project.json"
+    ERRORS=$((ERRORS + 1))
+  fi
 fi
 
 # ---------------------------------------------------------------------------

@@ -12,6 +12,10 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 - **Permission prompts in local pipeline runs**: Broadened `PermissionRequest` hook matcher from `Write(.claude/**)|Edit(.claude/**)` to `Write(**)|Edit(**)`, preventing permission dialogs for Write/Edit operations in worktrees during local runs
 
 ### Added
+- **Shopify App variant verification**: `verify-commands.ts` now supports `variant: "remix"` — adds `npm run build` (blocking), optional ESLint and TypeScript checks (advisory) based on config file detection
+- **Shopify App environment checks**: `shopify-env-check.sh` detects app vs theme variant and runs appropriate checks — apps verify `shopify.app.toml`, `node_modules`, `.env` with `SHOPIFY_API_KEY`; themes keep existing store URL + auth checks
+- **Shopify App .env.example generation**: First `/develop` in a Shopify App project auto-generates `.env.example` with standard vars (SHOPIFY_API_KEY, SHOPIFY_API_SECRET, SHOPIFY_APP_URL, SCOPES)
+- **Shopify App dev hint**: Remix variant env-check outputs a note to run `shopify app dev` in a separate terminal
 - **Local cost tracking**: SessionEnd hook now reads token usage from Claude Code session JSONL files and writes `total_tokens` + `estimated_cost` to the Board ticket — costs accumulate across multiple sessions per ticket
 - **Session cost calculator**: New `calculate-session-cost.sh` script parses Claude Code session data, detects model (Opus/Sonnet/Haiku), and calculates estimated USD cost using the same pricing as the VPS pipeline
 - **Coolify CLI wrapper**: New `coolify-api.sh` script for autonomous Coolify management — supports CRUD operations, deployment triggers, status checks, app logs, and app listing. Token stored securely in `~/.just-ship/config.json`, URL read from `project.json`
