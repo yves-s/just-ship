@@ -177,5 +177,6 @@ export async function postPipelineSummary(
     input_tokens: totals.inputTokens,
     output_tokens: totals.outputTokens,
     estimated_cost_usd: totals.estimatedCostUsd,
+    metadata: { tokens_used: totals.inputTokens + totals.outputTokens },
   });
 }
