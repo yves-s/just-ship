@@ -1,0 +1,9 @@
+<svg width="600" height="600" viewBox="0 0 150 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Sora:wght@800&amp;display=swap');</style>
+  </defs>
+  <circle cx="75" cy="52" r="30" fill="#3b82f6"/>
+  <path d="M72 32.5L72 62.5L57 62.5Z" fill="#fff" opacity="0.35"/>
+  <path d="M75 40L75 62.5L93 62.5Z" fill="#fff"/>
+  <text x="75" y="118" font-family="'Sora', sans-serif" font-weight="800" font-size="28" letter-spacing="-1.1" text-anchor="middle"><tspan fill="#0a0b10">just</tspan><tspan fill="#3b82f6">ship</tspan></text>
+</svg>
