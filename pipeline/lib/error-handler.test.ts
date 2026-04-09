@@ -125,14 +125,26 @@ describe("executeAutoHeal", () => {
 });
 
 describe("triageWithAI", () => {
-  it("returns escalate when no AI available", async () => {
+  it("delegates to classifyError for unclassified errors", async () => {
     const { triageWithAI } = await import("./error-handler.ts");
     const result = await triageWithAI({
       error: new Error("Something broke"),
       ticketId: "123",
       exitCode: 1,
       timedOut: false,
-    }, { skipAI: true });
+    });
     expect(result.action).toBe("escalate");
+    expect(result.reason).toContain("unclassified error");
+  });
+
+  it("delegates to classifyError for known patterns", async () => {
+    const { triageWithAI } = await import("./error-handler.ts");
+    const result = await triageWithAI({
+      error: new Error("timeout exceeded"),
+      ticketId: "456",
+      exitCode: 1,
+      timedOut: true,
+    });
+    expect(result.action).toBe("recovery");
   });
 });
