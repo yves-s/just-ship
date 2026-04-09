@@ -31,16 +31,18 @@ const lines = fs.readFileSync('${SESSION_FILE}', 'utf-8').split('\n').filter(Boo
 
 let inputTokens = 0;
 let outputTokens = 0;
+let cacheReadTokens = 0;
+let cacheCreateTokens = 0;
 let detectedModel = null;
 
-// Model pricing (must match pipeline/lib/cost.ts)
-// Keys: exact model IDs as reported by Claude Code sessions
+// Model pricing per 1K tokens (must match pipeline/lib/cost.ts)
+// Cache read = 90% discount on input, cache create = 25% surcharge on input
 const modelPricing = {
-  'claude-opus-4-6':              { input: 0.015, output: 0.075 },
-  'claude-opus-4-20250514':       { input: 0.015, output: 0.075 },
-  'claude-sonnet-4-6':            { input: 0.003, output: 0.015 },
-  'claude-sonnet-4-20250514':     { input: 0.003, output: 0.015 },
-  'claude-haiku-4-5-20251001':    { input: 0.0008, output: 0.004 },
+  'claude-opus-4-6':              { input: 0.015, cacheRead: 0.0015, cacheCreate: 0.01875, output: 0.075 },
+  'claude-opus-4-20250514':       { input: 0.015, cacheRead: 0.0015, cacheCreate: 0.01875, output: 0.075 },
+  'claude-sonnet-4-6':            { input: 0.003, cacheRead: 0.0003, cacheCreate: 0.00375, output: 0.015 },
+  'claude-sonnet-4-20250514':     { input: 0.003, cacheRead: 0.0003, cacheCreate: 0.00375, output: 0.015 },
+  'claude-haiku-4-5-20251001':    { input: 0.0008, cacheRead: 0.00008, cacheCreate: 0.001, output: 0.004 },
 };
 
 for (const line of lines) {
@@ -48,9 +50,10 @@ for (const line of lines) {
     const obj = JSON.parse(line);
     const usage = obj?.message?.usage;
     if (usage && typeof usage.input_tokens === 'number') {
-      // input_tokens = direct input + cache creation + cache read
-      inputTokens += (usage.input_tokens || 0) + (usage.cache_creation_input_tokens || 0) + (usage.cache_read_input_tokens || 0);
-      outputTokens += (usage.output_tokens || 0);
+      inputTokens += usage.input_tokens || 0;
+      cacheReadTokens += usage.cache_read_input_tokens || 0;
+      cacheCreateTokens += usage.cache_creation_input_tokens || 0;
+      outputTokens += usage.output_tokens || 0;
     }
     // Detect model from first message with valid pricing (typically consistent within a session)
     if (!detectedModel && obj?.message?.model) {
@@ -62,19 +65,25 @@ for (const line of lines) {
   } catch {}
 }
 
-if (inputTokens === 0 && outputTokens === 0) {
+const totalTokens = inputTokens + cacheReadTokens + cacheCreateTokens + outputTokens;
+if (totalTokens === 0) {
   process.exit(0); // No usage data — silent exit
 }
 
 // Use detected model pricing, fall back to Opus if unknown
 const finalModel = detectedModel || 'claude-opus-4-6';
-const pricing = modelPricing[finalModel];
-const costUsd = (inputTokens / 1000) * pricing.input + (outputTokens / 1000) * pricing.output;
+const p = modelPricing[finalModel];
+const costUsd = (inputTokens / 1000) * p.input
+  + (cacheReadTokens / 1000) * p.cacheRead
+  + (cacheCreateTokens / 1000) * p.cacheCreate
+  + (outputTokens / 1000) * p.output;
 
 process.stdout.write(JSON.stringify({
   input_tokens: inputTokens,
+  cache_read_tokens: cacheReadTokens,
+  cache_creation_tokens: cacheCreateTokens,
   output_tokens: outputTokens,
-  total_tokens: inputTokens + outputTokens,
+  total_tokens: totalTokens,
   estimated_cost_usd: parseFloat(costUsd.toFixed(4))
 }));
 " 2>/dev/null || exit 0
