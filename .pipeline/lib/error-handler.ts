@@ -145,22 +145,13 @@ This ticket was automatically created by the pipeline error handler.`;
 }
 
 /**
- * For errors classified as "escalate", optionally run AI triage
- * to determine if the error is actually auto-healable.
- * Uses haiku model for fast, cheap classification.
+ * Triage an error — currently a pass-through to rule-based classification.
+ * AI-based reclassification (e.g. "escalate" → "auto_heal" via haiku model)
+ * will be added when the auto-heal pipeline is ready.
  */
 export async function triageWithAI(
   ctx: ErrorContext,
-  options?: TriageOptions,
+  _options?: TriageOptions,
 ): Promise<ErrorClassification> {
-  // First try rule-based classification
-  const ruleResult = classifyError(ctx);
-  if (ruleResult.action !== "escalate") return ruleResult;
-
-  // If AI is skipped (testing) or no project dir, return escalate
-  if (options?.skipAI || !ctx.projectDir) return ruleResult;
-
-  // TODO: Implement AI triage call when auto-heal pipeline is ready
-  // Will call haiku model with error context to reclassify "escalate" → "auto_heal"
-  return ruleResult;
+  return classifyError(ctx);
 }
