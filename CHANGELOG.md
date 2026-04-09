@@ -15,6 +15,7 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 - **Monitor installer** (`vps/install-monitor.sh`): One-command remote installation via SSH — copies script, installs cron entry, creates logrotate config (7-day retention), verifies execution. Idempotent and follows the same pattern as `provision-pipeline.sh`
 
 ### Fixed
+- **Token-usage not reaching Board**: `postPipelineSummary` now includes `metadata.tokens_used` in the `pipeline_completed` event — fixes `increment_ticket_tokens` RPC never firing because it reads `metadata.tokens_used` while the engine only sent top-level `input_tokens`/`output_tokens`
 - **Local cost tracking in worktree scenarios**: `detect-ticket-post.sh` and `on-session-end.sh` now resolve the main project root via `git rev-parse --git-common-dir` instead of using the Bash event CWD directly — fixes `.active-ticket` being written to worktree dir while `on-session-end` reads from project root
 - **Model ID recognition for cost calculation**: Added `claude-opus-4-6` and `claude-sonnet-4-6` to pricing tables in `calculate-session-cost.sh` and `pipeline/lib/cost.ts` — sessions using current model IDs are now correctly matched instead of falling through to the fallback
 - **VPS provisioning script** (`scripts/provision-pipeline.sh`): One-command setup of isolated pipeline instances on Hostinger VPS — creates Docker Compose stack (pipeline-server + Bugsink + Dozzle), auto-allocates ports, extends shared Caddy config with HTTPS, generates pipeline key, and includes full rollback on failure
