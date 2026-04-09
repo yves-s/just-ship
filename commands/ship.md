@@ -253,9 +253,48 @@ Ausgabe: `✓ worktree — .worktrees/T-{N} aufgeräumt` (falls vorhanden)
 
 Falls kein Worktree existiert: still überspringen.
 
-SOFORT WEITER ZU SCHRITT 6.
+SOFORT WEITER ZU SCHRITT 5c.
 
 **Hinweis:** Schritt 3b (Vercel Preview URL) bleibt unverändert. Für Shopify-Projekte returned das Vercel-Script leer, und die Preview-URL wurde bereits während `/develop` Schritt 9f ins Ticket geschrieben.
+
+### 5c. Token-Tracking (nur wenn Pipeline konfiguriert)
+
+Berechne Session-Kosten und patche sie aufs Ticket. Das muss hier passieren — nicht im SessionEnd-Hook, weil eine Session mehrere Tickets überleben kann.
+
+```bash
+# Finde neueste Session-JSONL für dieses Projekt
+SAFE_CWD=$(echo "$PWD" | sed 's|^/||' | sed 's|/|-|g')
+SESSION_DIR="$HOME/.claude/projects/-${SAFE_CWD}"
+SESSION_FILE=$(ls -t "$SESSION_DIR"/*.jsonl 2>/dev/null | head -1)
+
+if [ -n "$SESSION_FILE" ]; then
+  COST_JSON=$(bash .claude/scripts/calculate-session-cost.sh "$(basename "$SESSION_FILE" .jsonl)" "$PWD" 2>/dev/null || echo "")
+
+  if [ -n "$COST_JSON" ]; then
+    NEW_TOKENS=$(echo "$COST_JSON" | node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).total_tokens || 0))" 2>/dev/null || echo "0")
+    NEW_COST=$(echo "$COST_JSON" | node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).estimated_cost_usd || 0))" 2>/dev/null || echo "0")
+
+    if [ "$NEW_TOKENS" != "0" ]; then
+      EXISTING=$(bash .claude/scripts/board-api.sh get "tickets/{N}" 2>/dev/null || echo "")
+      if [ -n "$EXISTING" ]; then
+        OLD_TOKENS=$(echo "$EXISTING" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); process.stdout.write(String(d.data?.total_tokens || 0))" 2>/dev/null || echo "0")
+        OLD_COST=$(echo "$EXISTING" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); process.stdout.write(String(d.data?.estimated_cost || 0))" 2>/dev/null || echo "0")
+
+        TOTAL_TOKENS=$(node -e "process.stdout.write(String(Number('$OLD_TOKENS') + Number('$NEW_TOKENS')))")
+        TOTAL_COST=$(node -e "process.stdout.write(String(parseFloat((Number('$OLD_COST') + Number('$NEW_COST')).toFixed(4))))")
+
+        bash .claude/scripts/board-api.sh patch "tickets/{N}" "{\"total_tokens\": $TOTAL_TOKENS, \"estimated_cost\": $TOTAL_COST}" >/dev/null 2>&1 || true
+      fi
+    fi
+  fi
+fi
+```
+
+Ausgabe:
+- `✓ tokens — {TOTAL_TOKENS} tokens, ${TOTAL_COST}` (falls Kosten berechnet)
+- Still überspringen falls keine Session-Daten oder kein Pipeline
+
+SOFORT WEITER ZU SCHRITT 6.
 
 ### 6. Pipeline-Status auf "done" (nur wenn konfiguriert)
 
