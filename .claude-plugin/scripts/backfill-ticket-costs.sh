@@ -19,10 +19,10 @@ if [ "${1:-}" = "--dry-run" ]; then
   echo ""
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Resolve board-api.sh path
-BOARD_API="$SCRIPT_DIR/.claude/scripts/board-api.sh"
+# Resolve board-api.sh path — both scripts live in the same directory
+BOARD_API="$SCRIPT_DIR/board-api.sh"
 if [ ! -f "$BOARD_API" ]; then
   echo "ERROR: board-api.sh not found at $BOARD_API"
   exit 1
