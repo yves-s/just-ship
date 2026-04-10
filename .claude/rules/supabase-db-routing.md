@@ -1,3 +1,13 @@
+---
+description: Route queries to the correct Supabase database — Pipeline-DB vs App-DB
+paths:
+  - "**/*supabase*"
+  - "**/*migration*"
+  - "**/*.sql"
+  - "pipeline/**"
+  - "**/rls*"
+---
+
 Two Supabase databases — never mix them up:
 
 - **Pipeline-DB: `wsmnutkobalfrceavpxs`** — Tickets, Workspaces, Projects, task_events (Board/Pipeline)

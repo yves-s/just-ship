@@ -1,3 +1,16 @@
+---
+description: Shopify domain knowledge comes from the MCP server, not local skill files
+paths:
+  - "sections/**"
+  - "snippets/**"
+  - "templates/**"
+  - "layout/**"
+  - "config/**"
+  - "app/**"
+  - "shopify.app.toml"
+  - "**/*.liquid"
+---
+
 When the project contains Shopify theme files (e.g. `sections/`, `snippets/`, `templates/`, `layout/theme.liquid`) or Shopify app files (e.g. `app/`, `shopify.app.toml`, Polaris components), the Shopify AI Toolkit provides all Shopify domain knowledge.
 
 **The Shopify AI Toolkit (`@shopify/dev-mcp`) is configured as an MCP server** during `setup.sh`. It provides:
