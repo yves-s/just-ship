@@ -28,7 +28,6 @@ COPY commands/ /app/commands/
 COPY skills/ /app/skills/
 COPY templates/ /app/templates/
 COPY setup.sh /app/setup.sh
-COPY vps/ /app/vps/
 
 WORKDIR /app
 

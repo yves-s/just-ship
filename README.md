@@ -156,7 +156,7 @@ Every `/develop` run executes a strict 10-step pipeline. No step is optional, no
  5  Implementation       Sub-agents in parallel (data-engineer first if schema changes)
  6  Build Check          Run build commands -- DevOps agent only on failure
  7  Review               QA agent checks acceptance criteria + security
- 8  Docs Check           Auto-update CHANGELOG, README, ARCHITECTURE, VPS docs (see below)
+ 8  Docs Check           Auto-update CHANGELOG, README, ARCHITECTURE docs (see below)
  9  Ship (no merge)      Commit → Push → PR → change summary → status "in_review" → preview URL (Vercel, Shopify, or Coolify)
 10  Automated QA         Build + tests + optional Playwright screenshots, QA report as PR comment
 ```
@@ -177,7 +177,7 @@ Documentation is not a separate task -- it is an automated step in every develop
 | Pipeline, agents, config | `docs/ARCHITECTURE.md` -- affected sections |
 | Architecture structures | `CLAUDE.md` -- architecture section |
 | Commands, agents, skills | `templates/CLAUDE.md` -- template for new projects |
-| VPS, worker, server | `vps/README.md` -- VPS-specific docs |
+| Worker, server | `docs/ARCHITECTURE.md` -- pipeline server section |
 | Workflow, conventions | `CONTRIBUTING.md` -- contributing guidelines |
 
 Docs changes are part of the same commit as the code. No separate PR, no "we'll do it later".
@@ -269,7 +269,7 @@ just-ship/
 │   ├── run.sh                  # Bash wrapper
 │   └── lib/                    # Config, agent loader, skill loader, event hooks, cost tracking
 ├── templates/                  # CLAUDE.md + project.json templates
-├── vps/                        # VPS deployment (systemd, setup script)
+├── vps/                        # Docker build files (Dockerfile + entrypoint — infra in just-ship-ops)
 └── .claude/                    # Claude Code config (hooks, scripts, settings)
 ```
 
@@ -416,7 +416,7 @@ The pipeline is built on the [Claude Agent SDK](https://github.com/anthropics/cl
 
 ### VPS Worker
 
-Runs the pipeline 24/7 on a VPS — polls for tickets, claims them, runs the orchestrator, and creates PRs automatically. See [Autonomous VPS Deployment](#autonomous-vps-deployment) for the full setup overview and **[vps/README.md](vps/README.md)** for the step-by-step guide.
+Runs the pipeline 24/7 on a VPS — polls for tickets, claims them, runs the orchestrator, and creates PRs automatically. See [Autonomous VPS Deployment](#autonomous-vps-deployment) for the full setup overview. VPS infrastructure (Docker-Compose, systemd, setup scripts) lives in the [just-ship-ops](https://github.com/yves-s/just-ship-ops) repository.
 
 ---
 
@@ -496,7 +496,7 @@ Ticket queue --> Worker claims ticket --> Orchestrator runs agents --> PR create
 | **4. Configure environment** | API keys and project env vars go in `/home/claude-dev/.just-ship/env.{project-slug}` |
 | **5. Done** | Press "Develop" on the Board — the VPS picks up the ticket and starts working |
 
-See **[vps/README.md](vps/README.md)** for the complete step-by-step guide with all commands.
+See the [just-ship-ops](https://github.com/yves-s/just-ship-ops) repository for the complete VPS setup guide and infrastructure files.
 
 ### Multi-Project Support
 

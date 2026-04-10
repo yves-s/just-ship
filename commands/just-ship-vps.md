@@ -123,7 +123,7 @@ Warte auf die Antwort des Users und fuehre die gewaehlte Option aus:
 - **Option 1:** Frage nach dem Projekt (Name/Pfad) und fuehre Phase 2 aus.
 - **Option 2:** Fuehre das Update aus:
   ```bash
-  ssh root@<VPS_HOST> "docker pull ghcr.io/yves-s/just-ship/pipeline:latest && cd /home/claude-dev/just-ship && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d pipeline-server"
+  ssh root@<VPS_HOST> "docker pull ghcr.io/yves-s/just-ship/pipeline:latest && cd /home/claude-dev/just-ship-ops && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d pipeline-server"
   ```
   Dann Health-Check und Ergebnis melden.
 - **Option 3:** Zeige Logs und Container-Status:
@@ -263,13 +263,15 @@ ssh root@<IP> "su - claude-dev -c 'echo \"export GH_TOKEN=<github-token>\" >> ~/
 ssh root@<IP> "mkdir -p /home/claude-dev/projects /home/claude-dev/.just-ship && chown -R claude-dev:claude-dev /home/claude-dev"
 ```
 
-### 1.6 Just-Ship Framework klonen
+### 1.6 Repos klonen
 
-Das Repo wird fuer `docker-compose.yml`, `connect-project.sh` und den Updater-Service benoetigt.
+Das Engine-Repo wird fuer `setup.sh --update` auf Projekt-Repos benoetigt.
+Das Ops-Repo wird fuer `docker-compose.yml`, `connect-project.sh` und den Updater-Service benoetigt.
 Der Pipeline-Server selbst kommt als fertiges Image von GHCR — kein Build auf dem VPS.
 
 ```bash
 ssh root@<IP> "su - claude-dev -c 'git clone https://github.com/yves-s/just-ship.git /home/claude-dev/just-ship 2>/dev/null || (cd /home/claude-dev/just-ship && git pull)'"
+ssh root@<IP> "su - claude-dev -c 'git clone https://github.com/yves-s/just-ship-ops.git /home/claude-dev/just-ship-ops 2>/dev/null || (cd /home/claude-dev/just-ship-ops && git pull)'"
 ```
 
 ### 1.7 Globale Env-Datei erstellen
@@ -352,15 +354,15 @@ Das Pipeline-Server-Image wird als fertiges Image von GHCR gepullt — kein Buil
 Ohne HTTPS (Default — startet pipeline-server, bugsink und dozzle, aber NICHT caddy):
 
 ```bash
-ssh root@<IP> "docker pull ghcr.io/yves-s/just-ship/pipeline:latest && cd /home/claude-dev/just-ship && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d pipeline-server bugsink dozzle"
+ssh root@<IP> "docker pull ghcr.io/yves-s/just-ship/pipeline:latest && cd /home/claude-dev/just-ship-ops && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d pipeline-server bugsink dozzle"
 ```
 
-**Hinweis:** Ohne HTTPS/Caddy sind Bugsink und Dozzle nur intern erreichbar (Docker-Netzwerk). Fuer direkten Zugriff temporaer Ports oeffnen: `docker compose -f vps/docker-compose.yml exec -d` oder SSH-Tunnel: `ssh -L 8000:localhost:8000 root@<IP>`.
+**Hinweis:** Ohne HTTPS/Caddy sind Bugsink und Dozzle nur intern erreichbar (Docker-Netzwerk). Fuer direkten Zugriff temporaer Ports oeffnen: `docker compose -f /home/claude-dev/just-ship-ops/vps/docker-compose.yml exec -d` oder SSH-Tunnel: `ssh -L 8000:localhost:8000 root@<IP>`.
 
 Mit HTTPS (falls User eine Domain angegeben hat): Zuerst Caddyfile erstellen, dann alle Services starten:
 
 ```bash
-ssh root@<IP> "cat > /home/claude-dev/just-ship/vps/Caddyfile << 'CADDYEOF'
+ssh root@<IP> "cat > /home/claude-dev/just-ship-ops/vps/Caddyfile << 'CADDYEOF'
 <domain> {
     reverse_proxy pipeline-server:3001
 
@@ -379,15 +381,15 @@ ssh root@<IP> "cat > /home/claude-dev/just-ship/vps/Caddyfile << 'CADDYEOF'
     }
 }
 CADDYEOF
-chown claude-dev:claude-dev /home/claude-dev/just-ship/vps/Caddyfile"
+chown claude-dev:claude-dev /home/claude-dev/just-ship-ops/vps/Caddyfile"
 
-ssh root@<IP> "docker pull ghcr.io/yves-s/just-ship/pipeline:latest && cd /home/claude-dev/just-ship && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d"
+ssh root@<IP> "docker pull ghcr.io/yves-s/just-ship/pipeline:latest && cd /home/claude-dev/just-ship-ops && CLAUDE_UID=\$(id -u claude-dev) CLAUDE_GID=\$(id -g claude-dev) docker compose -f vps/docker-compose.yml up -d"
 ```
 
 **Caddy-Basicauth-Hash generieren und .env patchen** (nach dem ersten `docker compose up`, damit der Caddy-Container verfuegbar ist):
 
 ```bash
-CADDY_HASH=$(ssh root@<IP> "docker compose -f /home/claude-dev/just-ship/vps/docker-compose.yml exec -T caddy caddy hash-password --plaintext '$MONITORING_PW'" 2>/dev/null | tr -d '\r\n')
+CADDY_HASH=$(ssh root@<IP> "docker compose -f /home/claude-dev/just-ship-ops/vps/docker-compose.yml exec -T caddy caddy hash-password --plaintext '$MONITORING_PW'" 2>/dev/null | tr -d '\r\n')
 ssh root@<IP> "sed -i 's|MONITORING_HASH=placeholder-wird-in-1.9-ersetzt|MONITORING_HASH='\"$CADDY_HASH\"'|' /home/claude-dev/.env"
 ```
 
@@ -399,7 +401,7 @@ ssh root@<IP> "apt-get install -y apache2-utils -qq && CADDY_HASH=\$(htpasswd -n
 
 Nach dem Hash-Update die Container neu starten damit Caddy die Env-Var liest:
 ```bash
-ssh root@<IP> "cd /home/claude-dev/just-ship && docker compose -f vps/docker-compose.yml up -d"
+ssh root@<IP> "cd /home/claude-dev/just-ship-ops && docker compose -f vps/docker-compose.yml up -d"
 ```
 
 ### 1.10 Verifizieren
@@ -439,7 +441,7 @@ VPS ist eingerichtet!
 - Monitoring: Bugsink + Dozzle laufen (nur intern erreichbar ohne HTTPS/Caddy)
 - Status: Bereit fuer Projekte
 
-HTTPS ist nicht aktiv. Fuer HTTPS siehe vps/README.md → "HTTPS einrichten".
+HTTPS ist nicht aktiv. Fuer HTTPS siehe just-ship-ops/vps/README.md → "HTTPS einrichten".
 Ohne HTTPS sind Bugsink (/errors/) und Dozzle (/logs/) nur per SSH-Tunnel erreichbar.
 
 **Naechster Schritt: Projekt verbinden.**
@@ -468,7 +470,7 @@ Sag mir einfach den Namen oder Pfad — z.B. "mein-projekt" oder "~/Developer/me
 
 ## Phase 2: Projekt verbinden
 
-Wird pro Projekt ausgefuehrt. **Verwende IMMER das Script** `vps/connect-project.sh` — KEINE manuellen Schritte.
+Wird pro Projekt ausgefuehrt. **Verwende IMMER das Script** aus dem Ops-Repo (`just-ship-ops/vps/connect-project.sh`) — KEINE manuellen Schritte.
 
 ### 2.1 Parameter sammeln
 
@@ -487,6 +489,11 @@ Optional (fuer Workspace-Config, falls noch nicht gesetzt):
 ```bash
 VPS_HOST=$(echo "<vps_url>" | sed 's|https\?://||;s|/.*||')
 
+# Ops-Repo Pfad (VPS-Infrastruktur lebt dort)
+# Suche relativ zum Engine-Repo oder im gleichen Workspace
+OPS_REPO=$(find "$(dirname "$(pwd)")" -maxdepth 2 -name "just-ship-ops" -type d 2>/dev/null | head -1)
+if [ -z "$OPS_REPO" ]; then echo "ERROR: just-ship-ops repo nicht gefunden"; exit 1; fi
+
 # Repo-URL aus git remote
 REPO=$(cd <project-path> && git remote get-url origin | sed 's|.*github.com[:/]||;s|\.git$||')
 
@@ -499,7 +506,7 @@ WS_JSON=$(bash .claude/scripts/write-config.sh read-workspace --id "$WS_ID" 2>/d
 BOARD_URL=$(echo "$WS_JSON" | node -e "try{process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).board_url)}catch{}" 2>/dev/null)
 BOARD_API_KEY=$(echo "$WS_JSON" | node -e "try{process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).api_key)}catch{}" 2>/dev/null)
 
-bash vps/connect-project.sh \
+bash "$OPS_REPO/vps/connect-project.sh" \
   --host "$VPS_HOST" \
   --project-path "<project-path>" \
   --repo "$REPO" \

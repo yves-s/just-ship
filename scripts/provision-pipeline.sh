@@ -64,8 +64,8 @@ ssh_run() { ssh $SSH_OPTS "root@$VPS" "$@"; }
 
 # --- Paths ---
 INSTANCE_DIR="/home/claude-dev/pipelines/${NAME}"
-CADDY_FILE="/home/claude-dev/just-ship/vps/Caddyfile"
-CADDY_BACKUP="/home/claude-dev/just-ship/vps/Caddyfile.bak.$$"
+CADDY_FILE="/home/claude-dev/just-ship-ops/vps/Caddyfile"
+CADDY_BACKUP="/home/claude-dev/just-ship-ops/vps/Caddyfile.bak.$$"
 
 # --- Rollback state tracking ---
 CADDY_MODIFIED=0
@@ -139,6 +139,14 @@ ok "Docker: $(ssh_run 'docker --version' 2>/dev/null | awk '{print $3}' | tr -d 
 ssh_run "docker ps --filter name=caddy --filter status=running -q | grep -q ." >/dev/null 2>&1 \
   || fail "Caddy is not running on the VPS. Start the base stack first."
 ok "Caddy running"
+
+# just-ship-ops repo cloned and Caddyfile present?
+ssh_run "test -d /home/claude-dev/just-ship-ops" \
+  || fail "just-ship-ops repo not found at /home/claude-dev/just-ship-ops. Clone it first:
+  ssh root@${VPS} \"su - claude-dev -c 'git clone https://github.com/yves-s/just-ship-ops.git /home/claude-dev/just-ship-ops'\""
+ssh_run "test -f ${CADDY_FILE}" \
+  || fail "Caddyfile not found at ${CADDY_FILE}. Ensure just-ship-ops is fully cloned and the base stack has been set up."
+ok "just-ship-ops cloned and Caddyfile present"
 
 # Global .env present with required keys?
 ssh_run "test -f /home/claude-dev/.env" \
@@ -519,8 +527,8 @@ echo "    Logs:         https://${DOMAIN}/logs/"
 echo ""
 echo "  Instance dir:   ${INSTANCE_DIR}"
 echo ""
-echo "  Connect a project:"
-echo "    bash vps/connect-project.sh \\"
+echo "  Connect a project (run from the just-ship engine repo):"
+echo "    bash ../just-ship-ops/vps/connect-project.sh \\"
 echo "      --host ${VPS} \\"
 echo "      --project-path <local-project-path> \\"
 echo "      --repo <owner/repo> \\"
