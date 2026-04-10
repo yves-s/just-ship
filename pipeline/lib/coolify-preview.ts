@@ -1,8 +1,13 @@
 /**
  * Coolify Preview URL Poller
  *
- * Polls the Coolify Deployments API until a deployment matching a given
- * branch reaches "finished" state. Used by the QA pipeline to obtain a testable URL.
+ * Polls the Coolify v4 Deployments API until a deployment matching a given
+ * application reaches "finished" state. Used by the QA pipeline to obtain a testable URL.
+ *
+ * Coolify v4 Beta does NOT support `GET /api/v1/applications/{uuid}/deployments`.
+ * Instead we use:
+ *   - `GET /api/v1/applications/{uuid}` for app details (fqdn, name, preview_url_template)
+ *   - `GET /api/v1/deployments` for all recent deployments, filtered by application_name
  */
 
 import { sleep } from "./utils.ts";
@@ -14,14 +19,39 @@ export interface CoolifyConfig {
   coolifyMaxWaitMs: number;
 }
 
+/** Shape returned by GET /api/v1/applications/{uuid} */
+interface CoolifyApp {
+  uuid: string;
+  name: string;
+  fqdn?: string;
+  preview_url_template?: string;
+}
+
+/** Shape returned by GET /api/v1/deployments (array items) */
 interface CoolifyDeployment {
   id: number;
-  uuid: string;
+  application_id: string;
+  application_name: string;
+  deployment_uuid: string;
   status: string; // "queued" | "in_progress" | "finished" | "failed" | "cancelled"
-  commit_sha?: string;
-  commit_message?: string;
-  branch?: string;
+  pull_request_id: number;
   created_at: string;
+}
+
+/**
+ * Build the preview URL for a deployment.
+ *
+ * For PR deployments (pull_request_id > 0), constructs `https://{pr_id}.{domain}`
+ * using Coolify's preview URL template pattern.
+ * For non-PR deployments, returns the production FQDN as-is.
+ */
+function buildPreviewUrl(fqdn: string, pullRequestId: number): string {
+  if (pullRequestId > 0) {
+    // Strip protocol to get bare domain: "https://board.just-ship.io" -> "board.just-ship.io"
+    const domain = fqdn.replace(/^https?:\/\//, "");
+    return `https://${pullRequestId}.${domain}`;
+  }
+  return fqdn;
 }
 
 /**
@@ -56,7 +86,7 @@ export async function waitForCoolifyPreview(
 
   while (Date.now() - startTime < config.coolifyMaxWaitMs) {
     try {
-      // Get application details for the FQDN
+      // Step 1: Get application details for FQDN, name, and preview_url_template
       const appRes = await fetch(
         `${baseUrl}/api/v1/applications/${config.coolifyAppUuid}`,
         {
@@ -73,11 +103,17 @@ export async function waitForCoolifyPreview(
         continue;
       }
 
-      const app = (await appRes.json()) as { fqdn?: string; uuid: string };
+      const app = (await appRes.json()) as CoolifyApp;
 
-      // Get recent deployments
+      if (!app.name) {
+        console.error("[coolify-preview] App has no name field -- retrying");
+        await sleep(config.coolifyPollIntervalMs);
+        continue;
+      }
+
+      // Step 2: Fetch all deployments and filter by application_name
       const deploymentsRes = await fetch(
-        `${baseUrl}/api/v1/applications/${config.coolifyAppUuid}/deployments`,
+        `${baseUrl}/api/v1/deployments`,
         {
           headers: { Authorization: `Bearer ${token}` },
           signal: AbortSignal.timeout(10_000),
@@ -92,15 +128,21 @@ export async function waitForCoolifyPreview(
         continue;
       }
 
-      const deployments = (await deploymentsRes.json()) as CoolifyDeployment[];
+      const allDeployments = (await deploymentsRes.json()) as CoolifyDeployment[];
 
-      // Find the most recent deployment (Coolify deploys on push, so the latest is ours)
-      const latest = deployments[0];
+      // Filter to deployments for our application
+      const appDeployments = allDeployments.filter(
+        (d) => d.application_name === app.name,
+      );
+
+      // Take the most recent deployment (API returns newest first)
+      const latest = appDeployments[0];
 
       if (latest) {
         if (latest.status === "finished") {
-          const previewUrl = app.fqdn || null;
-          if (previewUrl) {
+          const fqdn = app.fqdn || null;
+          if (fqdn) {
+            const previewUrl = buildPreviewUrl(fqdn, latest.pull_request_id);
             console.error(`[coolify-preview] Deployment ready: ${previewUrl}`);
             return previewUrl;
           }
@@ -110,7 +152,7 @@ export async function waitForCoolifyPreview(
 
         if (latest.status === "failed" || latest.status === "cancelled") {
           console.error(
-            `[coolify-preview] Deployment ${latest.status} (uuid: ${latest.uuid}) -- aborting`,
+            `[coolify-preview] Deployment ${latest.status} (uuid: ${latest.deployment_uuid}) -- aborting`,
           );
           return null;
         }
@@ -122,7 +164,7 @@ export async function waitForCoolifyPreview(
       } else {
         const elapsed = Math.round((Date.now() - startTime) / 1000);
         console.error(
-          `[coolify-preview] No deployments found (${elapsed}s elapsed) -- polling`,
+          `[coolify-preview] No deployments found for "${app.name}" (${elapsed}s elapsed) -- polling`,
         );
       }
     } catch (err) {

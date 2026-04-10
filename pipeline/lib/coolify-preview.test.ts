@@ -1,90 +1,331 @@
 /**
- * Tests for Coolify Preview URL Poller
+ * Tests for Coolify Preview URL Poller (Coolify v4 Beta API)
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { waitForCoolifyPreview, type CoolifyConfig } from "./coolify-preview.js";
 
+const BASE_CONFIG: CoolifyConfig = {
+  coolifyUrl: "https://coolify.example.com",
+  coolifyAppUuid: "v7ivmdiih5421n863927r8o0",
+  coolifyPollIntervalMs: 50,
+  coolifyMaxWaitMs: 300,
+};
+
+/** Helper to create a mock fetch that routes by URL pattern */
+function mockFetch(handlers: Record<string, () => Promise<Response>>) {
+  return vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
+    const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+    for (const [pattern, handler] of Object.entries(handlers)) {
+      if (urlStr.includes(pattern)) {
+        return handler();
+      }
+    }
+    return new Response("Not found", { status: 404 });
+  });
+}
+
+/** Helper to create a JSON Response */
+function jsonResponse(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 describe("coolify-preview", () => {
+  const originalFetch = global.fetch;
+
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.COOLIFY_API_TOKEN;
   });
 
-  describe("waitForCoolifyPreview", () => {
-    it("returns null when COOLIFY_API_TOKEN is not set", async () => {
-      const config: CoolifyConfig = {
-        coolifyUrl: "https://coolify.example.com",
-        coolifyAppUuid: "app123",
-        coolifyPollIntervalMs: 100,
-        coolifyMaxWaitMs: 500,
-      };
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
 
-      const result = await waitForCoolifyPreview("main", config);
+  describe("waitForCoolifyPreview — precondition checks", () => {
+    it("returns null when COOLIFY_API_TOKEN is not set", async () => {
+      const result = await waitForCoolifyPreview("main", BASE_CONFIG);
       expect(result).toBeNull();
     });
 
     it("returns null when coolifyUrl is missing", async () => {
       process.env.COOLIFY_API_TOKEN = "token123";
-      const config: CoolifyConfig = {
-        coolifyUrl: "",
-        coolifyAppUuid: "app123",
-        coolifyPollIntervalMs: 100,
-        coolifyMaxWaitMs: 500,
-      };
-
-      const result = await waitForCoolifyPreview("main", config);
+      const result = await waitForCoolifyPreview("main", { ...BASE_CONFIG, coolifyUrl: "" });
       expect(result).toBeNull();
     });
 
     it("returns null when coolifyAppUuid is missing", async () => {
       process.env.COOLIFY_API_TOKEN = "token123";
-      const config: CoolifyConfig = {
-        coolifyUrl: "https://coolify.example.com",
-        coolifyAppUuid: "",
-        coolifyPollIntervalMs: 100,
-        coolifyMaxWaitMs: 500,
-      };
+      const result = await waitForCoolifyPreview("main", { ...BASE_CONFIG, coolifyAppUuid: "" });
+      expect(result).toBeNull();
+    });
+  });
 
-      const result = await waitForCoolifyPreview("main", config);
+  describe("waitForCoolifyPreview — deployment finished (production)", () => {
+    it("returns production FQDN when deployment is finished with pull_request_id 0", async () => {
+      process.env.COOLIFY_API_TOKEN = "token123";
+
+      global.fetch = mockFetch({
+        "/api/v1/applications/": async () =>
+          jsonResponse({
+            uuid: "v7ivmdiih5421n863927r8o0",
+            name: "just-ship-board",
+            fqdn: "https://board.just-ship.io",
+            preview_url_template: "{{pr_id}}.{{domain}}",
+          }),
+        "/api/v1/deployments": async () =>
+          jsonResponse([
+            {
+              id: 137,
+              application_id: "1",
+              application_name: "just-ship-board",
+              deployment_uuid: "abc123",
+              status: "finished",
+              pull_request_id: 0,
+              created_at: "2026-04-10T19:48:54.000000Z",
+            },
+          ]),
+      });
+
+      const result = await waitForCoolifyPreview("main", BASE_CONFIG);
+      expect(result).toBe("https://board.just-ship.io");
+    });
+  });
+
+  describe("waitForCoolifyPreview — PR preview URL", () => {
+    it("returns PR preview URL when pull_request_id > 0", async () => {
+      process.env.COOLIFY_API_TOKEN = "token123";
+
+      global.fetch = mockFetch({
+        "/api/v1/applications/": async () =>
+          jsonResponse({
+            uuid: "v7ivmdiih5421n863927r8o0",
+            name: "just-ship-board",
+            fqdn: "https://board.just-ship.io",
+            preview_url_template: "{{pr_id}}.{{domain}}",
+          }),
+        "/api/v1/deployments": async () =>
+          jsonResponse([
+            {
+              id: 138,
+              application_id: "1",
+              application_name: "just-ship-board",
+              deployment_uuid: "pr-deploy-42",
+              status: "finished",
+              pull_request_id: 42,
+              created_at: "2026-04-10T20:00:00.000000Z",
+            },
+          ]),
+      });
+
+      const result = await waitForCoolifyPreview("feature/T-42-some-feature", BASE_CONFIG);
+      expect(result).toBe("https://42.board.just-ship.io");
+    });
+  });
+
+  describe("waitForCoolifyPreview — failure states", () => {
+    it("returns null when deployment status is failed", async () => {
+      process.env.COOLIFY_API_TOKEN = "token123";
+
+      global.fetch = mockFetch({
+        "/api/v1/applications/": async () =>
+          jsonResponse({
+            uuid: "v7ivmdiih5421n863927r8o0",
+            name: "just-ship-board",
+            fqdn: "https://board.just-ship.io",
+          }),
+        "/api/v1/deployments": async () =>
+          jsonResponse([
+            {
+              id: 139,
+              application_id: "1",
+              application_name: "just-ship-board",
+              deployment_uuid: "failed-deploy",
+              status: "failed",
+              pull_request_id: 0,
+              created_at: "2026-04-10T20:00:00.000000Z",
+            },
+          ]),
+      });
+
+      const result = await waitForCoolifyPreview("main", BASE_CONFIG);
+      expect(result).toBeNull();
+    });
+
+    it("returns null when deployment status is cancelled", async () => {
+      process.env.COOLIFY_API_TOKEN = "token123";
+
+      global.fetch = mockFetch({
+        "/api/v1/applications/": async () =>
+          jsonResponse({
+            uuid: "v7ivmdiih5421n863927r8o0",
+            name: "just-ship-board",
+            fqdn: "https://board.just-ship.io",
+          }),
+        "/api/v1/deployments": async () =>
+          jsonResponse([
+            {
+              id: 140,
+              application_id: "1",
+              application_name: "just-ship-board",
+              deployment_uuid: "cancelled-deploy",
+              status: "cancelled",
+              pull_request_id: 0,
+              created_at: "2026-04-10T20:00:00.000000Z",
+            },
+          ]),
+      });
+
+      const result = await waitForCoolifyPreview("main", BASE_CONFIG);
+      expect(result).toBeNull();
+    });
+
+    it("returns null when FQDN is not set on the application", async () => {
+      process.env.COOLIFY_API_TOKEN = "token123";
+
+      global.fetch = mockFetch({
+        "/api/v1/applications/": async () =>
+          jsonResponse({
+            uuid: "v7ivmdiih5421n863927r8o0",
+            name: "just-ship-board",
+            fqdn: null,
+          }),
+        "/api/v1/deployments": async () =>
+          jsonResponse([
+            {
+              id: 141,
+              application_id: "1",
+              application_name: "just-ship-board",
+              deployment_uuid: "no-fqdn-deploy",
+              status: "finished",
+              pull_request_id: 0,
+              created_at: "2026-04-10T20:00:00.000000Z",
+            },
+          ]),
+      });
+
+      const result = await waitForCoolifyPreview("main", BASE_CONFIG);
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("waitForCoolifyPreview — timeout and errors", () => {
+    it("returns null when max wait time is exceeded (deployment stays in_progress)", async () => {
+      process.env.COOLIFY_API_TOKEN = "token123";
+
+      global.fetch = mockFetch({
+        "/api/v1/applications/": async () =>
+          jsonResponse({
+            uuid: "v7ivmdiih5421n863927r8o0",
+            name: "just-ship-board",
+            fqdn: "https://board.just-ship.io",
+          }),
+        "/api/v1/deployments": async () =>
+          jsonResponse([
+            {
+              id: 142,
+              application_id: "1",
+              application_name: "just-ship-board",
+              deployment_uuid: "stuck-deploy",
+              status: "in_progress",
+              pull_request_id: 0,
+              created_at: "2026-04-10T20:00:00.000000Z",
+            },
+          ]),
+      });
+
+      const result = await waitForCoolifyPreview("main", {
+        ...BASE_CONFIG,
+        coolifyMaxWaitMs: 120,
+        coolifyPollIntervalMs: 50,
+      });
+      expect(result).toBeNull();
+    });
+
+    it("returns null when no deployments match the application name", async () => {
+      process.env.COOLIFY_API_TOKEN = "token123";
+
+      global.fetch = mockFetch({
+        "/api/v1/applications/": async () =>
+          jsonResponse({
+            uuid: "v7ivmdiih5421n863927r8o0",
+            name: "just-ship-board",
+            fqdn: "https://board.just-ship.io",
+          }),
+        "/api/v1/deployments": async () =>
+          jsonResponse([
+            {
+              id: 143,
+              application_id: "2",
+              application_name: "some-other-app",
+              deployment_uuid: "other-deploy",
+              status: "finished",
+              pull_request_id: 0,
+              created_at: "2026-04-10T20:00:00.000000Z",
+            },
+          ]),
+      });
+
+      const result = await waitForCoolifyPreview("main", {
+        ...BASE_CONFIG,
+        coolifyMaxWaitMs: 120,
+        coolifyPollIntervalMs: 50,
+      });
       expect(result).toBeNull();
     });
 
     it("handles fetch timeout gracefully", async () => {
       process.env.COOLIFY_API_TOKEN = "token123";
 
-      // Mock fetch to simulate timeout
       global.fetch = vi.fn().mockRejectedValue(new Error("AbortError: The operation was aborted"));
 
-      const config: CoolifyConfig = {
-        coolifyUrl: "https://coolify.example.com",
-        coolifyAppUuid: "app123",
+      const result = await waitForCoolifyPreview("main", {
+        ...BASE_CONFIG,
+        coolifyMaxWaitMs: 120,
         coolifyPollIntervalMs: 50,
-        coolifyMaxWaitMs: 100,
-      };
-
-      const result = await waitForCoolifyPreview("main", config);
+      });
       expect(result).toBeNull();
     });
 
-    it("returns null when max wait time is exceeded", async () => {
+    it("retries when app API returns non-OK status", async () => {
       process.env.COOLIFY_API_TOKEN = "token123";
+      let callCount = 0;
 
-      // Mock fetch to return incomplete deployment
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ fqdn: null }),
+      global.fetch = vi.fn(async (url: string | URL | Request) => {
+        const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes("/api/v1/applications/")) {
+          callCount++;
+          if (callCount === 1) {
+            return new Response("Server error", { status: 500 });
+          }
+          return jsonResponse({
+            uuid: "v7ivmdiih5421n863927r8o0",
+            name: "just-ship-board",
+            fqdn: "https://board.just-ship.io",
+          });
+        }
+        if (urlStr.includes("/api/v1/deployments")) {
+          return jsonResponse([
+            {
+              id: 144,
+              application_id: "1",
+              application_name: "just-ship-board",
+              deployment_uuid: "retry-deploy",
+              status: "finished",
+              pull_request_id: 0,
+              created_at: "2026-04-10T20:00:00.000000Z",
+            },
+          ]);
+        }
+        return new Response("Not found", { status: 404 });
       });
 
-      const config: CoolifyConfig = {
-        coolifyUrl: "https://coolify.example.com",
-        coolifyAppUuid: "app123",
-        coolifyPollIntervalMs: 50,
-        coolifyMaxWaitMs: 100,
-      };
-
-      const result = await waitForCoolifyPreview("main", config);
-      expect(result).toBeNull();
+      const result = await waitForCoolifyPreview("main", BASE_CONFIG);
+      expect(result).toBe("https://board.just-ship.io");
+      expect(callCount).toBe(2);
     });
   });
 

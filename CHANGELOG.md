@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Fixed
+- **Coolify Preview URL polling** (T-752): Updated `coolify-preview.ts` and `get-preview-url.sh` to use correct Coolify v4 API endpoints — `GET /api/v1/deployments` instead of the non-existent `GET /api/v1/applications/{uuid}/deployments`. Added PR preview URL construction using `preview_url_template` pattern (`https://{pr_id}.{domain}`)
+
 ### Added
 - **Plugin scaffold** (`.claude-plugin/plugin.json`): Claude Code plugin manifest with name, version, description, author, keywords, entry points (skills/, agents/, commands/), hooks (SessionStart, SubagentStart/Stop, SessionEnd), and userConfig for sensitive credentials (board_api_key, anthropic_api_key, github_token) and non-sensitive config (workspace_id, project_id). README updated with plugin installation section
 - **Backfill script for historical ticket costs** (`.claude/scripts/backfill-ticket-costs.sh`): One-time script to correct historical ticket costs — resets 6 local tickets that had cumulative session costs with wrong pricing to $0, recalculates 8 VPS tickets with current Opus rates ($5/MTok). Supports `--dry-run`. Total correction: $680 → $0.95
