@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Added
+- **Smart Model Routing** (`pipeline/lib/model-router.ts`): Pipeline agents are now routed to optimal models per phase — planning agents (code-review, qa, security) use Opus, implementation agents (backend, frontend, data-engineer, devops) use Sonnet. Configurable via `pipeline.model_routing` in `project.json` with per-agent overrides, custom phase assignments, and model validation. Falls back to single-model behavior when not configured. Board events include model info for cost tracking
+
 ### Changed
 - **Shopify skills replaced by official Shopify AI Toolkit**: Removed 9 custom Shopify skill files (`skills/shopify-*.md`) — Shopify domain knowledge now comes from the official `@shopify/dev-mcp` MCP server which provides live docs search, code validation, and auto-updates. `setup.sh` automatically configures the MCP server for detected Shopify projects (both fresh install and update). `detect-shopify.sh` no longer outputs skill names. Pipeline scripts (shopify-dev, shopify-preview, shopify-qa, shopify-env-check, shopify-app-deploy) remain unchanged
 

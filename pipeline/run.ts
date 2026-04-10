@@ -21,6 +21,7 @@ import { estimateCost } from "./lib/cost.ts";
 import { checkLevel1Exists } from "./lib/artifact-verifier.ts";
 import { resolveVerifyCommands, runVerifyCommands } from "./lib/verify-commands.ts";
 import { detectScopeReduction } from "./lib/scope-guard.ts";
+import { createModelRouter } from "./lib/model-router.ts";
 
 // --- Exported pipeline function (used by worker.ts) ---
 export interface PipelineOptions {
@@ -254,6 +255,13 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
     }
   }
 
+  // --- Smart Model Routing: assign optimal model per agent phase ---
+  const modelRouter = createModelRouter(config.pipeline.modelRouting);
+  const routedCount = modelRouter.applyToAgents(filteredAgents);
+  if (routedCount > 0) {
+    logger.info({ routedCount }, "Model routing applied to agents");
+  }
+
   // Build orchestrator prompt with skills
   let orchestratorPrompt = loadOrchestratorPrompt(projectDir);
   const orchestratorSkills = loadedSkills.byRole.get("orchestrator");
@@ -268,12 +276,18 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
     apiKey: config.pipeline.apiKey,
     ticketNumber: ticket.ticketId,
   };
+  // Build agent → model map for event tracking
+  const agentModelMap: Record<string, string> = {};
+  for (const [name, def] of Object.entries(filteredAgents)) {
+    if (def.model) agentModelMap[name] = def.model;
+  }
   const eventHooks = hasPipeline ? createEventHooks(eventConfig, {
     onPause: (reason, questionText) => {
       pauseReason = reason;
       pauseQuestion = questionText;
     },
     getLastAssistantText: () => lastAssistantText,
+    agentModelMap,
   }) : null;
   const hooks = eventHooks?.hooks ?? {};
 
@@ -998,6 +1012,10 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
     }
   }
 
+  // Apply model routing to resume agents
+  const resumeModelRouter = createModelRouter(config.pipeline.modelRouting);
+  resumeModelRouter.applyToAgents(filteredAgents);
+
   const hasPipeline = !!(config.pipeline.apiUrl && config.pipeline.apiKey);
   const eventConfig: EventConfig = {
     apiUrl: config.pipeline.apiUrl,
@@ -1010,12 +1028,18 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
   let lastAssistantText = "";
   let newSessionId: string | undefined;
 
+  // Build agent → model map for event tracking
+  const resumeAgentModelMap: Record<string, string> = {};
+  for (const [name, def] of Object.entries(filteredAgents)) {
+    if (def.model) resumeAgentModelMap[name] = def.model;
+  }
   const eventHooks = hasPipeline ? createEventHooks(eventConfig, {
     onPause: (reason, questionText) => {
       pauseReason = reason;
       pauseQuestion = questionText;
     },
     getLastAssistantText: () => lastAssistantText,
+    agentModelMap: resumeAgentModelMap,
   }) : null;
   const hooks = eventHooks?.hooks ?? {};
 

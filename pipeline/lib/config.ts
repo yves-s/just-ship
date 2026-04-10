@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { homedir } from "node:os";
 import { logger } from "./logger.ts";
+import type { ModelRoutingConfig } from "./model-router.ts";
 
 export interface PipelineConfig {
   projectId: string;
@@ -37,6 +38,7 @@ export interface ProjectConfig {
       sonnet?: number;
       opus?: number;
     };
+    modelRouting?: ModelRoutingConfig;
   };
   maxWorkers: number;
   qa: QaConfig;
@@ -258,6 +260,7 @@ export function loadProjectConfig(projectDir: string): ProjectConfig {
       skipAgents: (rawPipeline.skip_agents as string[]) ?? [],
       maxAutonomousComplexity: (rawPipeline.max_autonomous_complexity as string) ?? "medium",
       timeouts: rawPipeline.timeouts as { haiku?: number; sonnet?: number; opus?: number } | undefined,
+      modelRouting: rawPipeline.model_routing as ModelRoutingConfig | undefined,
     },
     maxWorkers: Number(rawPipeline.max_workers ?? 1),
     qa,
