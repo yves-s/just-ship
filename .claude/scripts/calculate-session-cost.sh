@@ -19,7 +19,7 @@ fi
 # Build the JSONL path from cwd
 # Claude Code stores sessions at: ~/.claude/projects/-{cwd-with-slashes-replaced-by-dashes}/{session_id}.jsonl
 # Example: /Users/yschleich/Developer/just-ship -> -Users-yschleich-Developer-just-ship
-SAFE_CWD=$(echo "$CWD" | sed 's|^/||' | sed 's|/|-|g')
+SAFE_CWD=$(echo "$CWD" | sed 's|^/||' | sed 's|/|-|g' | sed 's| |-|g' | sed 's|\.|-|g')
 SESSION_FILE="$HOME/.claude/projects/-${SAFE_CWD}/${SESSION_ID}.jsonl"
 
 [ ! -f "$SESSION_FILE" ] && exit 0
