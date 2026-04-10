@@ -688,12 +688,49 @@ bash .claude/scripts/send-event.sh $TICKET_NUMBER qa-auto completed '{"tier": "{
 ```
 Ausgabe: `✓ qa-auto — {qa_tier} tier {passed|needs-review|skipped}`
 
+### 11. Session Summary
+
+Zeige am Ende eine strukturierte Zusammenfassung der gesamten Session im Terminal.
+
+**Daten sammeln:**
+
+```bash
+MERGE_BASE=$(git merge-base main HEAD)
+PR_URL=$(gh pr view --json url -q .url 2>/dev/null || echo "")
+```
+
+`$PREVIEW_URL` ist aus Schritt 9f verfügbar (leer wenn kein Hosting-Provider).
+`$QA_RESULT` ist aus Schritt 10e verfügbar (`passed`, `needs-review`, oder `skipped`).
+
+**Summary ausgeben:**
+
+```bash
+bash .claude/scripts/session-summary.sh \
+  "{N}" \
+  "{ticket_title}" \
+  "{1-2 Sätze Zusammenfassung was das Ticket adressiert}" \
+  "{qa_result}" \
+  "$PR_URL" \
+  "$PREVIEW_URL"
+```
+
+Das Script sammelt automatisch:
+- Git-Statistiken (geänderte Dateien, Diff-Stats, Commits, Branch)
+- Token-Verbrauch aus der aktuellen Session via `calculate-session-cost.sh`
+- Geschätzte Kosten mit erkanntem Model-Namen
+
+Falls Token-Daten nicht verfügbar sind, werden Token- und Cost-Blöcke automatisch weggelassen.
+Falls keine Preview-URL vorhanden ist, wird die Zeile automatisch weggelassen.
+
+**Keine Ausgabe außer dem Script-Output.** Das Script ersetzt die bisherige "fertig"-Meldung.
+
 ### Checkliste vor Abschluss
 
 Bevor du den Workflow als fertig meldest, prüfe:
 - [ ] **Falls Pipeline konfiguriert:** Status wurde auf "in_progress" gesetzt (Schritt 3)
 - [ ] **Falls Pipeline konfiguriert:** Status wurde auf "in_review" gesetzt (Schritt 9d)
 - [ ] **QA-Report:** PR hat ein `qa:*` Label (Schritt 10)
+- [ ] **Session Summary:** wurde ausgegeben (Schritt 11)
 Falls ein Status-Update fehlt und Pipeline konfiguriert ist: **JETZT nachholen**, nicht überspringen.
 
 **Hinweis:** Worktree wird NICHT hier aufgeräumt — das passiert in `/ship` nach dem Merge, damit Nachbesserungen nach Code Review im Worktree möglich bleiben.
