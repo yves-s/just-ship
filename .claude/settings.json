@@ -31,7 +31,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/detect-ticket.sh\"",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/detect-ticket.sh\"",
             "timeout": 5
           }
         ]
@@ -43,7 +43,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/on-agent-start.sh\"",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/on-agent-start.sh\"",
             "timeout": 5
           }
         ]
@@ -55,7 +55,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/on-agent-stop.sh\"",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/on-agent-stop.sh\"",
             "timeout": 5
           }
         ]
@@ -67,8 +67,20 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/on-session-end.sh\"",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/on-session-end.sh\"",
             "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/detect-ticket-post.sh\"",
+            "timeout": 2
           }
         ]
       }

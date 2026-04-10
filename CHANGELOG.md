@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Added
+- **Hooks & scripts migrated to plugin structure** (`.claude-plugin/scripts/`): All 5 event hooks and 16 utility scripts now live in the plugin directory alongside agents, skills, and rules from T-748. Hook scripts use `${CLAUDE_PLUGIN_ROOT}` for plugin-internal references while keeping project-relative paths (`$CWD`, `$PROJECT_ROOT`) for project files. `plugin.json` hooks updated to use plugin paths. PostToolUse hook for `detect-ticket-post.sh` added to plugin manifest. Code review fixed stale paths in `backfill-ticket-costs.sh` and `shopify-preview.sh`
+
 ### Fixed
 - **Coolify Preview URL polling** (T-752): Updated `coolify-preview.ts` and `get-preview-url.sh` to use correct Coolify v4 API endpoints — `GET /api/v1/deployments` instead of the non-existent `GET /api/v1/applications/{uuid}/deployments`. Added PR preview URL construction using `preview_url_template` pattern (`https://{pr_id}.{domain}`)
 - **Token tracking for projects with spaces/dots in path** (`calculate-session-cost.sh`, `session-summary.sh`, `develop.md`, `ship.md`): SAFE_CWD normalization now replaces spaces and dots with dashes, matching Claude Code's internal session directory naming convention. Previously, projects like `Psychotherapie Schleich/adhs-diagnostic` or `19elf.cc` would silently fail token tracking (exit 0, no data)
