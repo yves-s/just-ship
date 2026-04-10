@@ -15,7 +15,7 @@
   ],
   "skills": "skills/",
   "agents": "agents/",
-  "commands": "commands/",
+  "rules": "rules/",
   "hooks": {
     "SessionStart": [
       {

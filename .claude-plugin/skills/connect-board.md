@@ -1,0 +1,86 @@
+---
+name: just-ship:connect-board
+description: Board-Verbindung einrichten — verweist aufs Board
+---
+
+# /connect-board — Board verbinden
+
+Verbindet das aktuelle Projekt mit dem Just Ship Board.
+
+## Ausführung
+
+### 1. Status prüfen
+
+Lies `project.json` und prüfe `pipeline.workspace_id`. Falls gesetzt, validiere die vollständige Verbindung:
+
+```bash
+bash .claude/scripts/write-config.sh read-workspace --id <workspace_id>
+```
+
+**Ergebnis auswerten:**
+
+| `project.json` | `config.json` (read-workspace) | Status |
+|---|---|---|
+| `workspace_id` + `project_id` gesetzt | `api_key` vorhanden | **Voll verbunden** |
+| `workspace_id` gesetzt, `project_id` fehlt | `api_key` vorhanden | **Workspace verbunden, Projekt fehlt** |
+| `workspace_id` gesetzt | `api_key` leer oder read-workspace schlägt fehl | **Credentials fehlen** |
+| `workspace_id` nicht gesetzt | — | **Nicht verbunden** |
+
+**Voll verbunden:**
+```
+✓ Board verbunden (Workspace: {slug || workspace_id}, Projekt: {project_id})
+```
+
+**Workspace verbunden, Projekt fehlt:**
+```
+✓ Workspace verbunden ({slug || workspace_id}), aber kein Projekt verknüpft.
+
+Führe 'just-ship connect' im Terminal aus um ein Projekt auszuwählen.
+```
+
+**Credentials fehlen:**
+```
+⚠ Workspace in project.json gesetzt, aber API-Key fehlt in ~/.just-ship/config.json.
+
+Führe 'just-ship connect' mit einem neuen Code im Terminal aus.
+```
+
+**Nicht verbunden** → weiter zu Schritt 2.
+
+### 2. Falls nicht verbunden
+
+Ausgabe (NICHT in einem Code-Block, damit der Link klickbar ist):
+
+Öffne https://board.just-ship.io — das Board führt dich durch die Einrichtung. Sag Bescheid wenn du fertig bist.
+
+Das ist alles. Keine weiteren Erklärungen, keine Schritte. Das Board hat einen Onboarding-Stepper der alles erklärt.
+
+### 3. Wenn der User zurückkommt
+
+Prüfe ob die Verbindung eingerichtet wurde:
+
+```bash
+cat "$HOME/.just-ship/config.json" 2>/dev/null | node -e "
+  const c=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));
+  const entries=Object.entries(c.workspaces||{});
+  if(!entries.length){console.log('NOT_CONNECTED');process.exit();}
+  entries.forEach(([id,w])=>console.log('CONNECTED:'+id+':'+(w.slug||id)));
+"
+```
+
+**Falls CONNECTED:** Prüfe ob `project.json` den Workspace hat. Falls nicht, setze ihn:
+```bash
+".claude/scripts/write-config.sh" set-project --workspace-id <uuid> --project-id <project-id>
+```
+
+Bestätigung (zeige slug wenn verfügbar):
+```
+✓ Board verbunden (Workspace: {slug || uuid})
+```
+
+**Falls NOT_CONNECTED:** Frage ob etwas nicht geklappt hat und hilf weiter.
+
+## Wichtig
+
+- **Keine Secrets im Chat** — Credentials werden im Terminal via `just-ship connect` eingegeben, nie hier
+- **Nicht erklären wie das Board funktioniert** — das Board hat seinen eigenen Onboarding-Flow
