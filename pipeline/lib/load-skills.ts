@@ -167,9 +167,19 @@ export function loadSkillFrontmatters(
 
 /**
  * Reads full file content for a skill by its absolute path.
+ * Returns null if the file does not exist or cannot be read.
  */
-export function loadSkillFull(filePath: string): string {
-  return readFileSync(filePath, "utf-8");
+export function loadSkillFull(filePath: string): string | null {
+  if (!existsSync(filePath)) {
+    logger.warn(`Skill file '${filePath}' does not exist — skipping.`);
+    return null;
+  }
+  try {
+    return readFileSync(filePath, "utf-8");
+  } catch (err) {
+    logger.warn({ err, filePath }, `Failed to read skill file — skipping.`);
+    return null;
+  }
 }
 
 /**
