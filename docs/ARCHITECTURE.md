@@ -380,6 +380,17 @@ Process skills (TDD, debugging, code review, planning) are provided by the [supe
 | **finishing-a-development-branch** | Branch completion workflow |
 | **subagent-driven-development** | Multi-agent coordination |
 
+### Progressive Skill Disclosure
+
+Skills use a two-stage loading model to reduce token overhead on the VPS:
+
+- **Stage 1 (frontmatter-only):** `loadSkillFrontmatters()` reads only the YAML frontmatter (`name`, `description`, `triggers`) for each skill — roughly 100 tokens per skill instead of 200-500 lines of full content.
+- **Stage 2 (on-demand):** `loadSkillFull()` / `loadSkillByName()` loads complete skill content when a skill is activated for a specific agent role.
+
+The pipeline (`run.ts`) still loads full content for role-mapped skills via `loadSkills()`, but now also produces a `frontmatterIndex` — a compact text listing of all available skills — and tracks `totalFrontmatterTokens` vs `totalFullTokens` for cost visibility.
+
+All skills must have valid frontmatter with `name`, `description`, and `triggers` fields. The `scripts/validate-skill-frontmatter.sh` script validates this before merge.
+
 ### Custom Skills
 
 Projects can add their own skills in `.claude/skills/`. These are never touched by framework updates.
