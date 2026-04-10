@@ -295,22 +295,31 @@ if [ -n "$SESSION_FILE" ]; then
   if [ -n "$END_JSON" ]; then
     # Read start snapshot (written by /develop step 3e)
     SNAPSHOT_FILE=".claude/.token-snapshot-T-$TICKET_NUMBER.json"
-    START_TOKENS=0
-    START_COST=0
+    START_JSON='{"total_tokens":0,"estimated_cost_usd":0,"input_tokens":0,"cache_read_tokens":0,"cache_creation_tokens":0,"output_tokens":0}'
     if [ -f "$SNAPSHOT_FILE" ]; then
-      START_TOKENS=$(node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('$SNAPSHOT_FILE','utf-8')).total_tokens || 0))" 2>/dev/null || echo "0")
-      START_COST=$(node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('$SNAPSHOT_FILE','utf-8')).estimated_cost_usd || 0))" 2>/dev/null || echo "0")
+      START_JSON=$(cat "$SNAPSHOT_FILE")
     fi
 
-    END_TOKENS=$(echo "$END_JSON" | node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).total_tokens || 0))" 2>/dev/null || echo "0")
-    END_COST=$(echo "$END_JSON" | node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).estimated_cost_usd || 0))" 2>/dev/null || echo "0")
+    # Compute deltas for each token type
+    DELTA_JSON=$(node -e "
+      const start = JSON.parse('$START_JSON');
+      const end = JSON.parse(process.argv[1]);
+      const d = {
+        total_tokens: Math.max(0, (end.total_tokens||0) - (start.total_tokens||0)),
+        estimated_cost: parseFloat(Math.max(0, (end.estimated_cost_usd||0) - (start.estimated_cost_usd||0)).toFixed(4)),
+        input_tokens: Math.max(0, (end.input_tokens||0) - (start.input_tokens||0)),
+        cache_read_tokens: Math.max(0, (end.cache_read_tokens||0) - (start.cache_read_tokens||0)),
+        cache_creation_tokens: Math.max(0, (end.cache_creation_tokens||0) - (start.cache_creation_tokens||0)),
+        output_tokens: Math.max(0, (end.output_tokens||0) - (start.output_tokens||0)),
+      };
+      process.stdout.write(JSON.stringify(d));
+    " "$END_JSON" 2>/dev/null || echo "")
 
-    # Delta = end - start (ticket-specific cost)
-    DELTA_TOKENS=$(node -e "process.stdout.write(String(Math.max(0, Number('$END_TOKENS') - Number('$START_TOKENS'))))")
-    DELTA_COST=$(node -e "process.stdout.write(String(parseFloat(Math.max(0, Number('$END_COST') - Number('$START_COST')).toFixed(4))))")
-
-    if [ "$DELTA_TOKENS" != "0" ]; then
-      bash .claude/scripts/board-api.sh patch "tickets/$TICKET_NUMBER" "{\"total_tokens\": $DELTA_TOKENS, \"estimated_cost\": $DELTA_COST}" >/dev/null 2>&1 || true
+    if [ -n "$DELTA_JSON" ]; then
+      DELTA_TOKENS=$(echo "$DELTA_JSON" | node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).total_tokens))" 2>/dev/null || echo "0")
+      if [ "$DELTA_TOKENS" != "0" ]; then
+        bash .claude/scripts/board-api.sh patch "tickets/$TICKET_NUMBER" "$DELTA_JSON" >/dev/null 2>&1 || true
+      fi
     fi
 
     # Clean up snapshot
