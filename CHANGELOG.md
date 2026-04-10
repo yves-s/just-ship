@@ -9,6 +9,7 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 ## [Unreleased]
 
 ### Changed
+- **VPS infrastructure migrated to just-ship-ops**: Moved Docker-Compose, Caddyfile, systemd units, setup scripts (`setup-vps.sh`, `connect-project.sh`, `logs.sh`, `install-updater.sh`, `install-monitor.sh`), monitoring (`pipeline-container-monitor*`), and updater scripts from `vps/` to the `just-ship-ops` repository. Engine repo retains only `vps/Dockerfile` and `vps/entrypoint.sh` (CI build context). All markdown references updated across CLAUDE.md, README.md, docs/ARCHITECTURE.md, commands/, and scripts/. `/just-ship-vps` command now discovers the ops repo dynamically and validates its presence with pre-flight checks
 - **Shopify skills replaced by official Shopify AI Toolkit**: Removed 9 custom Shopify skill files (`skills/shopify-*.md`) — Shopify domain knowledge now comes from the official `@shopify/dev-mcp` MCP server which provides live docs search, code validation, and auto-updates. `setup.sh` automatically configures the MCP server for detected Shopify projects (both fresh install and update). `detect-shopify.sh` no longer outputs skill names. Pipeline scripts (shopify-dev, shopify-preview, shopify-qa, shopify-env-check, shopify-app-deploy) remain unchanged
 
 ### Added
