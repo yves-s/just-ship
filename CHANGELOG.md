@@ -1,5 +1,11 @@
 # Changelog
 
+## [T-716] Historische Ticket-Kosten mit korrektem Cache-Pricing backfillen — 2026-04-10
+
+**Bereiche:** Pipeline, Scripts
+
+Neues Backfill-Script `scripts/backfill-ticket-costs.sh` korrigiert historische Ticket-Kosten, die durch drei aufeinanderfolgende Pricing-Bugs (T-699, T-715, T-727) falsch berechnet wurden. VPS-Tickets (T-586 bis T-648) werden mit korrektem 5min-TTL-Pricing und 95% Cache-Read-Annahme neu berechnet. Lokale Tickets (T-712, T-715, T-719) mit session-kumulativen Werten werden auf 0 gesetzt (Daten nicht rekonstruierbar). Das Script ist idempotent und unterstützt `--dry-run` (Standard) und `--apply`.
+
 ## [T-625] VPS Integration Test — Pipeline Merge Gate — 2026-04-07
 
 **Bereiche:** Pipeline, Quality
