@@ -6,12 +6,14 @@ interface ModelPricing {
   output: number;
 }
 
+// Cache read = 5min TTL auto-caching (98% discount for Opus), cache create = 25% surcharge.
+// Claude Code uses auto-caching (no explicit cache_control), so 5min TTL applies.
 const MODEL_PRICING: Record<string, ModelPricing> = {
-  "claude-opus-4-6":              { input: 0.015, cacheRead: 0.0015, cacheCreate: 0.01875, output: 0.075 },
-  "claude-opus-4-20250514":       { input: 0.015, cacheRead: 0.0015, cacheCreate: 0.01875, output: 0.075 },
-  "claude-sonnet-4-6":            { input: 0.003, cacheRead: 0.0003, cacheCreate: 0.00375, output: 0.015 },
-  "claude-sonnet-4-20250514":     { input: 0.003, cacheRead: 0.0003, cacheCreate: 0.00375, output: 0.015 },
-  "claude-haiku-4-5-20251001":    { input: 0.0008, cacheRead: 0.00008, cacheCreate: 0.001, output: 0.004 },
+  "claude-opus-4-6":              { input: 0.015, cacheRead: 0.0003, cacheCreate: 0.01875, output: 0.075 },
+  "claude-opus-4-20250514":       { input: 0.015, cacheRead: 0.0003, cacheCreate: 0.01875, output: 0.075 },
+  "claude-sonnet-4-6":            { input: 0.003, cacheRead: 0.00006, cacheCreate: 0.00375, output: 0.015 },
+  "claude-sonnet-4-20250514":     { input: 0.003, cacheRead: 0.00006, cacheCreate: 0.00375, output: 0.015 },
+  "claude-haiku-4-5-20251001":    { input: 0.0008, cacheRead: 0.000016, cacheCreate: 0.001, output: 0.004 },
 };
 
 const MODEL_ALIASES: Record<string, string> = {
