@@ -17,9 +17,10 @@ if [[ ! "$CWD" =~ ^/ ]] || [[ "$CWD" =~ \.\. ]]; then
 fi
 
 # Build the JSONL path from cwd
-# Claude Code stores sessions at: ~/.claude/projects/-{cwd-with-slashes-replaced-by-dashes}/{session_id}.jsonl
+# Claude Code stores sessions at: ~/.claude/projects/-{cwd-with-slashes-and-spaces-replaced-by-dashes}/{session_id}.jsonl
 # Example: /Users/yschleich/Developer/just-ship -> -Users-yschleich-Developer-just-ship
-SAFE_CWD=$(echo "$CWD" | sed 's|^/||' | sed 's|/|-|g')
+# Example: /Users/yschleich/Developer/My Project -> -Users-yschleich-Developer-My-Project
+SAFE_CWD=$(echo "$CWD" | sed 's|^/||' | sed 's|/|-|g' | sed 's| |-|g')
 SESSION_FILE="$HOME/.claude/projects/-${SAFE_CWD}/${SESSION_ID}.jsonl"
 
 [ ! -f "$SESSION_FILE" ] && exit 0

@@ -194,7 +194,7 @@ bash .claude/scripts/send-event.sh $TICKET_NUMBER orchestrator agent_started
 **3e) Token-Snapshot schreiben** (für per-Ticket-Kosten bei `/ship`):
 
 ```bash
-SAFE_CWD=$(echo "$PWD" | sed 's|^/||' | sed 's|/|-|g')
+SAFE_CWD=$(echo "$PWD" | sed 's|^/||' | sed 's|/|-|g' | sed 's| |-|g')
 SESSION_DIR="$HOME/.claude/projects/-${SAFE_CWD}"
 SESSION_FILE=$(ls -t "$SESSION_DIR"/*.jsonl 2>/dev/null | head -1)
 if [ -n "$SESSION_FILE" ]; then

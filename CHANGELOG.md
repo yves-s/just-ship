@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Fixed
+- **Token tracking for projects with spaces in path** (T-755): `calculate-session-cost.sh`, `session-summary.sh`, `develop.md`, `ship.md` now replace spaces with dashes when building Claude Code session file paths — previously only slashes were replaced, causing silent token tracking failures for projects like `Psychotherapie Schleich/adhs-diagnostic`
+
 ### Added
 - **Plugin scaffold** (`.claude-plugin/plugin.json`): Claude Code plugin manifest with name, version, description, author, keywords, entry points (skills/, agents/, commands/), hooks (SessionStart, SubagentStart/Stop, SessionEnd), and userConfig for sensitive credentials (board_api_key, anthropic_api_key, github_token) and non-sensitive config (workspace_id, project_id). README updated with plugin installation section
 - **Backfill script for historical ticket costs** (`.claude/scripts/backfill-ticket-costs.sh`): One-time script to correct historical ticket costs — resets 6 local tickets that had cumulative session costs with wrong pricing to $0, recalculates 8 VPS tickets with current Opus rates ($5/MTok). Supports `--dry-run`. Total correction: $680 → $0.95
