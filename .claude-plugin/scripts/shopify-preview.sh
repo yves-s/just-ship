@@ -49,7 +49,7 @@ else
   # Try to read from ~/.just-ship/config.json via workspace
   WS_ID=$(node -e "process.stdout.write(require('./project.json').pipeline?.workspace_id || '')" 2>/dev/null || echo "")
   if [ -n "$WS_ID" ]; then
-    SHOPIFY_PW=$(bash .claude/scripts/write-config.sh read-workspace --id "$WS_ID" 2>/dev/null | \
+    SHOPIFY_PW=$(bash "$SCRIPT_DIR/write-config.sh" read-workspace --id "$WS_ID" 2>/dev/null | \
       node -e "
         try {
           const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));
