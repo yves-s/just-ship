@@ -21,8 +21,8 @@ Lies `project.json` für Konventionen.
 
 1. **Board API** (bevorzugt): Falls `pipeline.workspace_id` gesetzt → `board-api.sh` verwenden:
    ```bash
-   bash .claude/scripts/board-api.sh get "tickets/{N}"
-   bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"status": "in_progress"}'
+   bash .claude/scripts/board-api.sh get "tickets/$TICKET_NUMBER"
+   bash .claude/scripts/board-api.sh patch "tickets/$TICKET_NUMBER" '{"status": "in_progress"}'
    ```
    Credentials werden intern aufgelöst. `pipeline.project_id` aus `project.json`.
 2. **Legacy Supabase MCP**: Falls nur `project_id` gesetzt (ohne `workspace_id`), und `project_id` hat keine Bindestriche → `execute_sql` verwenden, Warnung ausgeben: "Kein Board API konfiguriert. Nutze Legacy Supabase MCP. Fuehre /setup-just-ship aus um zu upgraden."
@@ -87,9 +87,28 @@ LIMIT 1;
 
 **Kein Ticket gefunden:** User informieren und stoppen.
 
-### 2. Ticket übernehmen
+### 2. Ticket übernehmen + TICKET_NUMBER setzen
 
 Zeige kurz an: `▶ Ticket T-{N}: {title}` — dann direkt weiter, NICHT auf Bestätigung warten.
+
+**KRITISCH — Shell-Variable für alle folgenden Board-API-Calls setzen:**
+
+Extrahiere die Ticket-Nummer aus dem JSON-Response von Schritt 1 und setze sie als Shell-Variable:
+```bash
+# TICKET_NUMBER = die Zahl aus dem `number`-Feld des Ticket-JSON, z.B. 162
+TICKET_NUMBER=$(echo "$TICKET_JSON" | node -e "const json = JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); process.stdout.write(String(json.number || (json.data && json.data.number) || ''))" 2>/dev/null)
+# Fallback: falls $ARGUMENTS eine Ticket-ID enthält (z.B. "T-162" oder "162")
+if [ -z "$TICKET_NUMBER" ]; then
+  TICKET_NUMBER=$(echo "$ARGUMENTS" | grep -oE '[0-9]+' | head -1)
+fi
+if [ -z "$TICKET_NUMBER" ]; then
+  echo "ERROR: Konnte keine Ticket-Nummer ermitteln."
+  exit 1
+fi
+echo "TICKET_NUMBER=$TICKET_NUMBER"
+```
+
+**ALLE folgenden `board-api.sh` Calls MÜSSEN `$TICKET_NUMBER` verwenden.** Niemals `{N}` als Platzhalter in board-api.sh Calls — das wird nicht aufgelöst und erzeugt einen 404.
 
 ### 3. Status auf "in_progress" + Feature-Branch + Pipeline-Event
 
@@ -99,7 +118,11 @@ Zeige kurz an: `▶ Ticket T-{N}: {title}` — dann direkt weiter, NICHT auf Bes
 
 **Board API (bevorzugt):** Via board-api.sh:
 ```bash
-bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"status": "in_progress", "branch": "{branch}", "project_id": "{pipeline.project_id}"}'
+if bash .claude/scripts/board-api.sh patch "tickets/$TICKET_NUMBER" '{"status": "in_progress", "branch": "{branch}", "project_id": "{pipeline.project_id}"}'; then
+  echo "✓ Status in_progress für T-$TICKET_NUMBER gesetzt"
+else
+  echo "⚠ Status-Update fehlgeschlagen für T-$TICKET_NUMBER — weiter ohne Blockade"
+fi
 ```
 Hinweis: `branch` wird mitgesendet damit das Board anzeigt welcher Branch aktiv ist. `project_id` ordnet das Ticket dem Projekt zu falls noch nicht geschehen.
 
@@ -113,7 +136,7 @@ SET status = 'in_progress',
       WHERE name = '{pipeline.project_name}'
         AND workspace_id = '{pipeline.workspace_id}'
     ))
-WHERE number = {N}
+WHERE number = $TICKET_NUMBER
   AND workspace_id = '{pipeline.workspace_id}'
 RETURNING number, title, status;
 ```
@@ -147,13 +170,13 @@ Falls die Ausgabe `.git` enthält (kein Worktree) UND das Projekt `pipeline.max_
 # Worktree erstellen für parallele Ausführung
 git fetch origin main
 BRANCH="{abgeleiteter-prefix}/{ticket-nummer}-{kurzbeschreibung}"
-WORKTREE_DIR=".worktrees/T-{N}"
+WORKTREE_DIR=".worktrees/T-$TICKET_NUMBER"
 git worktree add "$WORKTREE_DIR" -b "$BRANCH" origin/main
 ```
 
 Danach: **Alle weiteren Schritte (4-11) im Worktree-Verzeichnis ausführen.** Nutze `$WORKTREE_DIR` als Arbeitsverzeichnis für alle Bash-Befehle (`cwd`), Read, Edit, Glob, Grep.
 
-Ausgabe: `▶ worktree — .worktrees/T-{N} erstellt`
+Ausgabe: `▶ worktree — .worktrees/T-$TICKET_NUMBER erstellt`
 
 Falls bereits in einem Worktree (z.B. bei Resume): einfach den Branch erstellen wie bisher:
 ```bash
@@ -165,7 +188,7 @@ git checkout -b {abgeleiteter-prefix}/{ticket-nummer}-{kurzbeschreibung}
 
 > **Note:** `.active-ticket` wird automatisch vom PostToolUse-Hook (`detect-ticket-post.sh`) gesetzt, sobald der erste Bash-Befehl im Worktree läuft. Kein manuelles Schreiben nötig.
 ```bash
-bash .claude/scripts/send-event.sh {N} orchestrator agent_started
+bash .claude/scripts/send-event.sh $TICKET_NUMBER orchestrator agent_started
 ```
 
 **3e) Token-Snapshot schreiben** (für per-Ticket-Kosten bei `/ship`):
@@ -175,7 +198,7 @@ SAFE_CWD=$(echo "$PWD" | sed 's|^/||' | sed 's|/|-|g')
 SESSION_DIR="$HOME/.claude/projects/-${SAFE_CWD}"
 SESSION_FILE=$(ls -t "$SESSION_DIR"/*.jsonl 2>/dev/null | head -1)
 if [ -n "$SESSION_FILE" ]; then
-  bash .claude/scripts/calculate-session-cost.sh "$(basename "$SESSION_FILE" .jsonl)" "$PWD" > .claude/.token-snapshot-T-{N}.json 2>/dev/null || true
+  bash .claude/scripts/calculate-session-cost.sh "$(basename "$SESSION_FILE" .jsonl)" "$PWD" > .claude/.token-snapshot-T-$TICKET_NUMBER.json 2>/dev/null || true
 fi
 ```
 
@@ -184,7 +207,7 @@ Falls das Projekt-Root ein Worktree ist, den Snapshot im Main-Repo schreiben (`.
 ### 3.5 Triage — Ticket-Qualitätsprüfung
 
 ```bash
-bash .claude/scripts/send-event.sh {N} triage agent_started
+bash .claude/scripts/send-event.sh $TICKET_NUMBER triage agent_started
 ```
 Ausgabe: `▶ triage — Ticket-Qualität prüfen`
 
@@ -196,7 +219,7 @@ Lies .claude/agents/triage.md für deine Rolle.
 
 Analysiere folgendes Ticket:
 
-Ticket-ID: T-{N}
+Ticket-ID: T-$TICKET_NUMBER
 Titel: {title}
 Beschreibung:
 {body}
@@ -209,7 +232,7 @@ Verarbeite das JSON-Ergebnis des Agents:
 - **qa_tier**: Merke `qa_tier` (full/light/skip), `qa_pages` und `qa_flows` für Schritt 10 (Automated QA).
 
 ```bash
-bash .claude/scripts/send-event.sh {N} triage completed '{"verdict": "{verdict}"}'
+bash .claude/scripts/send-event.sh $TICKET_NUMBER triage completed '{"verdict": "{verdict}"}'
 ```
 Ausgabe:
 - `✓ triage — Ticket ausreichend klar` (bei sufficient)
@@ -231,13 +254,13 @@ Lies `project.json` für Pfade und Stack-Details.
 
 Vor Agent-Start:
 ```bash
-bash .claude/scripts/send-event.sh {N} {agent-type} agent_started
+bash .claude/scripts/send-event.sh $TICKET_NUMBER {agent-type} agent_started
 ```
 Ausgabe: `▶ [{agent-type}] — {was der Agent macht}`
 
 Nach Agent-Ende — Token-Verbrauch aus dem Agent-Ergebnis extrahieren:
 ```bash
-bash .claude/scripts/send-event.sh {N} {agent-type} completed '{"tokens_used": {total_tokens}}'
+bash .claude/scripts/send-event.sh $TICKET_NUMBER {agent-type} completed '{"tokens_used": {total_tokens}}'
 ```
 Dabei `{total_tokens}` aus dem `<usage>total_tokens: X</usage>` Block des Agent-Ergebnisses lesen. Falls kein Usage-Block vorhanden, `0` senden.
 Ausgabe: `✓ [{agent-type}] abgeschlossen ({formatted_tokens} tokens)`
@@ -258,12 +281,12 @@ Ausgabe: `▶ build-check — {build command}`
 Lies Build-Commands aus `project.json` und führe sie aus.
 Nur bei Build-Fehlern:
 ```bash
-bash .claude/scripts/send-event.sh {N} devops agent_started
+bash .claude/scripts/send-event.sh $TICKET_NUMBER devops agent_started
 ```
 Ausgabe: `▶ devops — Build-Fehler beheben` und DevOps-Agent mit `model: "haiku"` spawnen.
 Nach DevOps-Agent:
 ```bash
-bash .claude/scripts/send-event.sh {N} devops completed
+bash .claude/scripts/send-event.sh $TICKET_NUMBER devops completed
 ```
 
 **NICHT STOPPEN.** Zeige dem User NICHT die Build-Ergebnisse und warte NICHT auf Antwort. SOFORT weiter zu Schritt 6.5.
@@ -271,7 +294,7 @@ bash .claude/scripts/send-event.sh {N} devops completed
 ### 6.5. Code Review (ein Agent)
 
 ```bash
-bash .claude/scripts/send-event.sh {N} code-review agent_started
+bash .claude/scripts/send-event.sh $TICKET_NUMBER code-review agent_started
 ```
 Ausgabe: `▶ code-review — Diff gegen main reviewen`
 
@@ -286,7 +309,7 @@ Du bist der Code Review Agent. Lies agents/code-review.md für deine Rolle.
 
 Arbeitsverzeichnis: {WORKTREE_DIR oder CWD}
 Branch: {aktueller Branch}
-Ticket: T-{N}
+Ticket: T-$TICKET_NUMBER
 
 Reviewe den Diff auf diesem Branch gegen main. Lies agents/code-review.md für Review-Kriterien und Workflow.
 Lies CLAUDE.md für Projekt-Konventionen.
@@ -300,7 +323,7 @@ Verarbeite das Ergebnis:
 - Falls keine Issues gefunden: still weiterlaufen
 
 ```bash
-bash .claude/scripts/send-event.sh {N} code-review completed
+bash .claude/scripts/send-event.sh $TICKET_NUMBER code-review completed
 ```
 Ausgabe nach Abschluss:
 - `✓ code-review abgeschlossen ({N} issues gefixt)` (bei Findings)
@@ -313,7 +336,7 @@ Falls Review-Fixes den Build brechen: DevOps-Agent spawnen (wie in Schritt 6), d
 ### 7. Review (ein Agent)
 
 ```bash
-bash .claude/scripts/send-event.sh {N} qa agent_started
+bash .claude/scripts/send-event.sh $TICKET_NUMBER qa agent_started
 ```
 Ausgabe: `▶ qa — Acceptance Criteria & Security prüfen`
 
@@ -323,7 +346,7 @@ Ein QA-Agent mit `model: "haiku"`:
 - Bei Problemen: direkt fixen
 
 ```bash
-bash .claude/scripts/send-event.sh {N} qa completed
+bash .claude/scripts/send-event.sh $TICKET_NUMBER qa completed
 ```
 Ausgabe nach Abschluss: `✓ qa abgeschlossen`
 
@@ -393,7 +416,7 @@ Ausgabe pro geprüfter Datei:
 
 **Pipeline-Event senden** (Orchestrator abgeschlossen):
 ```bash
-bash .claude/scripts/send-event.sh {N} orchestrator completed
+bash .claude/scripts/send-event.sh $TICKET_NUMBER orchestrator completed
 ```
 
 **WICHTIG: `/ship` wird NICHT aufgerufen.** `/ship` mergt automatisch — das darf nur der User auslösen.
@@ -407,7 +430,7 @@ NICHT mergen. NICHT auf main wechseln. NICHT Status auf "done" setzen.
 **9a. Commit:**
 ```bash
 git add <betroffene-dateien>
-git commit -m "feat(T-{N}): {englische Beschreibung}
+git commit -m "feat(T-$TICKET_NUMBER): {englische Beschreibung}
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 ```
@@ -419,7 +442,7 @@ git push -u origin $(git branch --show-current)
 
 **9c. PR erstellen:**
 ```bash
-gh pr view 2>/dev/null || gh pr create --title "feat(T-{N}): {Beschreibung}" --body "$(cat <<'EOF'
+gh pr view 2>/dev/null || gh pr create --title "feat(T-$TICKET_NUMBER): {Beschreibung}" --body "$(cat <<'EOF'
 ## Summary
 - {Bullet Points}
 
@@ -452,12 +475,16 @@ Baue daraus einen Markdown-String für das `summary`-Feld:
 
 **Board API (bevorzugt):**
 ```bash
-bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"summary": "{summary_markdown}"}'
+if bash .claude/scripts/board-api.sh patch "tickets/$TICKET_NUMBER" '{"summary": "{summary_markdown}"}'; then
+  echo "✓ summary auf T-$TICKET_NUMBER gesetzt"
+else
+  echo "⚠ summary Patch fehlgeschlagen für T-$TICKET_NUMBER — weiter ohne Blockade"
+fi
 ```
 
 **Legacy Supabase MCP (Fallback):**
 ```sql
-UPDATE public.tickets SET summary = '{summary_markdown}' WHERE number = {N} AND workspace_id = '{pipeline.workspace_id}';
+UPDATE public.tickets SET summary = '{summary_markdown}' WHERE number = $TICKET_NUMBER AND workspace_id = '{pipeline.workspace_id}';
 ```
 
 Ausgabe: `✓ summary — Änderungszusammenfassung ins Ticket geschrieben`
@@ -471,12 +498,16 @@ REVIEW_URL=$(gh pr view --json url -q .url 2>/dev/null || echo "")
 
 **Board API (bevorzugt):**
 ```bash
-bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"status": "in_review", "review_url": "'"$REVIEW_URL"'"}'
+if bash .claude/scripts/board-api.sh patch "tickets/$TICKET_NUMBER" '{"status": "in_review", "review_url": "'"$REVIEW_URL"'"}'; then
+  echo "✓ Status in_review + review_url auf T-$TICKET_NUMBER gesetzt"
+else
+  echo "⚠ in_review Patch fehlgeschlagen für T-$TICKET_NUMBER — weiter ohne Blockade"
+fi
 ```
 
 **Legacy Supabase MCP (Fallback):**
 ```sql
-UPDATE public.tickets SET status = 'in_review', review_url = '$REVIEW_URL' WHERE number = {N} AND workspace_id = '{pipeline.workspace_id}' RETURNING number, title, status;
+UPDATE public.tickets SET status = 'in_review', review_url = '$REVIEW_URL' WHERE number = $TICKET_NUMBER AND workspace_id = '{pipeline.workspace_id}' RETURNING number, title, status;
 ```
 
 Der PR bleibt offen bis der User ihn freigibt (via `/ship` oder "passt").
@@ -508,7 +539,7 @@ if [ -z "$HOSTING_PROVIDER" ]; then
 fi
 
 if [ "$HOSTING_PROVIDER" = "shopify" ]; then
-  PREVIEW_URL=$(bash .claude/scripts/shopify-dev.sh start "T-${N}" "${TITLE}")
+  PREVIEW_URL=$(bash .claude/scripts/shopify-dev.sh start "T-${TICKET_NUMBER}" "${TITLE}")
 elif [ "$HOSTING_PROVIDER" = "vercel" ]; then
   PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)
 elif [ "$HOSTING_PROVIDER" = "coolify" ]; then
@@ -528,21 +559,25 @@ Falls eine URL gefunden wurde (`$PREVIEW_URL` nicht leer), ins Ticket schreiben:
 **Board API:**
 ```bash
 if [ -n "$PREVIEW_URL" ]; then
-  bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"preview_url": "'"$PREVIEW_URL"'"}'
+  if bash .claude/scripts/board-api.sh patch "tickets/$TICKET_NUMBER" '{"preview_url": "'"$PREVIEW_URL"'"}'; then
+    echo "✓ preview_url auf T-$TICKET_NUMBER gesetzt"
+  else
+    echo "⚠ preview_url Patch fehlgeschlagen für T-$TICKET_NUMBER — weiter ohne Blockade"
+  fi
 fi
 ```
 
 **Preview-Comment posten (non-blocking):**
 ```bash
 if [ -n "$PREVIEW_URL" ]; then
-  bash .claude/scripts/post-comment.sh {N} "Preview: $PREVIEW_URL" preview
+  bash .claude/scripts/post-comment.sh $TICKET_NUMBER "Preview: $PREVIEW_URL" preview
 fi
 ```
 
 **Legacy Supabase MCP (Fallback):**
 ```bash
 if [ -n "$PREVIEW_URL" ]; then
-  mcp__claude_ai_Supabase__execute_sql "UPDATE public.tickets SET preview_url = '$PREVIEW_URL' WHERE number = {N} AND workspace_id = '{pipeline.workspace_id}' RETURNING number, preview_url;"
+  mcp__claude_ai_Supabase__execute_sql "UPDATE public.tickets SET preview_url = '$PREVIEW_URL' WHERE number = $TICKET_NUMBER AND workspace_id = '{pipeline.workspace_id}' RETURNING number, preview_url;"
 fi
 ```
 
@@ -558,7 +593,7 @@ Ausgabe:
 Nutze das `qa_tier` aus der Triage (Schritt 3.5). Falls die Triage kein `qa_tier` lieferte, default auf `light`.
 
 ```bash
-bash .claude/scripts/send-event.sh {N} qa-auto agent_started
+bash .claude/scripts/send-event.sh $TICKET_NUMBER qa-auto agent_started
 ```
 Ausgabe: `▶ qa-auto — Automatisierte QA ({qa_tier} tier)`
 
@@ -642,14 +677,14 @@ Nach 3 gescheiterten Versuchen: trotzdem weitermachen, Fehler im PR-Kommentar do
 #### 10e. QA-Report als PR-Kommentar + Labels
 
 ```bash
-gh pr comment --body-file /tmp/qa-report-{N}.md
+gh pr comment --body-file /tmp/qa-report-$TICKET_NUMBER.md
 gh pr edit --add-label "qa:passed"        # alles grün
 gh pr edit --add-label "qa:needs-review"  # nach 3 Fix-Versuchen nicht grün
 gh pr edit --add-label "qa:skipped"       # skip tier
 ```
 
 ```bash
-bash .claude/scripts/send-event.sh {N} qa-auto completed '{"tier": "{qa_tier}", "status": "{passed|failed}"}'
+bash .claude/scripts/send-event.sh $TICKET_NUMBER qa-auto completed '{"tier": "{qa_tier}", "status": "{passed|failed}"}'
 ```
 Ausgabe: `✓ qa-auto — {qa_tier} tier {passed|needs-review|skipped}`
 
