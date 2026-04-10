@@ -1,0 +1,91 @@
+{
+  "name": "just-ship",
+  "version": "1.0.0",
+  "description": "Autonomous multi-agent development pipeline — from ticket to PR in one command",
+  "author": {
+    "name": "Just Ship",
+    "url": "https://just-ship.io"
+  },
+  "keywords": [
+    "autonomous-development",
+    "multi-agent",
+    "pipeline",
+    "ticket-to-pr",
+    "claude-code"
+  ],
+  "skills": "skills/",
+  "agents": "agents/",
+  "commands": "commands/",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/detect-ticket.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/on-agent-start.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/on-agent-stop.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/on-session-end.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
+  "userConfig": {
+    "board_api_key": {
+      "description": "Just Ship Board API key (starts with adp_)",
+      "sensitive": true
+    },
+    "workspace_id": {
+      "description": "Just Ship workspace UUID",
+      "sensitive": false
+    },
+    "project_id": {
+      "description": "Just Ship project UUID",
+      "sensitive": false
+    },
+    "anthropic_api_key": {
+      "description": "Anthropic API key for pipeline runner (VPS only)",
+      "sensitive": true
+    },
+    "github_token": {
+      "description": "GitHub personal access token with repo scope (VPS only)",
+      "sensitive": true
+    }
+  }
+}
