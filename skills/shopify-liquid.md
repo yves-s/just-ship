@@ -1,6 +1,13 @@
 ---
 name: shopify-liquid
 description: Use when writing, modifying, or debugging Shopify Liquid code — sections, snippets, schema, template logic. Covers Liquid syntax, section schema patterns, template hierarchy, Shopify-specific filters, and common gotchas. Load this skill whenever a ticket involves Liquid templates, section building, snippet creation, or Liquid debugging in a Shopify theme.
+triggers:
+  - shopify
+  - liquid
+  - sections
+  - snippets
+  - schema
+  - template
 ---
 
 # Shopify Liquid

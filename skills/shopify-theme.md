@@ -1,6 +1,13 @@
 ---
 name: shopify-theme
 description: Use when working with Shopify theme file structure, JSON templates, assets, settings, localization, or theme JavaScript. Covers OS 2.0 architecture, Web Components pattern, Ajax Cart API, Section Rendering API, CSS custom properties, and asset pipeline. Load this skill whenever a ticket involves theme structure, template wiring, JavaScript behavior, asset loading, or i18n in a Shopify theme.
+triggers:
+  - shopify
+  - theme
+  - assets
+  - i18n
+  - javascript
+  - os2
 ---
 
 # Shopify Theme Architecture

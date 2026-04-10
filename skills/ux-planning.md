@@ -1,6 +1,13 @@
 ---
 name: ux-planning
 description: Use when planning a feature from a UI/UX perspective — user flows, screen inventory, information architecture, navigation, and interaction patterns. Use BEFORE implementation, AFTER brainstorming. Also triggers for navigation redesign, onboarding flow design, mobile-first planning, feature scoping from a UX perspective, or when a ticket reads like a feature description rather than a scoped task. This skill makes autonomous UX decisions — it doesn't ask "modal or bottom sheet?" when the answer is obvious from the context. It applies UX heuristics, accessibility, and mobile-native patterns by default, not as an afterthought. Use proactively whenever a feature needs UX definition before code.
+triggers:
+  - ux
+  - user-flow
+  - navigation
+  - onboarding
+  - information-architecture
+  - mobile
 ---
 
 # UX Planning

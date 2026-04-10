@@ -1,6 +1,12 @@
 ---
 name: shopify-metafields
 description: Use when working with Shopify metafields, metaobjects, custom structured content, or complex metafield access patterns in Liquid. Covers metafield types, .value dereferencing, reference resolution, list iteration, metaobjects as custom content types, and Admin API mutations. Load this skill whenever a ticket involves custom data, structured content beyond standard product fields, or metaobject definitions.
+triggers:
+  - shopify
+  - metafields
+  - metaobjects
+  - custom-data
+  - liquid
 ---
 
 # Shopify Metafields & Metaobjects

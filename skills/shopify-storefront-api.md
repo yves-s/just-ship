@@ -1,6 +1,13 @@
 ---
 name: shopify-storefront-api
 description: Use when building custom storefronts, data fetching, or working with Shopify's GraphQL Storefront API. Covers queries, mutations, pagination, authentication, caching, and rate limits. Load for Hydrogen projects, headless builds, or any code that fetches products/collections/cart data from Shopify.
+triggers:
+  - shopify
+  - storefront-api
+  - graphql
+  - headless
+  - cart
+  - collections
 ---
 
 # Shopify Storefront API

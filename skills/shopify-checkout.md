@@ -1,6 +1,13 @@
 ---
 name: shopify-checkout
 description: Use when customizing Shopify checkout (Shopify Plus). Covers Checkout UI Extensions (React sandbox), Shopify Functions (discounts, payment, delivery customizations), Cart Transform, Checkout Branding API, and post-purchase extensions. Load when working on checkout customizations.
+triggers:
+  - shopify
+  - checkout
+  - extensions
+  - discounts
+  - payment
+  - functions
 ---
 
 # Shopify Checkout Customization

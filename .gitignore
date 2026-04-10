@@ -62,6 +62,7 @@ scripts/*
 !scripts/pipeline-vps-test.sh
 !scripts/detect-shopify.sh
 !scripts/provision-pipeline.sh
+!scripts/validate-skill-frontmatter.sh
 .worktrees/
 
 # Git worktrees

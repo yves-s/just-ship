@@ -1,6 +1,12 @@
 ---
 name: shopify-app-scaffold
 description: Use after running `shopify app init --template=remix` to clean up the generated scaffold into an opinionated starter. Removes demo content, keeps auth and infrastructure, creates a minimal app shell. Load when scaffold_type is "shopify-app" in Triage result.
+triggers:
+  - shopify
+  - scaffold
+  - remix
+  - app-init
+  - starter
 ---
 
 # Shopify App Scaffold Cleanup

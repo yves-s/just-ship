@@ -221,6 +221,15 @@ Process skills for TDD, debugging, code review, and planning -- provided by the 
 
 Add your own project-specific skills in `.claude/skills/`. They are never touched by framework updates.
 
+### Progressive Skill Disclosure
+
+Skills use a two-stage loading model to minimize token overhead on the VPS (API plan):
+
+1. **Frontmatter-only** -- initial load reads only `name`, `description`, and `triggers` keywords (~100 tokens/skill)
+2. **Full content** -- loaded on demand when a skill is activated for a specific agent role
+
+All skills must include valid YAML frontmatter. Validate with: `bash scripts/validate-skill-frontmatter.sh`
+
 ---
 
 ## Architecture

@@ -229,7 +229,12 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
   const agents = loadAgents(projectDir);
   const loadedSkills = loadSkills(projectDir, config);
   if (loadedSkills.skillNames.length > 0) {
-    logger.info({ skills: loadedSkills.skillNames }, "Skills loaded");
+    logger.info({
+      skills: loadedSkills.skillNames,
+      frontmatterTokens: loadedSkills.totalFrontmatterTokens,
+      fullTokens: loadedSkills.totalFullTokens,
+      savedTokens: loadedSkills.totalFullTokens - loadedSkills.totalFrontmatterTokens,
+    }, "Skills loaded (progressive disclosure)");
   }
 
   // Filter agents by skipAgents config
@@ -970,6 +975,14 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
 
   const agents = loadAgents(projectDir);
   const loadedSkills = loadSkills(projectDir, config);
+  if (loadedSkills.skillNames.length > 0) {
+    logger.info({
+      skills: loadedSkills.skillNames,
+      frontmatterTokens: loadedSkills.totalFrontmatterTokens,
+      fullTokens: loadedSkills.totalFullTokens,
+      savedTokens: loadedSkills.totalFullTokens - loadedSkills.totalFrontmatterTokens,
+    }, "Skills loaded (progressive disclosure)");
+  }
 
   // Filter agents by skipAgents config
   const skipAgents = config.pipeline.skipAgents ?? [];

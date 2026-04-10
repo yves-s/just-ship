@@ -1,6 +1,13 @@
 ---
 name: creative-design
 description: Use when creating new UIs from scratch — landing pages, marketing sites, prototypes, or any greenfield frontend work where no existing design system applies. Also triggers for portfolio sites, product launches, campaign pages, microsites, or any page where visual distinction and memorability matter as much as function. This skill creates something genuinely distinctive — not another AI-generated template. For spacing, typography defaults, responsive strategy, and accessibility, defer to `frontend-design`. This skill adds the creative layer on top.
+triggers:
+  - landing-page
+  - marketing
+  - greenfield
+  - visual
+  - branding
+  - creative
 ---
 
 # Creative Design (Greenfield)
