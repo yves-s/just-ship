@@ -26,7 +26,7 @@ Lies `project.json`. Bestimme den Pipeline-Modus:
 
 1. **Board API** (bevorzugt): Falls `pipeline.workspace_id` gesetzt → `board-api.sh` verwenden:
    ```bash
-   bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"status": "done"}'
+   bash .claude/scripts/board-api.sh patch "tickets/$TICKET_NUMBER" '{"status": "done"}'
    ```
    Credentials werden intern aufgelöst. `pipeline.project_id` aus `project.json`.
 2. **Legacy Supabase MCP**: Falls nur `project_id` gesetzt (ohne `workspace_id`), und `project_id` hat keine Bindestriche → `execute_sql` verwenden, Warnung ausgeben: "Kein Board API konfiguriert. Nutze Legacy Supabase MCP. Fuehre /setup-just-ship aus um zu upgraden."
@@ -41,14 +41,19 @@ Lies `project.json`. Bestimme den Pipeline-Modus:
 
 ## Ablauf — ALLE Schritte ohne Pause durchführen
 
-### 0. Branch auflösen (falls Argument übergeben)
+### 0. Branch auflösen und TICKET_NUMBER setzen
+
+**KRITISCH — dieser Schritt setzt die Variable die ALLE folgenden Board-API-Calls verwenden.**
 
 Falls `/ship` mit Argument aufgerufen wird (z.B. `/ship T-385`):
 
-1. Ticket-Nummer aus Argument extrahieren (Pattern: `T-{N}` oder `{N}`)
+1. Ticket-Nummer aus Argument extrahieren (Pattern: `T-385` → `385`, oder `385` direkt):
+   ```bash
+   TICKET_NUMBER=$(echo "$ARGUMENTS" | grep -oE '[0-9]+' | head -1)
+   ```
 2. Zugehörigen Branch finden:
    ```bash
-   git branch --list "*T-${N}*" "*/${N}-*" | head -1 | xargs
+   git branch --list "*T-${TICKET_NUMBER}*" "*/${TICKET_NUMBER}-*" | head -1 | xargs
    ```
 3. Branch auschecken:
    ```bash
@@ -56,9 +61,19 @@ Falls `/ship` mit Argument aufgerufen wird (z.B. `/ship T-385`):
    ```
 4. Weiter mit Schritt 1
 
-Falls kein Branch gefunden: Fehlermeldung "Kein Branch für T-{N} gefunden."
+Falls `/ship` ohne Argument: aktuellen Branch verwenden. Fehler wenn auf `main`.
 
-Falls `/ship` ohne Argument: wie bisher den aktuellen Branch verwenden. Fehler wenn auf `main`.
+**In JEDEM Fall — Ticket-Nummer aus Branch-Name extrahieren und als Shell-Variable setzen:**
+```bash
+TICKET_NUMBER=$(git branch --show-current | grep -oE 'T-[0-9]+' | head -1 | sed 's/T-//')
+if [ -z "$TICKET_NUMBER" ]; then
+  echo "ERROR: Konnte keine Ticket-Nummer aus Branch-Name extrahieren. Branch: $(git branch --show-current)"
+  exit 1
+fi
+echo "TICKET_NUMBER=$TICKET_NUMBER"
+```
+
+**ALLE folgenden Bash-Blöcke MÜSSEN `$TICKET_NUMBER` verwenden.** Niemals `{N}` als Platzhalter in board-api.sh Calls — das wird nicht aufgelöst und erzeugt einen 404.
 
 SOFORT WEITER ZU SCHRITT 1.
 
@@ -113,14 +128,18 @@ REVIEW_URL=$(gh pr view --json url -q .url 2>/dev/null || echo "")
 **Board API (bevorzugt):**
 ```bash
 if [ -n "$REVIEW_URL" ]; then
-  bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"review_url": "'"$REVIEW_URL"'"}'
+  if bash .claude/scripts/board-api.sh patch "tickets/$TICKET_NUMBER" '{"review_url": "'"$REVIEW_URL"'"}'; then
+    echo "✓ review_url auf T-$TICKET_NUMBER gesetzt"
+  else
+    echo "⚠ review_url Patch fehlgeschlagen für T-$TICKET_NUMBER — weiter ohne Blockade"
+  fi
 fi
 ```
 
 **Legacy Supabase MCP (Fallback):**
 ```bash
 if [ -n "$REVIEW_URL" ]; then
-  mcp__claude_ai_Supabase__execute_sql "UPDATE public.tickets SET review_url = '$REVIEW_URL' WHERE number = {N} AND workspace_id = '{pipeline.workspace_id}' RETURNING number, review_url;"
+  mcp__claude_ai_Supabase__execute_sql "UPDATE public.tickets SET review_url = '$REVIEW_URL' WHERE number = $TICKET_NUMBER AND workspace_id = '{pipeline.workspace_id}' RETURNING number, review_url;"
 fi
 ```
 
@@ -142,14 +161,18 @@ Falls eine URL gefunden wurde (`$PREVIEW_URL` nicht leer):
 **Board API:**
 ```bash
 if [ -n "$PREVIEW_URL" ]; then
-  bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"preview_url": "'"$PREVIEW_URL"'"}'
+  if bash .claude/scripts/board-api.sh patch "tickets/$TICKET_NUMBER" '{"preview_url": "'"$PREVIEW_URL"'"}'; then
+    echo "✓ preview_url auf T-$TICKET_NUMBER gesetzt"
+  else
+    echo "⚠ preview_url Patch fehlgeschlagen für T-$TICKET_NUMBER — weiter ohne Blockade"
+  fi
 fi
 ```
 
 **Legacy Supabase MCP (Fallback):**
 ```bash
 if [ -n "$PREVIEW_URL" ]; then
-  mcp__claude_ai_Supabase__execute_sql "UPDATE public.tickets SET preview_url = '$PREVIEW_URL' WHERE number = {N} AND workspace_id = '{pipeline.workspace_id}' RETURNING number, preview_url;"
+  mcp__claude_ai_Supabase__execute_sql "UPDATE public.tickets SET preview_url = '$PREVIEW_URL' WHERE number = $TICKET_NUMBER AND workspace_id = '{pipeline.workspace_id}' RETURNING number, preview_url;"
 fi
 ```
 
@@ -229,7 +252,7 @@ Ausgabe:
 **Theme-Variant (default):** Unpublished Preview-Theme löschen:
 ```bash
 if [ "$PLATFORM" = "shopify" ] && [ "$VARIANT" != "remix" ]; then
-  THEME_ID_FILE=".worktrees/T-${N}/.claude/.shopify-theme-id"
+  THEME_ID_FILE=".worktrees/T-${TICKET_NUMBER}/.claude/.shopify-theme-id"
   [ ! -f "$THEME_ID_FILE" ] && THEME_ID_FILE=".claude/.shopify-theme-id"
   SHOPIFY_THEME_ID_FILE="$THEME_ID_FILE" bash .claude/scripts/shopify-preview.sh cleanup
 fi
@@ -245,11 +268,11 @@ SOFORT WEITER ZU SCHRITT 5b.
 
 Prüfe ob ein Worktree für dieses Ticket existiert:
 ```bash
-if [ -d ".worktrees/T-{N}" ]; then
-  git worktree remove .worktrees/T-{N} --force 2>/dev/null || true
+if [ -d ".worktrees/T-$TICKET_NUMBER" ]; then
+  git worktree remove ".worktrees/T-$TICKET_NUMBER" --force 2>/dev/null || true
 fi
 ```
-Ausgabe: `✓ worktree — .worktrees/T-{N} aufgeräumt` (falls vorhanden)
+Ausgabe: `✓ worktree — .worktrees/T-$TICKET_NUMBER aufgeräumt` (falls vorhanden)
 
 Falls kein Worktree existiert: still überspringen.
 
@@ -271,7 +294,7 @@ if [ -n "$SESSION_FILE" ]; then
 
   if [ -n "$END_JSON" ]; then
     # Read start snapshot (written by /develop step 3e)
-    SNAPSHOT_FILE=".claude/.token-snapshot-T-{N}.json"
+    SNAPSHOT_FILE=".claude/.token-snapshot-T-$TICKET_NUMBER.json"
     START_TOKENS=0
     START_COST=0
     if [ -f "$SNAPSHOT_FILE" ]; then
@@ -287,7 +310,7 @@ if [ -n "$SESSION_FILE" ]; then
     DELTA_COST=$(node -e "process.stdout.write(String(parseFloat(Math.max(0, Number('$END_COST') - Number('$START_COST')).toFixed(4))))")
 
     if [ "$DELTA_TOKENS" != "0" ]; then
-      bash .claude/scripts/board-api.sh patch "tickets/{N}" "{\"total_tokens\": $DELTA_TOKENS, \"estimated_cost\": $DELTA_COST}" >/dev/null 2>&1 || true
+      bash .claude/scripts/board-api.sh patch "tickets/$TICKET_NUMBER" "{\"total_tokens\": $DELTA_TOKENS, \"estimated_cost\": $DELTA_COST}" >/dev/null 2>&1 || true
     fi
 
     # Clean up snapshot
@@ -310,7 +333,7 @@ SOFORT WEITER ZU SCHRITT 6.
 ```bash
 SHIP_STATUS_OK=false
 for ATTEMPT in 1 2 3; do
-  if bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"status": "done", "summary": "{pr_summary}"}'; then
+  if bash .claude/scripts/board-api.sh patch "tickets/$TICKET_NUMBER" '{"status": "done", "summary": "{pr_summary}"}'; then
     SHIP_STATUS_OK=true
     break
   fi
@@ -318,14 +341,14 @@ for ATTEMPT in 1 2 3; do
   sleep $ATTEMPT
 done
 if [ "$SHIP_STATUS_OK" != "true" ]; then
-  echo "⚠ Board-Status-Update auf 'done' fehlgeschlagen nach 3 Versuchen. Manuell prüfen: T-{N}"
+  echo "⚠ Board-Status-Update auf 'done' fehlgeschlagen nach 3 Versuchen. Manuell prüfen: T-$TICKET_NUMBER"
 fi
 ```
 Hinweis: `summary` wird mitgesendet damit das Board eine Zusammenfassung des abgeschlossenen Tickets anzeigt.
 
 **Legacy Supabase MCP (Fallback):** Via `mcp__claude_ai_Supabase__execute_sql`:
 ```sql
-UPDATE public.tickets SET status = 'done', summary = '{summary}' WHERE number = {N} AND workspace_id = '{pipeline.workspace_id}' RETURNING number, title, status;
+UPDATE public.tickets SET status = 'done', summary = '{summary}' WHERE number = $TICKET_NUMBER AND workspace_id = '{pipeline.workspace_id}' RETURNING number, title, status;
 ```
 
 SOFORT WEITER ZU SCHRITT 7.
@@ -336,7 +359,7 @@ SOFORT WEITER ZU SCHRITT 7.
 ✓ Shipped: feat(T-{ticket}): {Beschreibung}
   PR: {url}
   Branch: {branch} → deleted
-  Worktree: .worktrees/T-{N} → aufgeräumt (falls vorhanden)
+  Worktree: .worktrees/T-$TICKET_NUMBER → aufgeräumt (falls vorhanden)
   Board: done (falls konfiguriert)
 ```
 
