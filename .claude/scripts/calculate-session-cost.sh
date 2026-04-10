@@ -35,15 +35,15 @@ let cacheReadTokens = 0;
 let cacheCreateTokens = 0;
 let detectedModel = null;
 
-// Model pricing per 1K tokens (must match pipeline/lib/cost.ts)
-// Cache read = 5min TTL auto-caching (98% discount for Opus), cache create = 25% surcharge
-// Claude Code uses auto-caching (no explicit cache_control), so 5min TTL applies.
-const modelPricing = {
-  'claude-opus-4-6':              { input: 0.015, cacheRead: 0.0003, cacheCreate: 0.01875, output: 0.075 },
-  'claude-opus-4-20250514':       { input: 0.015, cacheRead: 0.0003, cacheCreate: 0.01875, output: 0.075 },
-  'claude-sonnet-4-6':            { input: 0.003, cacheRead: 0.00006, cacheCreate: 0.00375, output: 0.015 },
-  'claude-sonnet-4-20250514':     { input: 0.003, cacheRead: 0.00006, cacheCreate: 0.00375, output: 0.015 },
-  'claude-haiku-4-5-20251001':    { input: 0.0008, cacheRead: 0.000016, cacheCreate: 0.001, output: 0.004 },
+// Pricing last verified: 2026-04-10 — https://platform.claude.com/docs/en/about-claude/pricing
+// Per MTok (million tokens). Must match pipeline/lib/cost.ts.
+// Cache: 5min TTL auto-caching (read = 2% of input, create = 125% of input).
+const COST_PER_MTOK = {
+  'claude-opus-4-6':              { input: 5, cacheRead: 0.10, cacheCreate: 6.25, output: 25 },
+  'claude-opus-4-20250514':       { input: 5, cacheRead: 0.10, cacheCreate: 6.25, output: 25 },
+  'claude-sonnet-4-6':            { input: 3, cacheRead: 0.06, cacheCreate: 3.75, output: 15 },
+  'claude-sonnet-4-20250514':     { input: 3, cacheRead: 0.06, cacheCreate: 3.75, output: 15 },
+  'claude-haiku-4-5-20251001':    { input: 1, cacheRead: 0.02, cacheCreate: 1.25, output: 5 },
 };
 
 for (const line of lines) {
@@ -59,7 +59,7 @@ for (const line of lines) {
     // Detect model from first message with valid pricing (typically consistent within a session)
     if (!detectedModel && obj?.message?.model) {
       const model = obj.message.model;
-      if (modelPricing[model]) {
+      if (COST_PER_MTOK[model]) {
         detectedModel = model;
       }
     }
@@ -73,11 +73,11 @@ if (totalTokens === 0) {
 
 // Use detected model pricing, fall back to Opus if unknown
 const finalModel = detectedModel || 'claude-opus-4-6';
-const p = modelPricing[finalModel];
-const costUsd = (inputTokens / 1000) * p.input
-  + (cacheReadTokens / 1000) * p.cacheRead
-  + (cacheCreateTokens / 1000) * p.cacheCreate
-  + (outputTokens / 1000) * p.output;
+const p = COST_PER_MTOK[finalModel];
+const costUsd = (inputTokens / 1_000_000) * p.input
+  + (cacheReadTokens / 1_000_000) * p.cacheRead
+  + (cacheCreateTokens / 1_000_000) * p.cacheCreate
+  + (outputTokens / 1_000_000) * p.output;
 
 process.stdout.write(JSON.stringify({
   input_tokens: inputTokens,
