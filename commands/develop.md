@@ -96,7 +96,7 @@ Zeige kurz an: `▶ Ticket T-{N}: {title}` — dann direkt weiter, NICHT auf Bes
 Extrahiere die Ticket-Nummer aus dem JSON-Response von Schritt 1 und setze sie als Shell-Variable:
 ```bash
 # TICKET_NUMBER = die Zahl aus dem `number`-Feld des Ticket-JSON, z.B. 162
-TICKET_NUMBER=$(echo "$TICKET_JSON" | node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).number || JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).data?.number || ''))" 2>/dev/null)
+TICKET_NUMBER=$(echo "$TICKET_JSON" | node -e "const json = JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); process.stdout.write(String(json.number || (json.data && json.data.number) || ''))" 2>/dev/null)
 # Fallback: falls $ARGUMENTS eine Ticket-ID enthält (z.B. "T-162" oder "162")
 if [ -z "$TICKET_NUMBER" ]; then
   TICKET_NUMBER=$(echo "$ARGUMENTS" | grep -oE '[0-9]+' | head -1)
