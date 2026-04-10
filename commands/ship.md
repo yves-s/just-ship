@@ -285,7 +285,7 @@ SOFORT WEITER ZU SCHRITT 5c.
 Berechne die **Ticket-spezifischen** Kosten als Delta zwischen dem Snapshot (geschrieben bei `/develop` Start) und dem aktuellen Stand. Das isoliert die Kosten pro Ticket, auch wenn mehrere Tickets in einer Session bearbeitet werden.
 
 ```bash
-SAFE_CWD=$(echo "$PWD" | sed 's|^/||' | sed 's|/|-|g')
+SAFE_CWD=$(echo "$PWD" | sed 's|^/||' | sed 's|/|-|g' | sed 's| |-|g' | sed 's|\.|-|g')
 SESSION_DIR="$HOME/.claude/projects/-${SAFE_CWD}"
 SESSION_FILE=$(ls -t "$SESSION_DIR"/*.jsonl 2>/dev/null | head -1)
 

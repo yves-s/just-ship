@@ -10,6 +10,7 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ### Fixed
 - **Coolify Preview URL polling** (T-752): Updated `coolify-preview.ts` and `get-preview-url.sh` to use correct Coolify v4 API endpoints — `GET /api/v1/deployments` instead of the non-existent `GET /api/v1/applications/{uuid}/deployments`. Added PR preview URL construction using `preview_url_template` pattern (`https://{pr_id}.{domain}`)
+- **Token tracking for projects with spaces/dots in path** (`calculate-session-cost.sh`, `session-summary.sh`, `develop.md`, `ship.md`): SAFE_CWD normalization now replaces spaces and dots with dashes, matching Claude Code's internal session directory naming convention. Previously, projects like `Psychotherapie Schleich/adhs-diagnostic` or `19elf.cc` would silently fail token tracking (exit 0, no data)
 
 ### Added
 - **Smart Model Routing** (`pipeline/lib/model-router.ts`): Pipeline agents are now routed to optimal models per phase — planning agents (code-review, qa, security) use Opus, implementation agents (backend, frontend, data-engineer, devops) use Sonnet. Configurable via `pipeline.model_routing` in `project.json` with per-agent overrides, custom phase assignments, and model validation. Falls back to single-model behavior when not configured. Board events include model info for cost tracking

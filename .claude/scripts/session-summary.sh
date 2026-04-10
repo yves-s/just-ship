@@ -45,7 +45,7 @@ if [[ "$REPO_ROOT" =~ \.worktrees/T-[0-9]+ ]]; then
 fi
 
 # Find the session file from the main repo's project dir
-SAFE_CWD=$(echo "$REPO_ROOT" | sed 's|^/||' | sed 's|/|-|g')
+SAFE_CWD=$(echo "$REPO_ROOT" | sed 's|^/||' | sed 's|/|-|g' | sed 's| |-|g' | sed 's|\.|-|g')
 SESSION_DIR="$HOME/.claude/projects/-${SAFE_CWD}"
 SESSION_FILE=$(ls -t "$SESSION_DIR"/*.jsonl 2>/dev/null | head -1 || true)
 
