@@ -596,6 +596,31 @@ if [ "$MODE" = "update" ]; then
   # Write version
   echo "$FRAMEWORK_VERSION" > "$VERSION_FILE"
 
+  # Sync plugin.json + marketplace.json versions from framework source
+  if [ -f "$FRAMEWORK_DIR/.claude-plugin/plugin.json" ]; then
+    PLUGIN_VERSION=$(JS_PLUGIN_SRC="$FRAMEWORK_DIR/.claude-plugin/plugin.json" node -e "
+      try { process.stdout.write(JSON.parse(require('fs').readFileSync(process.env.JS_PLUGIN_SRC,'utf-8')).version || '1.0.0'); }
+      catch(e) { process.stdout.write('1.0.0'); }
+    " 2>/dev/null || echo "1.0.0")
+    SYNCED=0
+    for pf in "$PROJECT_DIR/.claude-plugin/plugin.json" "$PROJECT_DIR/.claude-plugin/marketplace.json"; do
+      if [ -f "$pf" ]; then
+        JS_PF="$pf" JS_VER="$PLUGIN_VERSION" node -e "
+          const fs = require('fs');
+          const c = JSON.parse(fs.readFileSync(process.env.JS_PF, 'utf-8'));
+          const v = process.env.JS_VER;
+          if (c.version !== undefined) c.version = v;
+          if (c.metadata !== undefined) c.metadata.version = v;
+          if (c.plugins && c.plugins[0]) c.plugins[0].version = v;
+          fs.writeFileSync(process.env.JS_PF, JSON.stringify(c, null, 2) + '\n');
+        " 2>/dev/null && SYNCED=$((SYNCED + 1))
+      fi
+    done
+    if [ "$SYNCED" -gt 0 ]; then
+      echo "  ✓ Plugin version synced ($PLUGIN_VERSION)"
+    fi
+  fi
+
   # --- Check for old project.json format ---
   if [ -f "$PROJECT_DIR/project.json" ]; then
     JS_PJ="$PROJECT_DIR/project.json"

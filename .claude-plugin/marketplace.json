@@ -1,0 +1,40 @@
+{
+  "name": "just-ship",
+  "description": "Marketplace for the Just Ship autonomous development framework",
+  "owner": {
+    "name": "Just Ship",
+    "email": "hello@just-ship.io"
+  },
+  "metadata": {
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "just-ship",
+      "description": "Autonomous multi-agent development pipeline — from ticket to PR in one command. Write tickets, and watch them turn into pull requests. 10 specialized agents (Orchestrator, Backend, Frontend, Data Engineer, QA, and more) work in parallel to plan, implement, test, and ship your code.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Just Ship",
+        "url": "https://just-ship.io"
+      },
+      "source": {
+        "source": "github",
+        "repo": "yves-s/just-ship",
+        "ref": "v1.0.0"
+      },
+      "category": "development",
+      "tags": [
+        "autonomous-development",
+        "multi-agent",
+        "pipeline",
+        "ticket-to-pr",
+        "claude-code",
+        "agents",
+        "ci-cd",
+        "automation",
+        "kanban",
+        "devops"
+      ]
+    }
+  ]
+}
