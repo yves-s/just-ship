@@ -44,7 +44,43 @@ Two modes of operation:
 
 ---
 
-## Quick Start
+## Installation
+
+Two ways to install — choose the one that fits your workflow:
+
+### Path A: Plugin (recommended)
+
+Install as a Claude Code plugin via the Just Ship marketplace:
+
+```bash
+# 1. Add the marketplace
+claude plugin marketplace add yves-s/just-ship
+
+# 2. Install the plugin
+claude plugin install just-ship@just-ship
+```
+
+Then configure your project:
+```bash
+cd /path/to/your-project
+claude
+# Inside Claude Code:
+/init
+```
+
+**Update:**
+```bash
+claude plugin update just-ship@just-ship
+```
+
+**For development/testing (load from local directory):**
+```bash
+claude --plugin-dir /path/to/just-ship
+```
+
+### Path B: CLI (`setup.sh`)
+
+Full installation with CLI wrapper and VPS pipeline support:
 
 ```bash
 curl -fsSL https://just-ship.io/install | bash
@@ -59,30 +95,22 @@ just-ship setup
 
 The setup wizard guides you through project configuration and optionally connects to the [Just Ship Board](https://board.just-ship.io).
 
-**Update just-ship itself:**
+**Update:**
 ```bash
-just-ship self-update
+just-ship self-update   # pull latest framework
+just-ship update        # apply updates to current project
 ```
 
----
+### After installation (both paths)
 
-## Plugin Installation
-
-If you already have Claude Code, you can install just-ship as a plugin:
-
-**Load for a session:**
-```bash
-claude --plugin-dir /path/to/just-ship
-```
-
-After installation, configure your credentials:
+Configure your credentials:
 - **Board API Key** — from your [Just Ship Board](https://board.just-ship.io) workspace settings
 - **Workspace ID** — your workspace UUID
 - **Project ID** — your project UUID
 
 Sensitive values are stored in your system keychain. Non-sensitive config goes to `settings.json`.
 
-> **Note:** Plugin installation is for using just-ship as a development tool. For the full autonomous pipeline with VPS worker, use the [Quick Start](#quick-start) setup instead.
+> **When to use which:** Plugin installation is the simplest way to get started. Use the CLI path if you need the full autonomous VPS pipeline or prefer `just-ship` as a shell command.
 
 ---
 
@@ -351,7 +379,16 @@ Project-specific instructions -- architecture, conventions, domain knowledge. Ge
 - Git + [GitHub CLI](https://cli.github.com/) (`gh`)
 - Node.js >= 18
 
-### First Installation
+### Plugin Installation
+
+```bash
+claude plugin marketplace add yves-s/just-ship
+claude plugin install just-ship@just-ship
+```
+
+Update: `claude plugin update just-ship@just-ship`
+
+### CLI Installation
 
 ```bash
 curl -fsSL https://just-ship.io/install | bash
@@ -364,9 +401,9 @@ cd /path/to/your-project
 just-ship setup
 ```
 
-Interactive setup: asks for project name, generates config files, installs dependencies, sets up the [superpowers](https://github.com/obra/superpowers-marketplace) plugin.
+Non-interactive setup: auto-detects stack, generates config files, installs dependencies.
 
-### Update
+### CLI Update
 
 ```bash
 cd /path/to/your-project

@@ -6,12 +6,20 @@
     "name": "Just Ship",
     "url": "https://just-ship.io"
   },
+  "homepage": "https://just-ship.io",
+  "repository": "https://github.com/yves-s/just-ship",
+  "license": "MIT",
   "keywords": [
     "autonomous-development",
     "multi-agent",
     "pipeline",
     "ticket-to-pr",
-    "claude-code"
+    "claude-code",
+    "agents",
+    "automation",
+    "kanban",
+    "devops",
+    "ci-cd"
   ],
   "skills": "skills/",
   "agents": "agents/",
