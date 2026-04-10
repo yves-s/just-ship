@@ -177,10 +177,17 @@ else
 fi
 ((TESTS++))
 
-# Edge case: Long summary wrapping
-test_ac "Edge case: Long summary wraps" \
-  "bash '$SCRIPT' '723' 'Test' 'This is a very long summary text that should wrap across multiple lines in the terminal output' 'passed' '' ''" \
-  "lines"
+# Edge case: Long summary wrapping — verify fold splits the text so more than one │ prefix line appears
+WRAP_OUTPUT=$(bash "$SCRIPT" '723' 'Test' 'This is a very long summary text that should wrap across multiple lines in the terminal output' 'passed' '' '' 2>&1)
+WRAP_LINE_COUNT=$(echo "$WRAP_OUTPUT" | grep -c '^│  ' || true)
+((TESTS++))
+if [ "$WRAP_LINE_COUNT" -ge 2 ]; then
+  echo "✓ Edge case: Long summary wraps (${WRAP_LINE_COUNT} │  lines)"
+  ((PASS++))
+else
+  echo "✗ Edge case: Long summary wraps — expected ≥2 wrapped lines, got ${WRAP_LINE_COUNT}"
+  ((FAIL++))
+fi
 
 # Edge case: Error handling
 test_ac "Error: Missing params shows usage" \
