@@ -41,15 +41,24 @@ interface CoolifyDeployment {
 /**
  * Build the preview URL for a deployment.
  *
- * For PR deployments (pull_request_id > 0), constructs `https://{pr_id}.{domain}`
- * using Coolify's preview URL template pattern.
+ * For PR deployments (pull_request_id > 0), uses Coolify's preview_url_template
+ * to construct the URL. The template uses `{{pr_id}}` and `{{domain}}` placeholders.
+ * Example: template "board-{{pr_id}}.preview.just-ship.io" with PR 126 and
+ * fqdn "https://board.just-ship.io" → "https://board-126.preview.just-ship.io"
+ *
  * For non-PR deployments, returns the production FQDN as-is.
  */
-function buildPreviewUrl(fqdn: string, pullRequestId: number): string {
-  if (pullRequestId > 0) {
-    // Strip protocol to get bare domain: "https://board.just-ship.io" -> "board.just-ship.io"
+function buildPreviewUrl(
+  fqdn: string,
+  pullRequestId: number,
+  previewUrlTemplate?: string,
+): string {
+  if (pullRequestId > 0 && previewUrlTemplate) {
     const domain = fqdn.replace(/^https?:\/\//, "");
-    return `https://${pullRequestId}.${domain}`;
+    const previewDomain = previewUrlTemplate
+      .replace(/\{\{pr_id\}\}/g, String(pullRequestId))
+      .replace(/\{\{domain\}\}/g, domain);
+    return `https://${previewDomain}`;
   }
   return fqdn;
 }
@@ -142,7 +151,7 @@ export async function waitForCoolifyPreview(
         if (latest.status === "finished") {
           const fqdn = app.fqdn || null;
           if (fqdn) {
-            const previewUrl = buildPreviewUrl(fqdn, latest.pull_request_id);
+            const previewUrl = buildPreviewUrl(fqdn, latest.pull_request_id, app.preview_url_template);
             console.error(`[coolify-preview] Deployment ready: ${previewUrl}`);
             return previewUrl;
           }

@@ -96,7 +96,7 @@ describe("coolify-preview", () => {
   });
 
   describe("waitForCoolifyPreview — PR preview URL", () => {
-    it("returns PR preview URL when pull_request_id > 0", async () => {
+    it("returns PR preview URL using default template ({{pr_id}}.{{domain}})", async () => {
       process.env.COOLIFY_API_TOKEN = "token123";
 
       global.fetch = mockFetch({
@@ -123,6 +123,63 @@ describe("coolify-preview", () => {
 
       const result = await waitForCoolifyPreview("feature/T-42-some-feature", BASE_CONFIG);
       expect(result).toBe("https://42.board.just-ship.io");
+    });
+
+    it("returns PR preview URL using custom template (board-{{pr_id}}.preview.just-ship.io)", async () => {
+      process.env.COOLIFY_API_TOKEN = "token123";
+
+      global.fetch = mockFetch({
+        "/api/v1/applications/": async () =>
+          jsonResponse({
+            uuid: "v7ivmdiih5421n863927r8o0",
+            name: "just-ship-board",
+            fqdn: "https://board.just-ship.io",
+            preview_url_template: "board-{{pr_id}}.preview.just-ship.io",
+          }),
+        "/api/v1/deployments": async () =>
+          jsonResponse([
+            {
+              id: 139,
+              application_id: "1",
+              application_name: "just-ship-board",
+              deployment_uuid: "pr-deploy-126",
+              status: "finished",
+              pull_request_id: 126,
+              created_at: "2026-04-10T20:38:00.000000Z",
+            },
+          ]),
+      });
+
+      const result = await waitForCoolifyPreview("fix/T-126-pricing-ui", BASE_CONFIG);
+      expect(result).toBe("https://board-126.preview.just-ship.io");
+    });
+
+    it("returns production FQDN when PR but no preview_url_template", async () => {
+      process.env.COOLIFY_API_TOKEN = "token123";
+
+      global.fetch = mockFetch({
+        "/api/v1/applications/": async () =>
+          jsonResponse({
+            uuid: "v7ivmdiih5421n863927r8o0",
+            name: "just-ship-board",
+            fqdn: "https://board.just-ship.io",
+          }),
+        "/api/v1/deployments": async () =>
+          jsonResponse([
+            {
+              id: 140,
+              application_id: "1",
+              application_name: "just-ship-board",
+              deployment_uuid: "pr-deploy-no-template",
+              status: "finished",
+              pull_request_id: 50,
+              created_at: "2026-04-10T20:00:00.000000Z",
+            },
+          ]),
+      });
+
+      const result = await waitForCoolifyPreview("feature/T-50-test", BASE_CONFIG);
+      expect(result).toBe("https://board.just-ship.io");
     });
   });
 
