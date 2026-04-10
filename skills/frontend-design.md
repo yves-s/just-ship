@@ -2,6 +2,14 @@
 name: frontend-design
 description: >
   Use when building any user-facing UI — components, pages, layouts, forms, tables, dashboards, or any feature where visual quality matters. Also triggers for responsive implementation, animation/transitions, design system work, component composition, and design decision-making. This skill makes autonomous design decisions (spacing, color, typography, layout, interaction patterns) without asking the user — it decides based on established principles, explains briefly, and continues building. Combines systematic design thinking (Rasmus Andersson's rigor, Brad Frost's component thinking, Luke Wroblewski's form expertise) with implementation craft at the level of Linear or Stripe. Use proactively on every frontend task, even "simple" ones.
+triggers:
+  - ui
+  - component
+  - layout
+  - frontend
+  - design
+  - responsive
+  - animation
 ---
 
 # Frontend Design

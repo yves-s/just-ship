@@ -1,6 +1,14 @@
 ---
 name: backend
 description: Use when implementing API endpoints, server-side business logic, webhook handlers, event pipelines, shared hooks, or backend integrations. Also triggers for queue-based processing, background jobs, third-party API integrations, or any server-side data flow. This skill builds production-grade backend code — not just working code, but code that handles failure, observes itself, and stays reliable at 3am. Use proactively on every backend task, even simple CRUD endpoints — because every endpoint eventually becomes critical.
+triggers:
+  - api
+  - endpoint
+  - webhook
+  - backend
+  - server
+  - queue
+  - integration
 ---
 
 # Backend Engineering

@@ -1,6 +1,13 @@
 ---
 name: shopify-admin-api
 description: Use when working with Shopify's Admin API for backend operations — products, orders, customers, inventory, metafields, webhooks, and bulk operations. Covers GraphQL and REST endpoints, authentication, rate limits, and data migration patterns.
+triggers:
+  - shopify
+  - admin-api
+  - graphql
+  - products
+  - orders
+  - webhooks
 ---
 
 # Shopify Admin API

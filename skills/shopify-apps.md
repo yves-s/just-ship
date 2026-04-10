@@ -1,6 +1,13 @@
 ---
 name: shopify-apps
 description: Use when building Shopify apps -- custom or public. Covers Shopify App CLI, App Bridge v4, Polaris UI components, session tokens, OAuth, app proxy, theme app extensions, and billing API. Load when scaffolding, building, or maintaining a Shopify app.
+triggers:
+  - shopify
+  - app
+  - polaris
+  - oauth
+  - app-bridge
+  - billing
 ---
 
 # Shopify App Development

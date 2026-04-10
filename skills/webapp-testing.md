@@ -1,6 +1,13 @@
 ---
 name: webapp-testing
 description: Testing strategy and execution for web applications. Covers test pyramid decisions (unit/integration/E2E), framework selection, mocking boundaries, and visual testing with Playwright. Use when deciding what to test, how to test it, and when writing tests.
+triggers:
+  - testing
+  - e2e
+  - playwright
+  - unit
+  - integration
+  - coverage
 ---
 
 # Web Application Testing

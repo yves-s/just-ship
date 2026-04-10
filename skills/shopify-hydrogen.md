@@ -1,6 +1,13 @@
 ---
 name: shopify-hydrogen
 description: Use when building or modifying Shopify Hydrogen storefronts. Covers React Router (ex-Remix) patterns, Hydrogen-specific hooks and components, SSR/streaming, caching strategies, Oxygen deployment, and route patterns. Load whenever working in a Hydrogen project.
+triggers:
+  - shopify
+  - hydrogen
+  - storefront
+  - ssr
+  - oxygen
+  - react-router
 ---
 
 # Shopify Hydrogen

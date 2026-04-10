@@ -2,6 +2,13 @@
 name: sparring
 description: >
   Strategic sparring partner for thinking through ideas, features, and decisions. Use when the CEO wants to discuss, explore, or think through a topic — NOT when they want to build something (that's brainstorming). Triggers on: "lass uns besprechen", "was denkst du", "ich bin unsicher", "wie würdest du", "sollen wir", "ich hab da eine Idee", "was hältst du von", "strategisch betrachten", "lass uns durchdenken", "discuss", "think through", "what do you think about". This skill loads the right domain experts automatically based on the topic, conducts a structured discussion, and exits cleanly — either as a resolved discussion or as a ticket via /ticket.
+triggers:
+  - discuss
+  - strategy
+  - thinking
+  - explore
+  - decision
+  - sparring
 ---
 
 # Sparring

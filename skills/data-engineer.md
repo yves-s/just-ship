@@ -1,6 +1,14 @@
 ---
 name: data-engineer
 description: Use when making database schema changes, writing migrations, configuring RLS policies, syncing TypeScript types, or designing data models from scratch. Also triggers for query performance issues, indexing strategy, data modeling decisions (normalize vs. denormalize, ledger vs. counter, lookup table vs. enum), and any Supabase/Postgres architecture question. This skill doesn't just write migrations — it architects data models that stay correct, fast, and secure as the product scales. Use proactively whenever data storage is involved, even for "simple" tables.
+triggers:
+  - database
+  - schema
+  - migration
+  - rls
+  - supabase
+  - postgres
+  - index
 ---
 
 # Database Engineering

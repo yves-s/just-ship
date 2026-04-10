@@ -1,6 +1,12 @@
 ---
 name: test-driven-development
 description: Use when implementing any feature or bugfix, before writing implementation code
+triggers:
+  - tdd
+  - tests
+  - testing
+  - feature
+  - bugfix
 ---
 
 # Test-Driven Development (TDD)
