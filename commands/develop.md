@@ -168,6 +168,19 @@ git checkout -b {abgeleiteter-prefix}/{ticket-nummer}-{kurzbeschreibung}
 bash .claude/scripts/send-event.sh {N} orchestrator agent_started
 ```
 
+**3e) Token-Snapshot schreiben** (für per-Ticket-Kosten bei `/ship`):
+
+```bash
+SAFE_CWD=$(echo "$PWD" | sed 's|^/||' | sed 's|/|-|g')
+SESSION_DIR="$HOME/.claude/projects/-${SAFE_CWD}"
+SESSION_FILE=$(ls -t "$SESSION_DIR"/*.jsonl 2>/dev/null | head -1)
+if [ -n "$SESSION_FILE" ]; then
+  bash .claude/scripts/calculate-session-cost.sh "$(basename "$SESSION_FILE" .jsonl)" "$PWD" > .claude/.token-snapshot-T-{N}.json 2>/dev/null || true
+fi
+```
+
+Falls das Projekt-Root ein Worktree ist, den Snapshot im Main-Repo schreiben (`.claude/` dort ist der kanonische Ort).
+
 ### 3.5 Triage — Ticket-Qualitätsprüfung
 
 ```bash

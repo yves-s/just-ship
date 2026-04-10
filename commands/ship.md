@@ -259,40 +259,48 @@ SOFORT WEITER ZU SCHRITT 5c.
 
 ### 5c. Token-Tracking (nur wenn Pipeline konfiguriert)
 
-Berechne Session-Kosten und patche sie aufs Ticket. Das muss hier passieren — nicht im SessionEnd-Hook, weil eine Session mehrere Tickets überleben kann.
+Berechne die **Ticket-spezifischen** Kosten als Delta zwischen dem Snapshot (geschrieben bei `/develop` Start) und dem aktuellen Stand. Das isoliert die Kosten pro Ticket, auch wenn mehrere Tickets in einer Session bearbeitet werden.
 
 ```bash
-# Finde neueste Session-JSONL für dieses Projekt
 SAFE_CWD=$(echo "$PWD" | sed 's|^/||' | sed 's|/|-|g')
 SESSION_DIR="$HOME/.claude/projects/-${SAFE_CWD}"
 SESSION_FILE=$(ls -t "$SESSION_DIR"/*.jsonl 2>/dev/null | head -1)
 
 if [ -n "$SESSION_FILE" ]; then
-  COST_JSON=$(bash .claude/scripts/calculate-session-cost.sh "$(basename "$SESSION_FILE" .jsonl)" "$PWD" 2>/dev/null || echo "")
+  END_JSON=$(bash .claude/scripts/calculate-session-cost.sh "$(basename "$SESSION_FILE" .jsonl)" "$PWD" 2>/dev/null || echo "")
 
-  if [ -n "$COST_JSON" ]; then
-    NEW_TOKENS=$(echo "$COST_JSON" | node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).total_tokens || 0))" 2>/dev/null || echo "0")
-    NEW_COST=$(echo "$COST_JSON" | node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).estimated_cost_usd || 0))" 2>/dev/null || echo "0")
-
-    if [ "$NEW_TOKENS" != "0" ]; then
-      EXISTING=$(bash .claude/scripts/board-api.sh get "tickets/{N}" 2>/dev/null || echo "")
-      if [ -n "$EXISTING" ]; then
-        OLD_TOKENS=$(echo "$EXISTING" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); process.stdout.write(String(d.data?.total_tokens || 0))" 2>/dev/null || echo "0")
-        OLD_COST=$(echo "$EXISTING" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); process.stdout.write(String(d.data?.estimated_cost || 0))" 2>/dev/null || echo "0")
-
-        TOTAL_TOKENS=$(node -e "process.stdout.write(String(Number('$OLD_TOKENS') + Number('$NEW_TOKENS')))")
-        TOTAL_COST=$(node -e "process.stdout.write(String(parseFloat((Number('$OLD_COST') + Number('$NEW_COST')).toFixed(4))))")
-
-        bash .claude/scripts/board-api.sh patch "tickets/{N}" "{\"total_tokens\": $TOTAL_TOKENS, \"estimated_cost\": $TOTAL_COST}" >/dev/null 2>&1 || true
-      fi
+  if [ -n "$END_JSON" ]; then
+    # Read start snapshot (written by /develop step 3e)
+    SNAPSHOT_FILE=".claude/.token-snapshot-T-{N}.json"
+    START_TOKENS=0
+    START_COST=0
+    if [ -f "$SNAPSHOT_FILE" ]; then
+      START_TOKENS=$(node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('$SNAPSHOT_FILE','utf-8')).total_tokens || 0))" 2>/dev/null || echo "0")
+      START_COST=$(node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('$SNAPSHOT_FILE','utf-8')).estimated_cost_usd || 0))" 2>/dev/null || echo "0")
     fi
+
+    END_TOKENS=$(echo "$END_JSON" | node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).total_tokens || 0))" 2>/dev/null || echo "0")
+    END_COST=$(echo "$END_JSON" | node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).estimated_cost_usd || 0))" 2>/dev/null || echo "0")
+
+    # Delta = end - start (ticket-specific cost)
+    DELTA_TOKENS=$(node -e "process.stdout.write(String(Math.max(0, Number('$END_TOKENS') - Number('$START_TOKENS'))))")
+    DELTA_COST=$(node -e "process.stdout.write(String(parseFloat(Math.max(0, Number('$END_COST') - Number('$START_COST')).toFixed(4))))")
+
+    if [ "$DELTA_TOKENS" != "0" ]; then
+      bash .claude/scripts/board-api.sh patch "tickets/{N}" "{\"total_tokens\": $DELTA_TOKENS, \"estimated_cost\": $DELTA_COST}" >/dev/null 2>&1 || true
+    fi
+
+    # Clean up snapshot
+    rm -f "$SNAPSHOT_FILE" 2>/dev/null || true
   fi
 fi
 ```
 
 Ausgabe:
-- `✓ tokens — {TOTAL_TOKENS} tokens, ${TOTAL_COST}` (falls Kosten berechnet)
+- `✓ tokens — {DELTA_TOKENS} tokens, ${DELTA_COST}` (falls Kosten berechnet)
 - Still überspringen falls keine Session-Daten oder kein Pipeline
+
+**Fallback:** Falls kein Snapshot existiert (z.B. `/ship` ohne vorheriges `/develop`), ist `START_TOKENS=0` und das Delta = Gesamtkosten der Session.
 
 SOFORT WEITER ZU SCHRITT 6.
 
