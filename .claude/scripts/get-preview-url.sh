@@ -4,7 +4,7 @@
 #
 # Supports multiple hosting providers:
 #   - vercel:  Polls GitHub Deployments API for Vercel preview URL
-#   - coolify: Polls Coolify Deployments API for deployment URL
+#   - coolify: Polls Coolify v4 Deployments API for deployment URL
 #   - other:   Exits silently (graceful no-op)
 #
 # Prints the URL to stdout if found, exits silently otherwise.
@@ -56,25 +56,34 @@ if [ "$HOSTING_PROVIDER" = "coolify" ]; then
   INTERVAL=5
 
   while [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
-    # Get latest deployment status
-    STATUS=$(curl -s -H "Authorization: Bearer $COOLIFY_TOKEN" \
+    # Step 1: Get app details (FQDN + name) — this endpoint works in Coolify v4
+    APP_RESPONSE=$(curl -s -H "Authorization: Bearer $COOLIFY_TOKEN" \
       "${COOLIFY_URL}/api/v1/applications/${COOLIFY_APP_UUID}" 2>/dev/null)
 
-    FQDN=$(echo "$STATUS" | node -e "
+    FQDN=$(echo "$APP_RESPONSE" | node -e "
       let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
         try { process.stdout.write(JSON.parse(d).fqdn || ''); } catch(e) {}
       });
     " 2>/dev/null)
 
-    if [ -n "$FQDN" ] && [ "$FQDN" != "null" ]; then
-      # Check if latest deployment is finished
+    APP_NAME=$(echo "$APP_RESPONSE" | node -e "
+      let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
+        try { process.stdout.write(JSON.parse(d).name || ''); } catch(e) {}
+      });
+    " 2>/dev/null)
+
+    if [ -n "$FQDN" ] && [ "$FQDN" != "null" ] && [ -n "$APP_NAME" ]; then
+      # Step 2: Fetch all deployments and filter by application_name
+      # Coolify v4 does NOT support /applications/{uuid}/deployments
       DEPLOY_STATUS=$(curl -s -H "Authorization: Bearer $COOLIFY_TOKEN" \
-        "${COOLIFY_URL}/api/v1/applications/${COOLIFY_APP_UUID}/deployments" 2>/dev/null \
+        "${COOLIFY_URL}/api/v1/deployments" 2>/dev/null \
         | node -e "
           let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
             try {
               const deps = JSON.parse(d);
-              process.stdout.write(deps[0]?.status || '');
+              const appName = '${APP_NAME}';
+              const matching = deps.filter(d => d.application_name === appName);
+              process.stdout.write(matching[0]?.status || '');
             } catch(e) {}
           });
         " 2>/dev/null)

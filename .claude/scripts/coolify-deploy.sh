@@ -100,10 +100,19 @@ if [ -z "$APP_UUID" ]; then
 fi
 echo "  App UUID: $APP_UUID" >&2
 
-# ── 3. Set domain ────────────────────────────────────────────────────────────
+# ── 3. Set domain + preview URL template ────────────────────────────────────
 
 echo "Setting domain: https://$DOMAIN..." >&2
 api PATCH "/applications/$APP_UUID" "{\"domains\": \"https://$DOMAIN\"}" >/dev/null
+
+# Set preview URL template — uses *.preview.just-ship.io wildcard DNS
+# Coolify v4 API does not accept preview_url_template via PATCH, so set via DB directly
+# This script runs on the Coolify host, so docker exec is available
+PREVIEW_TEMPLATE="${PROJECT_NAME}-{{pr_id}}.preview.just-ship.io"
+echo "Setting preview URL template: $PREVIEW_TEMPLATE..." >&2
+docker exec coolify-db psql -U coolify -d coolify -c \
+  "UPDATE applications SET preview_url_template = '${PREVIEW_TEMPLATE}' WHERE uuid = '${APP_UUID}';" \
+  2>/dev/null >&2 || echo "  WARN: Could not set preview_url_template via DB (non-critical)" >&2
 
 # ── 4. Set environment variables (from file) ─────────────────────────────────
 
@@ -140,6 +149,7 @@ cat <<EOF
   "project_uuid": "$PROJECT_UUID",
   "app_uuid": "$APP_UUID",
   "domain": "https://$DOMAIN",
+  "preview_url_template": "$PREVIEW_TEMPLATE",
   "repo": "$REPO",
   "branch": "$BRANCH",
   "auto_deploy": true
