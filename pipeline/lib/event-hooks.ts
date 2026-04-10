@@ -38,6 +38,8 @@ async function postEvent(config: EventConfig, payload: Record<string, unknown>):
 interface EventHookOptions {
   onPause?: (reason: string, questionText?: string) => void;
   getLastAssistantText?: () => string;
+  /** Agent name → model mapping for model routing. Included in agent_started events. */
+  agentModelMap?: Record<string, string>;
 }
 
 export function createEventHooks(
@@ -50,12 +52,16 @@ export function createEventHooks(
   // Track agents that already received a "completed" event (prevent duplicates)
   const completedAgentIds = new Set<string>();
 
+  const agentModelMap = options?.agentModelMap ?? {};
+
   const onAgentStarted: HookCallback = async (input) => {
     const hookInput = input as SubagentStartHookInput;
     agentTypeByIdMap.set(hookInput.agent_id, hookInput.agent_type);
+    const model = agentModelMap[hookInput.agent_type];
     await postEvent(config, {
       agent_type: hookInput.agent_type,
       event_type: "agent_started",
+      ...(model ? { model } : {}),
     });
     return { async: true as const };
   };

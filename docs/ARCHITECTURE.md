@@ -194,7 +194,7 @@ your-project/
     +-- run.ts                     # SDK pipeline execution
     +-- worker.ts                  # Polling worker
     +-- package.json               # Pipeline dependencies
-    +-- lib/                       # Config, agent loader, event hooks
+    +-- lib/                       # Config, agent loader, model router, event hooks
 ```
 
 ---
@@ -282,11 +282,32 @@ Sub-agents are spawned via the Claude Agent SDK's `Agent` tool. Multiple `Agent`
 
 ### Model Selection Strategy
 
-| Task Complexity | Model | Cost | Examples |
-|-----------------|-------|------|----------|
-| Orchestration and planning | Opus | $$$ | Only the orchestrator |
-| Creative implementation | Sonnet | $$ | UI components, business logic |
-| Routine/mechanical tasks | Haiku | $ | SQL migrations, build fixes, checklists, reviews |
+The pipeline uses **Smart Model Routing** (`pipeline/lib/model-router.ts`) to assign the optimal model per agent phase:
+
+| Phase | Model | Agents | Rationale |
+|-------|-------|--------|-----------|
+| Orchestration | Opus | orchestrator (hardcoded in `run.ts`) | Complex planning, multi-agent coordination |
+| Planning | Opus | code-review, qa, security | Quality-critical analysis and review |
+| Implementation | Sonnet | backend, frontend, data-engineer, devops | Code generation after clear plan — comparable quality at ~5x lower cost |
+| Triage | Haiku | triage (hardcoded in `run.ts`) | Fast, mechanical ticket analysis |
+
+**Configuration:** Override defaults via `pipeline.model_routing` in `project.json`:
+
+```json
+{
+  "pipeline": {
+    "model_routing": {
+      "planning_model": "opus",
+      "implementation_model": "sonnet",
+      "planning_phases": ["code-review", "qa", "security"],
+      "implementation_phases": ["backend", "frontend", "data-engineer", "devops"],
+      "override": { "backend": "opus" }
+    }
+  }
+}
+```
+
+**Fallback:** When `model_routing` is absent, all agents inherit the parent model (Opus) — preserving the pre-routing single-model behavior.
 
 ---
 
@@ -414,10 +435,11 @@ Internally:
 1. Loads `project.json` config.
 2. Creates a feature branch from main.
 3. Loads all agent definitions from `.claude/agents/`.
-4. Builds the orchestrator prompt with ticket details.
-5. Calls `query()` from the Agent SDK with the orchestrator prompt.
-6. Ships: pushes branch, creates PR, verifies remote branch exists.
-7. Outputs JSON result on stdout (for automation/n8n integration).
+4. Applies **Smart Model Routing** — assigns optimal model per agent phase (see [Model Selection Strategy](#model-selection-strategy)).
+5. Builds the orchestrator prompt with ticket details.
+6. Calls `query()` from the Agent SDK with the orchestrator prompt.
+7. Ships: pushes branch, creates PR, verifies remote branch exists.
+8. Outputs JSON result on stdout (for automation/n8n integration).
 
 Note: The orchestrator only commits locally. Push, PR creation, and ticket status updates are handled by the pipeline infrastructure (`run.ts`) after the orchestrator exits, ensuring these steps always execute reliably.
 

@@ -2,7 +2,7 @@
 name: backend
 description: Backend-Entwickler für API-Endpoints, Shared Hooks und Business Logic. Use when API or backend changes are needed.
 tools: Read, Write, Edit, Bash, Grep, Glob
-model: opus
+model: inherit
 permissionMode: bypassPermissions
 skills:
   - backend
