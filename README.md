@@ -66,6 +66,26 @@ just-ship self-update
 
 ---
 
+## Plugin Installation
+
+If you already have Claude Code, you can install just-ship as a plugin:
+
+**Load for a session:**
+```bash
+claude --plugin-dir /path/to/just-ship
+```
+
+After installation, configure your credentials:
+- **Board API Key** — from your [Just Ship Board](https://board.just-ship.io) workspace settings
+- **Workspace ID** — your workspace UUID
+- **Project ID** — your project UUID
+
+Sensitive values are stored in your system keychain. Non-sensitive config goes to `settings.json`.
+
+> **Note:** Plugin installation is for using just-ship as a development tool. For the full autonomous pipeline with VPS worker, use the [Quick Start](#quick-start) setup instead.
+
+---
+
 ## Commands
 
 | Command | What it does | Autonomous |
