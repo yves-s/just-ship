@@ -74,7 +74,7 @@ fi
 # ---------------------------------------------------------------------------
 
 if [ -z "$VARIANT" ]; then
-  node -e "process.stdout.write(JSON.stringify({detected:false,variant:'',store:'',build:{},skills:[]},null,2)+'\n')"
+  node -e "process.stdout.write(JSON.stringify({detected:false,variant:'',store:'',build:{}},null,2)+'\n')"
   exit 0
 fi
 
@@ -88,18 +88,11 @@ const builds = {
   hydrogen: { dev: 'npm run dev',      web: 'npm run build', install: 'npm install', test: '' },
 };
 
-const skills = {
-  remix:    ['shopify-apps', 'shopify-admin-api'],
-  liquid:   ['shopify-liquid', 'shopify-theme'],
-  hydrogen: ['shopify-hydrogen', 'shopify-storefront-api'],
-};
-
 const result = {
   detected: true,
   variant,
   store,
   build: builds[variant] || {},
-  skills: skills[variant] || [],
 };
 
 process.stdout.write(JSON.stringify(result, null, 2) + '\n');

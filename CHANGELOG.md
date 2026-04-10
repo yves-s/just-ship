@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Changed
+- **Shopify skills replaced by official Shopify AI Toolkit**: Removed 9 custom Shopify skill files (`skills/shopify-*.md`) — Shopify domain knowledge now comes from the official `@shopify/dev-mcp` MCP server which provides live docs search, code validation, and auto-updates. `setup.sh` automatically configures the MCP server for detected Shopify projects (both fresh install and update). `detect-shopify.sh` no longer outputs skill names. Pipeline scripts (shopify-dev, shopify-preview, shopify-qa, shopify-env-check, shopify-app-deploy) remain unchanged
+
 ### Added
 - **Plugin scaffold** (`.claude-plugin/plugin.json`): Claude Code plugin manifest with name, version, description, author, keywords, entry points (skills/, agents/, commands/), hooks (SessionStart, SubagentStart/Stop, SessionEnd), and userConfig for sensitive credentials (board_api_key, anthropic_api_key, github_token) and non-sensitive config (workspace_id, project_id). README updated with plugin installation section
 - **Backfill script for historical ticket costs** (`.claude/scripts/backfill-ticket-costs.sh`): One-time script to correct historical ticket costs — resets 6 local tickets that had cumulative session costs with wrong pricing to $0, recalculates 8 VPS tickets with current Opus rates ($5/MTok). Supports `--dry-run`. Total correction: $680 → $0.95
