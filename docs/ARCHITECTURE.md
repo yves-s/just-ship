@@ -158,9 +158,9 @@ just-ship/                         # Framework repository
 |   +-- project.json               # Project config template
 +-- apps/
 |   +-- board/                     # Just Ship Board (Next.js)
-+-- vps/                           # VPS infrastructure
-|   +-- setup-vps.sh               # Root setup script (Ubuntu 22.04)
-|   +-- just-ship-pipeline@.service  # systemd template unit
++-- vps/                           # Docker build files (CI only — infra moved to just-ship-ops)
+|   +-- Dockerfile                  # Pipeline container image
+|   +-- entrypoint.sh               # Container startup script
 +-- .claude/
 |   +-- hooks/                     # Event streaming hooks
 |   |   +-- detect-ticket.sh       # SessionStart: extract ticket from branch
@@ -267,7 +267,7 @@ Documentation is not a separate task -- it is an automated step in every develop
 | Pipeline, agents, config | `docs/ARCHITECTURE.md` -- affected sections |
 | Architecture structures | `CLAUDE.md` -- architecture section |
 | Commands, agents, skills | `templates/CLAUDE.md` -- template for new projects |
-| VPS, worker, server | `vps/README.md` -- VPS-specific docs |
+| Worker, server | `docs/ARCHITECTURE.md` -- pipeline server section |
 | Workflow, conventions | `CONTRIBUTING.md` -- contributing guidelines |
 
 Only existing files are updated -- no new docs are created. Docs changes are part of the same commit as the code.

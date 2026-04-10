@@ -395,7 +395,7 @@ Prüfe ob die jeweilige Zieldatei existiert. **Nur bestehende Dateien aktualisie
 | `pipeline/**`, `agents/*.md`, `.claude/**` | `docs/ARCHITECTURE.md` | Betroffene Sektionen (Agent System, Slash Commands, Pipeline SDK, etc.) |
 | Pipeline/Architektur-Strukturen | `CLAUDE.md` | Architektur-Abschnitt |
 | `commands/*.md`, `agents/*.md`, `skills/*.md` | `templates/CLAUDE.md` | Template aktualisieren falls Commands/Agents/Skills-Referenzen enthalten |
-| `vps/**`, `pipeline/worker.ts`, `pipeline/server.ts` | `vps/README.md` | VPS-spezifische Doku |
+| `pipeline/worker.ts`, `pipeline/server.ts` | `docs/ARCHITECTURE.md` | Pipeline-Server Abschnitt |
 | Workflow, Conventions, Dev-Setup | `CONTRIBUTING.md` | Contributing Guidelines |
 | Keine der obigen Trigger-Dateien | — | Teil 2 überspringen |
 
@@ -406,7 +406,7 @@ Ausgabe pro geprüfter Datei:
 - `✓ docs — README.md aktualisiert`
 - `✓ docs — docs/ARCHITECTURE.md aktualisiert`
 - `✓ docs — templates/CLAUDE.md aktualisiert`
-- `✓ docs — vps/README.md aktualisiert`
+- `✓ docs — docs/ARCHITECTURE.md aktualisiert (Pipeline-Server)`
 - `✓ docs — CONTRIBUTING.md aktualisiert`
 - `✓ docs — keine Änderungen nötig` (falls nur CHANGELOG und sonst nichts zu tun war)
 

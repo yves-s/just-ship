@@ -243,7 +243,7 @@ if [ -n "$CONTAINER_ID" ]; then
 else
   echo -e "${RED}FAIL${NC}"
   echo "  No running pipeline container on VPS." >&2
-  echo "  Start it: docker compose -f vps/docker-compose.yml up -d" >&2
+  echo "  Start it: cd /home/claude-dev/just-ship-ops && docker compose -f vps/docker-compose.yml up -d" >&2
   exit 2
 fi
 
