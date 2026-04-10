@@ -204,21 +204,9 @@ Shipped with the pipeline:
 | **sparring** | Strategic discussion partner with automatic domain expert triage |
 | **webapp-testing** | Testing strategy (test pyramid, framework selection, mocking) + Playwright visual testing |
 
-### Shopify Domain Skills
+### Shopify AI Toolkit
 
-Loaded automatically when `stack.platform: "shopify"` is set in `project.json`. Can also be loaded explicitly via `skills.domain`.
-
-| Skill | Variant | Purpose |
-|-------|---------|---------|
-| **shopify-liquid** | liquid | Liquid syntax, sections, snippets, schema patterns |
-| **shopify-theme** | liquid | Theme architecture, JSON templates, asset pipeline, i18n |
-| **shopify-metafields** | both | Metafield types, reference resolution, metaobjects |
-| **shopify-storefront-api** | hydrogen | GraphQL Storefront API, pagination, caching, rate limits |
-| **shopify-hydrogen** | hydrogen | React Router, Hydrogen components, SSR/streaming, Oxygen |
-| **shopify-admin-api** | both | Admin API mutations, webhooks, bulk operations |
-| **shopify-checkout** | both | Checkout UI Extensions, Shopify Functions (Plus only) |
-| **shopify-apps** | both | App CLI, App Bridge, Polaris, session tokens, billing |
-| **shopify-app-scaffold** | both | Opinionated cleanup after `shopify app create`, removes demo code |
+Shopify domain knowledge is provided by the official [Shopify AI Toolkit](https://github.com/Shopify/shopify-ai-toolkit) (`@shopify/dev-mcp` MCP server). Configured automatically by `setup.sh` when a Shopify project is detected. Provides 16 domain skills with live docs search, code validation, and auto-updates.
 
 ### Superpowers Plugin
 

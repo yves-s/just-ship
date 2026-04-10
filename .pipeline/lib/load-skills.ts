@@ -21,21 +21,8 @@ export type AgentRole =
 
 /** Which skills each agent role receives */
 const SKILL_AGENT_MAP: Record<string, AgentRole[]> = {
-  "shopify-liquid":         ["frontend", "orchestrator"],
-  "shopify-theme":          ["frontend", "qa", "devops", "orchestrator"],
-  "shopify-metafields":     ["data-engineer", "backend", "orchestrator"],
-  "shopify-storefront-api": ["backend", "frontend", "orchestrator"],
-  "shopify-hydrogen":       ["frontend", "backend", "orchestrator"],
-  "shopify-admin-api":      ["backend", "data-engineer", "orchestrator"],
-  "shopify-checkout":       ["frontend", "backend", "orchestrator"],
-  "shopify-apps":           ["backend", "frontend", "orchestrator"],
-  "shopify-app-scaffold":   ["orchestrator", "frontend"],
-};
-
-/** Default skills per platform+variant when skills.domain is not set */
-const VARIANT_DEFAULTS: Record<string, string[]> = {
-  liquid:   ["shopify-liquid", "shopify-theme"],
-  hydrogen: ["shopify-hydrogen", "shopify-storefront-api"],
+  // Shopify domain skills are provided by the @shopify/dev-mcp MCP server,
+  // not by local skill files. No entries needed here for Shopify skills.
 };
 
 export interface LoadedSkills {
@@ -114,9 +101,8 @@ function resolveSkillNames(config: ProjectConfig): string[] {
   if (config.skills?.domain && config.skills.domain.length > 0) {
     return config.skills.domain;
   }
-  if (config.stack.platform === "shopify" && config.stack.variant) {
-    return VARIANT_DEFAULTS[config.stack.variant] ?? [];
-  }
+  // Shopify variant defaults were removed — Shopify domain knowledge is now
+  // provided by the @shopify/dev-mcp MCP server, not local skill files.
   return [];
 }
 

@@ -8,456 +8,73 @@ const MOCK_SKILL_WITH_TRIGGERS = (name: string, description: string, triggers: s
 // Mock fs to avoid actual file reads in tests
 vi.mock("node:fs", () => ({
   readFileSync: vi.fn((path: string) => {
-    // Mock skill files to return content with frontmatter + triggers
-    if (path.includes("shopify-liquid.md")) {
-      return MOCK_SKILL_WITH_TRIGGERS("shopify-liquid", "Use for Liquid templates", ["shopify", "liquid", "sections"]);
+    if (path.includes("custom-skill.md")) {
+      return MOCK_SKILL_WITH_TRIGGERS("custom-skill", "A custom project skill", ["custom", "project"]);
     }
-    if (path.includes("shopify-theme.md")) {
-      return MOCK_SKILL_WITH_TRIGGERS("shopify-theme", "Use for theme structure", ["shopify", "theme", "assets"]);
-    }
-    if (path.includes("shopify-apps.md")) {
-      return MOCK_SKILL_WITH_TRIGGERS("shopify-apps", "Use for Shopify apps", ["shopify", "app", "polaris"]);
-    }
-    if (path.includes("shopify-admin-api.md")) {
-      return MOCK_SKILL_WITH_TRIGGERS("shopify-admin-api", "Use for Admin API", ["shopify", "admin-api", "graphql"]);
-    }
-    if (path.includes("shopify-hydrogen.md")) {
-      return MOCK_SKILL_WITH_TRIGGERS("shopify-hydrogen", "Use for Hydrogen storefronts", ["shopify", "hydrogen", "ssr"]);
-    }
-    if (path.includes("shopify-storefront-api.md")) {
-      return MOCK_SKILL_WITH_TRIGGERS("shopify-storefront-api", "Use for Storefront API", ["shopify", "storefront-api", "headless"]);
+    if (path.includes("another-skill.md")) {
+      return MOCK_SKILL_WITH_TRIGGERS("another-skill", "Another skill for testing", ["another", "test"]);
     }
     return "";
   }),
-  existsSync: vi.fn(() => true),
+  existsSync: vi.fn((path: string) => path.includes("custom-skill.md") || path.includes("another-skill.md")),
 }));
 
 /**
- * Test suite for load-skills.ts variant defaults
+ * Test suite for load-skills.ts
  *
- * Verifies that VARIANT_DEFAULTS correctly maps Shopify variants
- * to their expected domain skills without requiring manual configuration.
+ * Shopify domain knowledge is now provided by the @shopify/dev-mcp MCP server.
+ * VARIANT_DEFAULTS were removed — Shopify variants no longer map to local skill files.
  */
 
-describe("loadSkills — VARIANT_DEFAULTS", () => {
+const makeShopifyConfig = (variant: string): ProjectConfig => ({
+  name: "test-project",
+  stack: {
+    language: "Liquid/JSON",
+    framework: "",
+    backend: "",
+    package_manager: "npm",
+    platform: "shopify",
+    variant,
+  },
+  build: { dev: "", web: "", install: "", verify: "", test: "" },
+  hosting: { provider: "", project_id: "", team_id: "", coolify_url: "", coolify_app_uuid: "" },
+  shopify: { store: "test.myshopify.com" },
+  skills: { domain: [], custom: [] },
+  paths: { src: "src/", tests: "tests/" },
+  supabase: { project_id: "" },
+  pipeline: { workspace_id: "", project_id: "" },
+  conventions: { branch_prefix: "feature/", commit_format: "conventional", language: "en" },
+});
+
+describe("loadSkills — Shopify MCP migration", () => {
   const mockProjectDir = "/mock/project";
 
-  describe("Liquid Theme Variant", () => {
-    it("loads shopify-liquid and shopify-theme for liquid variant", () => {
-      const config: ProjectConfig = {
-        name: "test-theme",
-        stack: {
-          language: "Liquid/JSON",
-          framework: "",
-          backend: "",
-          package_manager: "npm",
-          platform: "shopify",
-          variant: "liquid",
-        },
-        build: {
-          dev: "shopify theme dev",
-          web: "shopify theme check",
-          install: "",
-          verify: "",
-          test: "",
-        },
-        hosting: {
-          provider: "",
-          project_id: "",
-          team_id: "",
-          coolify_url: "",
-          coolify_app_uuid: "",
-        },
-        shopify: {
-          store: "test.myshopify.com",
-        },
-        skills: {
-          domain: [],
-          custom: [],
-        },
-        paths: {
-          src: "src/",
-          tests: "tests/",
-        },
-        supabase: {
-          project_id: "",
-        },
-        pipeline: {
-          workspace_id: "",
-          project_id: "",
-        },
-        conventions: {
-          branch_prefix: "feature/",
-          commit_format: "conventional",
-          language: "en",
-        },
-      };
-
-      const result = loadSkills(mockProjectDir, config);
-
-      expect(result.skillNames).toContain("shopify-liquid");
-      expect(result.skillNames).toContain("shopify-theme");
-      expect(result.skillNames.length).toBe(2);
+  describe("Shopify variants return no local skills (MCP provides domain knowledge)", () => {
+    it("returns empty skill names for liquid variant", () => {
+      const result = loadSkills(mockProjectDir, makeShopifyConfig("liquid"));
+      expect(result.skillNames.length).toBe(0);
     });
 
-    it("uses VARIANT_DEFAULTS when skills.domain is empty for liquid", () => {
-      const config: ProjectConfig = {
-        name: "test-theme",
-        stack: {
-          language: "Liquid/JSON",
-          framework: "",
-          backend: "",
-          package_manager: "npm",
-          platform: "shopify",
-          variant: "liquid",
-        },
-        build: {
-          dev: "shopify theme dev",
-          web: "shopify theme check",
-          install: "",
-          verify: "",
-          test: "",
-        },
-        hosting: {
-          provider: "",
-          project_id: "",
-          team_id: "",
-          coolify_url: "",
-          coolify_app_uuid: "",
-        },
-        shopify: {
-          store: "test.myshopify.com",
-        },
-        skills: {
-          domain: [],
-          custom: [],
-        },
-        paths: {
-          src: "src/",
-          tests: "tests/",
-        },
-        supabase: {
-          project_id: "",
-        },
-        pipeline: {
-          workspace_id: "",
-          project_id: "",
-        },
-        conventions: {
-          branch_prefix: "feature/",
-          commit_format: "conventional",
-          language: "en",
-        },
-      };
+    it("returns empty skill names for remix variant", () => {
+      const result = loadSkills(mockProjectDir, makeShopifyConfig("remix"));
+      expect(result.skillNames.length).toBe(0);
+    });
 
-      const result = loadSkills(mockProjectDir, config);
+    it("returns empty skill names for hydrogen variant", () => {
+      const result = loadSkills(mockProjectDir, makeShopifyConfig("hydrogen"));
+      expect(result.skillNames.length).toBe(0);
+    });
 
-      const byRoleContent = result.byRole.get("frontend");
-      expect(byRoleContent).toBeDefined();
-      expect(byRoleContent).toContain("shopify-liquid");
-      expect(byRoleContent).toContain("shopify-theme");
+    it("returns empty byRole map for Shopify variants", () => {
+      const result = loadSkills(mockProjectDir, makeShopifyConfig("liquid"));
+      expect(result.byRole.size).toBe(0);
     });
   });
 
-  describe("Remix App Variant", () => {
-    it("loads shopify-apps and shopify-admin-api for remix variant", () => {
-      const config: ProjectConfig = {
-        name: "test-app",
-        stack: {
-          language: "TypeScript",
-          framework: "Remix",
-          backend: "Node.js",
-          package_manager: "npm",
-          platform: "shopify",
-          variant: "remix",
-        },
-        build: {
-          dev: "shopify app dev",
-          web: "npm run build",
-          install: "npm install",
-          verify: "",
-          test: "",
-        },
-        hosting: {
-          provider: "",
-          project_id: "",
-          team_id: "",
-          coolify_url: "",
-          coolify_app_uuid: "",
-        },
-        shopify: {
-          store: "test.myshopify.com",
-        },
-        skills: {
-          domain: [],
-          custom: [],
-        },
-        paths: {
-          src: "src/",
-          tests: "tests/",
-        },
-        supabase: {
-          project_id: "",
-        },
-        pipeline: {
-          workspace_id: "",
-          project_id: "",
-        },
-        conventions: {
-          branch_prefix: "feature/",
-          commit_format: "conventional",
-          language: "en",
-        },
-      };
-
-      const result = loadSkills(mockProjectDir, config);
-
-      expect(result.skillNames).toContain("shopify-apps");
-      expect(result.skillNames).toContain("shopify-admin-api");
-      expect(result.skillNames.length).toBe(2);
-    });
-
-    it("uses VARIANT_DEFAULTS when skills.domain is empty for remix", () => {
-      const config: ProjectConfig = {
-        name: "test-app",
-        stack: {
-          language: "TypeScript",
-          framework: "Remix",
-          backend: "Node.js",
-          package_manager: "npm",
-          platform: "shopify",
-          variant: "remix",
-        },
-        build: {
-          dev: "shopify app dev",
-          web: "npm run build",
-          install: "npm install",
-          verify: "",
-          test: "",
-        },
-        hosting: {
-          provider: "",
-          project_id: "",
-          team_id: "",
-          coolify_url: "",
-          coolify_app_uuid: "",
-        },
-        shopify: {
-          store: "test.myshopify.com",
-        },
-        skills: {
-          domain: [],
-          custom: [],
-        },
-        paths: {
-          src: "src/",
-          tests: "tests/",
-        },
-        supabase: {
-          project_id: "",
-        },
-        pipeline: {
-          workspace_id: "",
-          project_id: "",
-        },
-        conventions: {
-          branch_prefix: "feature/",
-          commit_format: "conventional",
-          language: "en",
-        },
-      };
-
-      const result = loadSkills(mockProjectDir, config);
-
-      const byRoleContent = result.byRole.get("backend");
-      expect(byRoleContent).toBeDefined();
-      expect(byRoleContent).toContain("shopify-apps");
-      expect(byRoleContent).toContain("shopify-admin-api");
-    });
-  });
-
-  describe("Hydrogen Storefront Variant", () => {
-    it("loads shopify-hydrogen and shopify-storefront-api for hydrogen variant", () => {
-      const config: ProjectConfig = {
-        name: "test-hydrogen",
-        stack: {
-          language: "TypeScript",
-          framework: "Hydrogen",
-          backend: "Node.js",
-          package_manager: "npm",
-          platform: "shopify",
-          variant: "hydrogen",
-        },
-        build: {
-          dev: "npm run dev",
-          web: "npm run build",
-          install: "npm install",
-          verify: "",
-          test: "",
-        },
-        hosting: {
-          provider: "",
-          project_id: "",
-          team_id: "",
-          coolify_url: "",
-          coolify_app_uuid: "",
-        },
-        shopify: {
-          store: "test.myshopify.com",
-        },
-        skills: {
-          domain: [],
-          custom: [],
-        },
-        paths: {
-          src: "src/",
-          tests: "tests/",
-        },
-        supabase: {
-          project_id: "",
-        },
-        pipeline: {
-          workspace_id: "",
-          project_id: "",
-        },
-        conventions: {
-          branch_prefix: "feature/",
-          commit_format: "conventional",
-          language: "en",
-        },
-      };
-
-      const result = loadSkills(mockProjectDir, config);
-
-      expect(result.skillNames).toContain("shopify-hydrogen");
-      expect(result.skillNames).toContain("shopify-storefront-api");
-      expect(result.skillNames.length).toBe(2);
-    });
-
-    it("uses VARIANT_DEFAULTS when skills.domain is empty for hydrogen", () => {
-      const config: ProjectConfig = {
-        name: "test-hydrogen",
-        stack: {
-          language: "TypeScript",
-          framework: "Hydrogen",
-          backend: "Node.js",
-          package_manager: "npm",
-          platform: "shopify",
-          variant: "hydrogen",
-        },
-        build: {
-          dev: "npm run dev",
-          web: "npm run build",
-          install: "npm install",
-          verify: "",
-          test: "",
-        },
-        hosting: {
-          provider: "",
-          project_id: "",
-          team_id: "",
-          coolify_url: "",
-          coolify_app_uuid: "",
-        },
-        shopify: {
-          store: "test.myshopify.com",
-        },
-        skills: {
-          domain: [],
-          custom: [],
-        },
-        paths: {
-          src: "src/",
-          tests: "tests/",
-        },
-        supabase: {
-          project_id: "",
-        },
-        pipeline: {
-          workspace_id: "",
-          project_id: "",
-        },
-        conventions: {
-          branch_prefix: "feature/",
-          commit_format: "conventional",
-          language: "en",
-        },
-      };
-
-      const result = loadSkills(mockProjectDir, config);
-
-      const byRoleContent = result.byRole.get("frontend");
-      expect(byRoleContent).toBeDefined();
-      expect(byRoleContent).toContain("shopify-hydrogen");
-      expect(byRoleContent).toContain("shopify-storefront-api");
-    });
-  });
-
-  describe("Custom Skills Override", () => {
-    it("uses explicit skills.domain when provided (overrides VARIANT_DEFAULTS)", () => {
-      const config: ProjectConfig = {
-        name: "test-app",
-        stack: {
-          language: "TypeScript",
-          framework: "Remix",
-          backend: "Node.js",
-          package_manager: "npm",
-          platform: "shopify",
-          variant: "remix",
-        },
-        build: {
-          dev: "shopify app dev",
-          web: "npm run build",
-          install: "npm install",
-          verify: "",
-          test: "",
-        },
-        hosting: {
-          provider: "",
-          project_id: "",
-          team_id: "",
-          coolify_url: "",
-          coolify_app_uuid: "",
-        },
-        shopify: {
-          store: "test.myshopify.com",
-        },
-        skills: {
-          domain: ["shopify-apps", "shopify-admin-api"],
-          custom: [],
-        },
-        paths: {
-          src: "src/",
-          tests: "tests/",
-        },
-        supabase: {
-          project_id: "",
-        },
-        pipeline: {
-          workspace_id: "",
-          project_id: "",
-        },
-        conventions: {
-          branch_prefix: "feature/",
-          commit_format: "conventional",
-          language: "en",
-        },
-      };
-
-      const result = loadSkills(mockProjectDir, config);
-
-      // When skills.domain is explicitly provided, it should be used as-is
-      // (even if variant has VARIANT_DEFAULTS)
-      expect(result.skillNames).toContain("shopify-apps");
-      expect(result.skillNames).toContain("shopify-admin-api");
-      expect(result.skillNames.length).toBe(2);
-    });
-  });
-
-  describe("Non-Shopify Platform", () => {
+  describe("Non-Shopify platform", () => {
     it("returns empty skills for non-shopify platform without explicit domain", () => {
       const config: ProjectConfig = {
-        name: "test-project",
+        ...makeShopifyConfig(""),
         stack: {
           language: "TypeScript",
           framework: "Next.js",
@@ -466,137 +83,41 @@ describe("loadSkills — VARIANT_DEFAULTS", () => {
           platform: "vercel",
           variant: "",
         },
-        build: {
-          dev: "npm run dev",
-          web: "npm run build",
-          install: "npm install",
-          verify: "",
-          test: "",
-        },
-        hosting: {
-          provider: "vercel",
-          project_id: "",
-          team_id: "",
-          coolify_url: "",
-          coolify_app_uuid: "",
-        },
-        shopify: {
-          store: "",
-        },
-        skills: {
-          domain: [],
-          custom: [],
-        },
-        paths: {
-          src: "src/",
-          tests: "tests/",
-        },
-        supabase: {
-          project_id: "",
-        },
-        pipeline: {
-          workspace_id: "",
-          project_id: "",
-        },
-        conventions: {
-          branch_prefix: "feature/",
-          commit_format: "conventional",
-          language: "en",
-        },
       };
 
       const result = loadSkills(mockProjectDir, config);
-
       expect(result.skillNames.length).toBe(0);
     });
   });
 
-  describe("Unknown Variant", () => {
-    it("returns empty skills for unknown variant", () => {
-      const config: ProjectConfig = {
-        name: "test-project",
-        stack: {
-          language: "TypeScript",
-          framework: "",
-          backend: "",
-          package_manager: "npm",
-          platform: "shopify",
-          variant: "unknown-variant",
-        },
-        build: {
-          dev: "",
-          web: "",
-          install: "",
-          verify: "",
-          test: "",
-        },
-        hosting: {
-          provider: "",
-          project_id: "",
-          team_id: "",
-          coolify_url: "",
-          coolify_app_uuid: "",
-        },
-        shopify: {
-          store: "",
-        },
-        skills: {
-          domain: [],
-          custom: [],
-        },
-        paths: {
-          src: "src/",
-          tests: "tests/",
-        },
-        supabase: {
-          project_id: "",
-        },
-        pipeline: {
-          workspace_id: "",
-          project_id: "",
-        },
-        conventions: {
-          branch_prefix: "feature/",
-          commit_format: "conventional",
-          language: "en",
-        },
-      };
-
-      const result = loadSkills(mockProjectDir, config);
-
+  describe("Unknown variant", () => {
+    it("returns empty skills for unknown Shopify variant", () => {
+      const result = loadSkills(mockProjectDir, makeShopifyConfig("unknown-variant"));
       expect(result.skillNames.length).toBe(0);
     });
   });
 
   describe("Progressive Disclosure — frontmatterIndex and token estimates", () => {
-    it("includes frontmatterIndex with name and description for each loaded skill", () => {
+    it("includes frontmatterIndex with name and description for loaded skills", () => {
       const config: ProjectConfig = {
-        name: "test-app",
+        ...makeShopifyConfig(""),
         stack: {
           language: "TypeScript",
-          framework: "Remix",
+          framework: "Next.js",
           backend: "Node.js",
           package_manager: "npm",
-          platform: "shopify",
-          variant: "remix",
+          platform: "",
+          variant: "",
         },
-        build: { dev: "", web: "", install: "", verify: "", test: "" },
-        hosting: { provider: "", project_id: "", team_id: "", coolify_url: "", coolify_app_uuid: "" },
-        shopify: { store: "" },
-        skills: { domain: [], custom: [] },
-        paths: { src: "", tests: "" },
-        supabase: { project_id: "" },
-        pipeline: { workspace_id: "", project_id: "" },
-        conventions: { branch_prefix: "feature/", commit_format: "conventional", language: "en" },
+        skills: { domain: ["custom-skill", "another-skill"], custom: [] },
       };
 
       const result = loadSkills(mockProjectDir, config);
 
       expect(result.frontmatterIndex).toBeDefined();
       expect(typeof result.frontmatterIndex).toBe("string");
-      expect(result.frontmatterIndex).toContain("shopify-apps");
-      expect(result.frontmatterIndex).toContain("shopify-admin-api");
-      // Each line should be "- name: description" format
+      expect(result.frontmatterIndex).toContain("custom-skill");
+      expect(result.frontmatterIndex).toContain("another-skill");
       const lines = result.frontmatterIndex.split("\n").filter(Boolean);
       expect(lines.length).toBeGreaterThan(0);
       lines.forEach((line) => {
@@ -604,38 +125,30 @@ describe("loadSkills — VARIANT_DEFAULTS", () => {
       });
     });
 
-    it("includes non-zero token estimates", () => {
+    it("includes non-zero token estimates for explicit skills", () => {
       const config: ProjectConfig = {
-        name: "test-app",
+        ...makeShopifyConfig(""),
         stack: {
           language: "TypeScript",
-          framework: "Remix",
+          framework: "Next.js",
           backend: "Node.js",
           package_manager: "npm",
-          platform: "shopify",
-          variant: "remix",
+          platform: "",
+          variant: "",
         },
-        build: { dev: "", web: "", install: "", verify: "", test: "" },
-        hosting: { provider: "", project_id: "", team_id: "", coolify_url: "", coolify_app_uuid: "" },
-        shopify: { store: "" },
-        skills: { domain: [], custom: [] },
-        paths: { src: "", tests: "" },
-        supabase: { project_id: "" },
-        pipeline: { workspace_id: "", project_id: "" },
-        conventions: { branch_prefix: "feature/", commit_format: "conventional", language: "en" },
+        skills: { domain: ["custom-skill"], custom: [] },
       };
 
       const result = loadSkills(mockProjectDir, config);
 
       expect(result.totalFrontmatterTokens).toBeGreaterThan(0);
       expect(result.totalFullTokens).toBeGreaterThan(0);
-      // Full tokens should be >= frontmatter tokens (full content is always larger)
       expect(result.totalFullTokens).toBeGreaterThanOrEqual(result.totalFrontmatterTokens);
     });
 
     it("returns zero token counts and empty frontmatterIndex when no skills are loaded", () => {
       const config: ProjectConfig = {
-        name: "test-project",
+        ...makeShopifyConfig(""),
         stack: {
           language: "TypeScript",
           framework: "Next.js",
@@ -644,14 +157,6 @@ describe("loadSkills — VARIANT_DEFAULTS", () => {
           platform: "vercel",
           variant: "",
         },
-        build: { dev: "", web: "", install: "", verify: "", test: "" },
-        hosting: { provider: "vercel", project_id: "", team_id: "", coolify_url: "", coolify_app_uuid: "" },
-        shopify: { store: "" },
-        skills: { domain: [], custom: [] },
-        paths: { src: "", tests: "" },
-        supabase: { project_id: "" },
-        pipeline: { workspace_id: "", project_id: "" },
-        conventions: { branch_prefix: "feature/", commit_format: "conventional", language: "en" },
       };
 
       const result = loadSkills(mockProjectDir, config);
@@ -662,193 +167,26 @@ describe("loadSkills — VARIANT_DEFAULTS", () => {
     });
   });
 
-  describe("Role-Based Skill Assignment", () => {
-    it("assigns Remix skills to appropriate roles", () => {
+  describe("Explicit skills.domain override", () => {
+    it("uses explicit skills.domain when provided for any platform", () => {
       const config: ProjectConfig = {
-        name: "test-app",
-        stack: {
-          language: "TypeScript",
-          framework: "Remix",
-          backend: "Node.js",
-          package_manager: "npm",
-          platform: "shopify",
-          variant: "remix",
-        },
-        build: {
-          dev: "shopify app dev",
-          web: "npm run build",
-          install: "npm install",
-          verify: "",
-          test: "",
-        },
-        hosting: {
-          provider: "",
-          project_id: "",
-          team_id: "",
-          coolify_url: "",
-          coolify_app_uuid: "",
-        },
-        shopify: {
-          store: "test.myshopify.com",
-        },
-        skills: {
-          domain: [],
-          custom: [],
-        },
-        paths: {
-          src: "src/",
-          tests: "tests/",
-        },
-        supabase: {
-          project_id: "",
-        },
-        pipeline: {
-          workspace_id: "",
-          project_id: "",
-        },
-        conventions: {
-          branch_prefix: "feature/",
-          commit_format: "conventional",
-          language: "en",
-        },
+        ...makeShopifyConfig("liquid"),
+        skills: { domain: ["custom-skill"], custom: [] },
       };
 
       const result = loadSkills(mockProjectDir, config);
-
-      // Backend role should get shopify-apps and shopify-admin-api
-      const backendContent = result.byRole.get("backend");
-      expect(backendContent).toBeDefined();
-      expect(backendContent).toContain("shopify-apps");
-      expect(backendContent).toContain("shopify-admin-api");
-
-      // Frontend should also get these skills
-      const frontendContent = result.byRole.get("frontend");
-      expect(frontendContent).toBeDefined();
-      expect(frontendContent).toContain("shopify-apps");
+      expect(result.skillNames).toContain("custom-skill");
+      expect(result.skillNames.length).toBe(1);
     });
 
-    it("assigns Liquid skills to frontend and qa roles", () => {
+    it("custom skills in skills.custom are loaded regardless of variant", () => {
       const config: ProjectConfig = {
-        name: "test-theme",
-        stack: {
-          language: "Liquid/JSON",
-          framework: "",
-          backend: "",
-          package_manager: "npm",
-          platform: "shopify",
-          variant: "liquid",
-        },
-        build: {
-          dev: "shopify theme dev",
-          web: "shopify theme check",
-          install: "",
-          verify: "",
-          test: "",
-        },
-        hosting: {
-          provider: "",
-          project_id: "",
-          team_id: "",
-          coolify_url: "",
-          coolify_app_uuid: "",
-        },
-        shopify: {
-          store: "test.myshopify.com",
-        },
-        skills: {
-          domain: [],
-          custom: [],
-        },
-        paths: {
-          src: "src/",
-          tests: "tests/",
-        },
-        supabase: {
-          project_id: "",
-        },
-        pipeline: {
-          workspace_id: "",
-          project_id: "",
-        },
-        conventions: {
-          branch_prefix: "feature/",
-          commit_format: "conventional",
-          language: "en",
-        },
+        ...makeShopifyConfig("liquid"),
+        skills: { domain: [], custom: ["custom-skill"] },
       };
 
       const result = loadSkills(mockProjectDir, config);
-
-      const frontendContent = result.byRole.get("frontend");
-      expect(frontendContent).toBeDefined();
-      expect(frontendContent).toContain("shopify-liquid");
-      expect(frontendContent).toContain("shopify-theme");
-
-      const qaContent = result.byRole.get("qa");
-      expect(qaContent).toBeDefined();
-      expect(qaContent).toContain("shopify-theme");
-    });
-
-    it("assigns Hydrogen skills to frontend and backend roles", () => {
-      const config: ProjectConfig = {
-        name: "test-hydrogen",
-        stack: {
-          language: "TypeScript",
-          framework: "Hydrogen",
-          backend: "Node.js",
-          package_manager: "npm",
-          platform: "shopify",
-          variant: "hydrogen",
-        },
-        build: {
-          dev: "npm run dev",
-          web: "npm run build",
-          install: "npm install",
-          verify: "",
-          test: "",
-        },
-        hosting: {
-          provider: "",
-          project_id: "",
-          team_id: "",
-          coolify_url: "",
-          coolify_app_uuid: "",
-        },
-        shopify: {
-          store: "test.myshopify.com",
-        },
-        skills: {
-          domain: [],
-          custom: [],
-        },
-        paths: {
-          src: "src/",
-          tests: "tests/",
-        },
-        supabase: {
-          project_id: "",
-        },
-        pipeline: {
-          workspace_id: "",
-          project_id: "",
-        },
-        conventions: {
-          branch_prefix: "feature/",
-          commit_format: "conventional",
-          language: "en",
-        },
-      };
-
-      const result = loadSkills(mockProjectDir, config);
-
-      const frontendContent = result.byRole.get("frontend");
-      expect(frontendContent).toBeDefined();
-      expect(frontendContent).toContain("shopify-hydrogen");
-      expect(frontendContent).toContain("shopify-storefront-api");
-
-      const backendContent = result.byRole.get("backend");
-      expect(backendContent).toBeDefined();
-      expect(backendContent).toContain("shopify-hydrogen");
+      expect(result.byRole.size).toBeGreaterThan(0);
     });
   });
 });
@@ -949,35 +287,27 @@ triggers:
 });
 
 describe("loadSkillFrontmatters", () => {
-  it("returns frontmatter array without loading full body for resolved skills", () => {
+  it("returns frontmatter array for explicitly configured skills", () => {
     const config: ProjectConfig = {
-      name: "test-app",
+      ...makeShopifyConfig(""),
       stack: {
         language: "TypeScript",
-        framework: "Remix",
+        framework: "Next.js",
         backend: "Node.js",
         package_manager: "npm",
-        platform: "shopify",
-        variant: "remix",
+        platform: "",
+        variant: "",
       },
-      build: { dev: "", web: "", install: "", verify: "", test: "" },
-      hosting: { provider: "", project_id: "", team_id: "", coolify_url: "", coolify_app_uuid: "" },
-      shopify: { store: "" },
-      skills: { domain: [], custom: [] },
-      paths: { src: "", tests: "" },
-      supabase: { project_id: "" },
-      pipeline: { workspace_id: "", project_id: "" },
-      conventions: { branch_prefix: "feature/", commit_format: "conventional", language: "en" },
+      skills: { domain: ["custom-skill", "another-skill"], custom: [] },
     };
 
     const frontmatters = loadSkillFrontmatters("/mock/project", config);
 
     expect(Array.isArray(frontmatters)).toBe(true);
-    expect(frontmatters.length).toBe(2); // shopify-apps + shopify-admin-api for remix
+    expect(frontmatters.length).toBe(2);
     const names = frontmatters.map((f) => f.name);
-    expect(names).toContain("shopify-apps");
-    expect(names).toContain("shopify-admin-api");
-    // Each frontmatter should have filePath set
+    expect(names).toContain("custom-skill");
+    expect(names).toContain("another-skill");
     frontmatters.forEach((fm) => {
       expect(typeof fm.filePath).toBe("string");
       expect(fm.filePath.length).toBeGreaterThan(0);
@@ -988,10 +318,10 @@ describe("loadSkillFrontmatters", () => {
 
 describe("loadSkillByName", () => {
   it("loads full content for a specific skill by name", () => {
-    const content = loadSkillByName("/mock/project", "shopify-liquid");
+    const content = loadSkillByName("/mock/project", "custom-skill");
 
     expect(content).not.toBeNull();
-    expect(content).toContain("shopify-liquid");
+    expect(content).toContain("custom-skill");
   });
 
   it("returns null for a skill name with path traversal characters", () => {
@@ -1001,7 +331,6 @@ describe("loadSkillByName", () => {
   });
 
   it("returns null when the skill file does not exist", async () => {
-    // Override existsSync to return false for this test
     const fs = await import("node:fs");
     const { existsSync } = vi.mocked(fs);
     existsSync.mockReturnValueOnce(false).mockReturnValueOnce(false);

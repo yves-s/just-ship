@@ -211,6 +211,37 @@ enable_agent_teams() {
   esac
 }
 
+# --- Helper: add Shopify AI Toolkit MCP server to a settings.json file ---
+# Usage: add_shopify_mcp_server <settings_file_path>
+add_shopify_mcp_server() {
+  local settings_file="$1"
+  local result
+  result=$(SETTINGS_PATH="$settings_file" node -e "
+    const fs = require('fs');
+    const settingsPath = process.env.SETTINGS_PATH;
+    let settings = {};
+    try { settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')); } catch(e) {}
+    if (!settings.mcpServers) settings.mcpServers = {};
+    if (!settings.mcpServers['shopify-dev-mcp']) {
+      settings.mcpServers['shopify-dev-mcp'] = {
+        command: 'npx',
+        args: ['-y', '@shopify/dev-mcp@latest']
+      };
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+      console.log('added');
+    } else {
+      console.log('exists');
+    }
+  " 2>/dev/null || echo "error")
+
+  case "$result" in
+    added)  echo "  ✓ Shopify AI Toolkit MCP server added (.claude/settings.json)" ;;
+    exists) echo "  ✓ Shopify AI Toolkit MCP server already configured" ;;
+    *)      echo "  ⚠ Could not configure Shopify AI Toolkit MCP server — add manually:"
+            echo "    Set mcpServers['shopify-dev-mcp'] in .claude/settings.json" ;;
+  esac
+}
+
 # --- Self-install guard ---
 # The framework repo itself uses symlinks (.claude/commands → ../commands etc.)
 # Running setup.sh on itself would try to copy files onto themselves.
@@ -457,6 +488,13 @@ if [ "$MODE" = "update" ]; then
 
   echo "Updating skills..."
   mkdir -p "$PROJECT_DIR/.claude/skills"
+  # Remove deprecated Shopify skills (replaced by Shopify AI Toolkit MCP server)
+  for old_skill in shopify-admin-api shopify-apps shopify-app-scaffold shopify-checkout shopify-hydrogen shopify-liquid shopify-metafields shopify-storefront-api shopify-theme; do
+    if [ -f "$PROJECT_DIR/.claude/skills/${old_skill}.md" ]; then
+      rm "$PROJECT_DIR/.claude/skills/${old_skill}.md"
+      echo "  - ${old_skill}.md removed (replaced by Shopify AI Toolkit)"
+    fi
+  done
   cp "$FRAMEWORK_DIR/skills/"*.md "$PROJECT_DIR/.claude/skills/"
   echo "  ✓ $(ls "$FRAMEWORK_DIR/skills/"*.md | wc -l | tr -d ' ') framework skills (project-specific skills untouched)"
 
@@ -524,6 +562,36 @@ if [ "$MODE" = "update" ]; then
 
   echo "Enabling Agent Teams..."
   enable_agent_teams
+
+  # --- Add Shopify AI Toolkit MCP server for Shopify projects ---
+  IS_SHOPIFY=$(node -e "
+    try {
+      const c = JSON.parse(require('fs').readFileSync('$PROJECT_DIR/project.json', 'utf-8'));
+      console.log(c.stack?.platform === 'shopify' ? 'yes' : 'no');
+    } catch(e) { console.log('no'); }
+  " 2>/dev/null || echo "no")
+
+  if [ "$IS_SHOPIFY" = "yes" ]; then
+    # Remove deprecated Shopify skill references from project.json
+    node -e "
+      const fs = require('fs');
+      const pjPath = '$PROJECT_DIR/project.json';
+      try {
+        const pj = JSON.parse(fs.readFileSync(pjPath, 'utf-8'));
+        const deprecated = ['shopify-admin-api', 'shopify-apps', 'shopify-app-scaffold', 'shopify-checkout', 'shopify-hydrogen', 'shopify-liquid', 'shopify-metafields', 'shopify-storefront-api', 'shopify-theme'];
+        if (pj.skills?.domain?.length) {
+          const cleaned = pj.skills.domain.filter(s => !deprecated.includes(s));
+          if (cleaned.length !== pj.skills.domain.length) {
+            pj.skills.domain = cleaned;
+            fs.writeFileSync(pjPath, JSON.stringify(pj, null, 2) + '\n');
+            console.log('cleaned');
+          }
+        }
+      } catch(e) {}
+    " 2>/dev/null
+
+    add_shopify_mcp_server "$PROJECT_DIR/.claude/settings.json"
+  fi
 
   # Write version
   echo "$FRAMEWORK_VERSION" > "$VERSION_FILE"
@@ -797,14 +865,12 @@ if [ "$SHOPIFY_DETECTED" = "true" ]; then
     if (!pj.shopify) pj.shopify = {};
     if (!pj.shopify.store && detected.store) pj.shopify.store = detected.store;
 
-    if (!pj.skills) pj.skills = {};
-    if (!pj.skills.domain || pj.skills.domain.length === 0) {
-      pj.skills.domain = detected.skills;
-    }
-
     fs.writeFileSync(pjPath, JSON.stringify(pj, null, 2) + '\n');
   " PJ_PATH="$PROJECT_DIR/project.json" DETECT_JSON="$DETECT_RESULT"
   echo "  ✓ project.json updated with Shopify config"
+
+  # Add Shopify AI Toolkit MCP server to .claude/settings.json
+  add_shopify_mcp_server "$PROJECT_DIR/.claude/settings.json"
 else
   echo "  ~ No Shopify project detected"
 fi
