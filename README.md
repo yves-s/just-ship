@@ -98,7 +98,8 @@ Sensitive values are stored in your system keychain. Non-sensitive config goes t
 | `/just-ship-review` | Checkout branch, install deps, build, start dev server for local testing | No |
 | `/recover` | Recover stuck pipeline ticket — resume from partial work or restart clean. Supports `/recover T-{N}` | Yes |
 | `/just-ship-status` | Show all branches, PRs, board status, worktrees, and cleanup recommendations | -- |
-| `/setup-just-ship` | Auto-detect stack, configure project, connect Dev Board, install Sidekick | Interactive |
+| `/init` | Auto-detect stack, create `project.json`, generate `CLAUDE.md` from template | Yes |
+| `/setup-just-ship` | Full setup: stack detection + Board connection + Sidekick install | Interactive |
 | `/just-ship-update` | Sync project files after framework update (auto-run by `just-ship update`) | Interactive |
 
 **Conversational triggers:** Saying "passt", "done", "fertig", or "sieht gut aus" automatically executes `/ship`.
