@@ -16,6 +16,7 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 - **Token tracking for projects with spaces/dots in path** (`calculate-session-cost.sh`, `session-summary.sh`, `develop.md`, `ship.md`): SAFE_CWD normalization now replaces spaces and dots with dashes, matching Claude Code's internal session directory naming convention. Previously, projects like `Psychotherapie Schleich/adhs-diagnostic` or `19elf.cc` would silently fail token tracking (exit 0, no data)
 
 ### Added
+- **Init Command** (`commands/init.md`): Non-interactive `/init` command for project setup — auto-detects stack (Shopify Theme/App/Hydrogen, Next.js, React, Vue, Python, Go, Rust, etc.), creates `project.json` with detected stack info, generates `CLAUDE.md` from template. Idempotent — never overwrites existing files. Board connection remains separate via `/connect-board`. `setup.sh` now references `/init` as the post-install next step
 - **Smart Model Routing** (`pipeline/lib/model-router.ts`): Pipeline agents are now routed to optimal models per phase — planning agents (code-review, qa, security) use Opus, implementation agents (backend, frontend, data-engineer, devops) use Sonnet. Configurable via `pipeline.model_routing` in `project.json` with per-agent overrides, custom phase assignments, and model validation. Falls back to single-model behavior when not configured. Board events include model info for cost tracking
 
 ### Changed

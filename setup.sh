@@ -921,7 +921,8 @@ if [ "$SHOPIFY_DETECTED" = "true" ]; then
   echo "Need help? Run: bash .claude/scripts/shopify-env-check.sh"
 else
   echo "Nächster Schritt:"
-  echo "  Öffne Claude Code und führe /setup-just-ship aus"
-  echo "  (erkennt Stack, füllt project.json, verbindet Board, installiert Sidekick)"
+  echo "  Öffne Claude Code und führe /init aus"
+  echo "  (erkennt Stack, füllt project.json, generiert CLAUDE.md)"
+  echo "  Danach optional: /connect-board (Board verbinden)"
 fi
 print_banner
