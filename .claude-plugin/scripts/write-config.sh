@@ -599,11 +599,16 @@ cmd_connect() {
   if [ -f "$pjson" ]; then
     JS_PJSON="$pjson" \
     JS_WORKSPACE_ID="$workspace_id" \
+    JS_BOARD_URL="$board" \
     node -e "
       const fs = require('fs');
       const pj = JSON.parse(fs.readFileSync(process.env.JS_PJSON, 'utf-8'));
       if (!pj.pipeline) pj.pipeline = {};
       pj.pipeline.workspace_id = process.env.JS_WORKSPACE_ID;
+      // Write board_url for plugin-native credential resolution
+      if (process.env.JS_BOARD_URL) {
+        pj.pipeline.board_url = process.env.JS_BOARD_URL;
+      }
       // Remove old format fields if present
       delete pj.pipeline.api_key;
       delete pj.pipeline.api_url;

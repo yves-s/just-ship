@@ -91,6 +91,10 @@
       "description": "Just Ship Board API key (starts with adp_)",
       "sensitive": true
     },
+    "board_api_url": {
+      "description": "Just Ship Board API base URL (https://board.example.com)",
+      "sensitive": false
+    },
     "workspace_id": {
       "description": "Just Ship workspace UUID",
       "sensitive": false
