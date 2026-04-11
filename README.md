@@ -118,7 +118,7 @@ Sensitive values are stored in your system keychain. Non-sensitive config goes t
 
 | Command | What it does | Autonomous |
 |---------|-------------|------------|
-| `/ticket` | Write a structured ticket (bug, feature, improvement, spike) | No |
+| `/ticket` | Write a structured ticket (bug, feature, improvement, spike). Supports splitting (auto-Epic + children) and manual grouping | No |
 | `/implement` | Implement from chat context or description — no ticket required | Yes |
 | `/develop` | Pick next ticket, implement end-to-end, create PR | Yes |
 | `/ship` | Commit + push + PR + squash merge + board status "done". Supports `/ship T-{N}` | Yes |

@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Added
+- **Auto-Epic on ticket split** (T-782): Every ticket split now automatically creates an Epic as a container before creating child tickets with `parent_ticket_id`. Trigger is the split action itself, not the ticket size. Also supports manual grouping of existing tickets under a new Epic. `/ticket` command updated to delegate split and group flows to the ticket-writer skill
+
 ### Changed
 - **VPS infrastructure consolidated into engine repo** (T-774): All VPS deployment files (docker-compose.yml, Caddyfile, systemd units, setup-vps.sh, connect-project.sh, updater, monitoring scripts, logs.sh, tests) moved from the ops-repo back into `vps/`. Single `git clone && bash vps/setup-vps.sh` now provisions a complete VPS without needing a second repo. OPS-CONTEXT.md updated to reference engine-repo paths. Architecture description in CLAUDE.md updated
 

@@ -199,7 +199,7 @@ A ticket is too big when any of these apply:
 - **Multiple user personas** in one ticket — each persona likely needs their own story
 - **"And" in the title** — "Add search AND filter results" is two tickets
 - **Can't estimate confidently** — if the team can't agree on effort, the scope is unclear
-- **Spans more than one sprint** — break it into shippable increments
+- **Too complex for a single autonomous run** — multiple domains, cross-repo, or vague requirements
 
 ### How to Split
 
@@ -242,6 +242,86 @@ A ticket is too big when any of these apply:
 
 When splitting, each resulting ticket must be independently shippable and testable. A ticket that only makes sense in combination with another ticket hasn't been split — it's been fragmented.
 
+### Auto-Epic on Split
+
+**Every split creates an Epic.** When you split a ticket into multiple child tickets, always create an Epic first as the container. The trigger is the **split action itself** — not the ticket size.
+
+#### Flow
+
+1. **Create the Epic ticket first:**
+   - Title: `[Epic] {Original topic}` — the overarching goal
+   - Body: Summarize the overall scope (from the original ticket description). Include a "Child Tickets" section that lists the planned children.
+   - Status: `backlog`
+   - Size: omit (Epics don't have a size — they are containers)
+
+2. **Create each child ticket with `parent_ticket_id`:**
+   - Each child references the Epic via `parent_ticket_id`
+   - Each child is independently shippable and sized (S, M, or L — never XL)
+   - Each child follows the standard ticket structure (Problem, Desired Behavior, ACs, Out of Scope)
+
+3. **Show the hierarchy in the output:**
+   ```
+   Epic T-{N}: [Epic] {title}
+     └─ T-{N+1} (M) {child title}
+     └─ T-{N+2} (M) {child title}
+     └─ T-{N+3} (S) {child title}
+   ```
+
+#### When creating via Board API
+
+```bash
+# 1. Create Epic first
+bash .claude/scripts/board-api.sh post tickets '{
+  "title": "[Epic] {epic_title}",
+  "body": "{epic_body}",
+  "status": "backlog",
+  "project_id": "{pipeline.project_id}"
+}'
+# → Extract epic ticket ID from response
+
+# 2. Create children with parent_ticket_id
+bash .claude/scripts/board-api.sh post tickets '{
+  "title": "{child_title}",
+  "body": "{child_body}",
+  "status": "backlog",
+  "parent_ticket_id": "{epic_ticket_id}",
+  "project_id": "{pipeline.project_id}"
+}'
+```
+
+#### When pipeline is not configured
+
+If `pipeline.project_id` is not set in `project.json`, skip all Board API calls. Present the Epic and child ticket structures as Markdown output instead. The user can create them manually in their tool of choice.
+
+#### What is NOT an Epic
+
+- **Spikes** are not Epics. Spikes use `parent_ticket_id` for follow-up tickets (via `/spike-review`), but they are time-boxed investigations, not scope containers.
+- **Single tickets** are not Epics. If a ticket doesn't get split, it stays a normal ticket.
+
+### Manual Grouping
+
+Existing tickets can be grouped under a new Epic after the fact. When the user says something like "Group T-100, T-101, T-102 under an Epic":
+
+1. Create a new Epic ticket with a title and summary that describes the shared scope
+2. Update each referenced ticket's `parent_ticket_id` to point to the new Epic
+3. Show the resulting hierarchy
+
+```bash
+# 1. Create the Epic
+bash .claude/scripts/board-api.sh post tickets '{
+  "title": "[Epic] {grouping_title}",
+  "body": "{summary of what these tickets accomplish together}",
+  "status": "backlog",
+  "project_id": "{pipeline.project_id}"
+}'
+# → Extract epic_ticket_id
+
+# 2. Link each existing ticket
+bash .claude/scripts/board-api.sh patch "tickets/{N}" '{"parent_ticket_id": "{epic_ticket_id}"}'
+```
+
+If `pipeline.project_id` is not set, skip Board API calls and output the Epic structure as Markdown. List the tickets that would be linked so the user can apply them manually.
+
 ## Sizing
 
 Every ticket gets a T-shirt size to set expectations before development starts.
@@ -279,7 +359,7 @@ Set these for every ticket:
 - **Status**: `ready_to_develop` (well-defined, can be picked up) or `backlog` (needs refinement)
 - **Priority**: `high` / `medium` / `low` — see Priority Guide below
 - **Type**: User Story / Bug / Improvement / Spike / Tech Debt
-- **Size**: S / M / L / XL
+- **Size**: S / M / L / XL — **omit for Epics** (Epics are scope containers, not sized work items)
 
 ### Priority Guide
 
