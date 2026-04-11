@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Changed
+- **README installation and configuration docs** (T-790): Updated outdated sections — `project.json` example now shows current schema (workspace_id/project_id, no api_key/api_url), "Connecting a Project" documents `just-ship connect "jsp_..."` flow, "After Installation" shows both plugin and CLI directory structures, `--plugin-dir` development flow documented
+
 ### Added
 - **Quality Gate Hooks** (T-742): PostToolUse hooks for Edit/Write that run lint and format checks on every changed file. ESLint/Biome/Ruff lint errors block the agent (exit 1), format violations are auto-fixed via Prettier/Biome/Ruff. Tool detection is cached per project.json mtime. Configurable via `quality_gates` in project.json (enabled, lint, format, ignore_patterns). Projects without linting tools skip silently
 - **Auto-Epic on ticket split** (T-782): Every ticket split now automatically creates an Epic as a container before creating child tickets with `parent_ticket_id`. Trigger is the split action itself, not the ticket size. Also supports manual grouping of existing tickets under a new Epic. `/ticket` command updated to delegate split and group flows to the ticket-writer skill

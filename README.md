@@ -78,6 +78,8 @@ claude plugin update just-ship@just-ship
 claude --plugin-dir /path/to/just-ship
 ```
 
+This loads the plugin directly from a local checkout instead of the marketplace. Useful for contributing to the framework or testing changes before publishing. The local directory must contain a `.claude-plugin/plugin.json`.
+
 ### Path B: CLI (`setup.sh`)
 
 Full installation with CLI wrapper and VPS pipeline support:
@@ -304,6 +306,18 @@ just-ship/
 
 ### After Installation
 
+**Plugin path** (`.claude-plugin/` lives in the framework repo, loaded by Claude Code):
+
+```
+your-project/
+├── CLAUDE.md                   # Project instructions (edit to match your project)
+├── project.json                # Config: stack, build commands, pipeline IDs
+```
+
+The plugin provides agents, commands, skills, hooks, and scripts directly from its own directory — no files are copied into your project.
+
+**CLI path** (`setup.sh` copies framework files into your project):
+
 ```
 your-project/
 ├── CLAUDE.md                   # Project instructions (edit to match your project)
@@ -336,34 +350,53 @@ Central config read by all agents and commands. Auto-populated by `/setup-just-s
   "name": "my-project",
   "description": "Project description",
   "stack": {
-    "framework": "Next.js 15 (App Router)",
     "language": "TypeScript",
-    "styling": "Tailwind CSS",
-    "database": "Supabase (PostgreSQL)",
-    "testing": "Vitest",
-    "package_manager": "pnpm"
+    "framework": "Next.js 15 (App Router)",
+    "backend": "Supabase",
+    "package_manager": "pnpm",
+    "platform": "",
+    "variant": ""
   },
   "build": {
     "web": "pnpm run build",
-    "test": "npx vitest run"
+    "test": "npx vitest run",
+    "dev": "pnpm dev",
+    "dev_port": 3000,
+    "install": "pnpm install",
+    "verify": ""
+  },
+  "hosting": {
+    "provider": "",
+    "project_id": "",
+    "team_id": "",
+    "coolify_url": "",
+    "coolify_app_uuid": ""
   },
   "paths": {
-    "components": "src/components",
-    "pages": "src/app"
+    "src": "src/",
+    "tests": "tests/"
   },
   "pipeline": {
-    "project_id": "uuid",
-    "project_name": "My Project",
-    "workspace_id": "uuid",
-    "api_url": "https://board.just-ship.io",
-    "api_key": "adp_..."
+    "workspace_id": "your-workspace-uuid",
+    "project_id": "your-project-uuid",
+    "board_url": "",
+    "skip_agents": [],
+    "timeouts": {}
   },
   "conventions": {
     "commit_format": "conventional",
     "language": "de"
+  },
+  "quality_gates": {
+    "enabled": true,
+    "format": true,
+    "lint": true,
+    "ignore_patterns": []
   }
 }
 ```
+
+> **Note:** Credentials (API keys, tokens) are never stored in `project.json`. They live in `~/.just-ship/config.json` (CLI path) or in the plugin's `userConfig` (plugin path), both resolved automatically by `board-api.sh`.
 
 ### CLAUDE.md
 
@@ -469,9 +502,9 @@ The **[Just Ship Board](https://board.just-ship.io)** is the visual companion fo
 ### Connecting a Project
 
 1. Create a workspace and project at [board.just-ship.io](https://board.just-ship.io)
-2. Copy the connect command from the project setup dialog
-3. Run it in Claude Code: `/setup-just-ship --board https://board.just-ship.io --key <key> --project <uuid>`
-4. This writes `api_url`, `api_key`, and `project_id` to `project.json`
+2. Copy the connect token (`jsp_...`) from the project setup dialog
+3. Run: `just-ship connect "jsp_..."` (CLI) or `/connect-board` (plugin)
+4. This writes `workspace_id` and `project_id` to `project.json` and stores the API key in `~/.just-ship/config.json`
 
 Commands (`/ticket`, `/develop`, `/ship`) auto-detect the Board config and use it for ticket operations and status updates.
 
