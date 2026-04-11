@@ -182,6 +182,121 @@ Schreibe die Datei als `CLAUDE.md` im Projekt-Root.
 
 Ausgabe: `\u2713 CLAUDE.md generiert`
 
+### 3.5 Framework-Dateien installieren
+
+Erkenne den Framework-Quellpfad und kopiere alle Framework-Dateien in das Projekt:
+
+```bash
+# Framework-Quellpfad bestimmen
+if [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$CLAUDE_PLUGIN_ROOT/setup.sh" ]; then
+  FRAMEWORK_DIR="$CLAUDE_PLUGIN_ROOT"
+elif [ -f "./setup.sh" ] && [ -d "./agents" ]; then
+  echo "⚠ Running inside the just-ship framework repo — skipping framework file installation."
+  FRAMEWORK_DIR=""
+else
+  echo "⚠ Framework source not found — install via setup.sh or register the just-ship plugin."
+  FRAMEWORK_DIR=""
+fi
+```
+
+Falls `FRAMEWORK_DIR` leer ist, diesen Schritt überspringen.
+
+Falls `FRAMEWORK_DIR` gesetzt ist, kopiere die folgenden Verzeichnisse (alle idempotent — bereits befüllte Verzeichnisse werden übersprungen):
+
+**agents/**
+```bash
+PROJECT_DIR="$(pwd)"
+agent_count=0
+if [ ! -d "$PROJECT_DIR/.claude/agents" ] || [ -z "$(ls -A "$PROJECT_DIR/.claude/agents/" 2>/dev/null)" ]; then
+  mkdir -p "$PROJECT_DIR/.claude/agents"
+  cp "$FRAMEWORK_DIR/agents/"*.md "$PROJECT_DIR/.claude/agents/" 2>/dev/null || true
+  agent_count=$(ls "$PROJECT_DIR/.claude/agents/"*.md 2>/dev/null | wc -l | tr -d ' ')
+  echo "✓ $agent_count agents installed"
+else
+  agent_count=$(ls "$PROJECT_DIR/.claude/agents/"*.md 2>/dev/null | wc -l | tr -d ' ')
+  echo "✓ agents/ already exists — skipped"
+fi
+```
+
+**commands/**
+```bash
+cmd_count=0
+if [ ! -d "$PROJECT_DIR/.claude/commands" ] || [ -z "$(ls -A "$PROJECT_DIR/.claude/commands/" 2>/dev/null)" ]; then
+  mkdir -p "$PROJECT_DIR/.claude/commands"
+  cp "$FRAMEWORK_DIR/commands/"*.md "$PROJECT_DIR/.claude/commands/" 2>/dev/null || true
+  cmd_count=$(ls "$PROJECT_DIR/.claude/commands/"*.md 2>/dev/null | wc -l | tr -d ' ')
+  echo "✓ $cmd_count commands installed"
+else
+  cmd_count=$(ls "$PROJECT_DIR/.claude/commands/"*.md 2>/dev/null | wc -l | tr -d ' ')
+  echo "✓ commands/ already exists — skipped"
+fi
+```
+
+**skills/**
+```bash
+skill_count=0
+if [ ! -d "$PROJECT_DIR/.claude/skills" ] || [ -z "$(ls -A "$PROJECT_DIR/.claude/skills/" 2>/dev/null)" ]; then
+  mkdir -p "$PROJECT_DIR/.claude/skills"
+  for d in "$FRAMEWORK_DIR/skills/"*/; do
+    [ -f "$d/SKILL.md" ] || continue
+    dname=$(basename "$d")
+    cp "$d/SKILL.md" "$PROJECT_DIR/.claude/skills/$dname.md"
+    skill_count=$((skill_count + 1))
+  done
+  echo "✓ $skill_count skills installed"
+else
+  skill_count=$(ls "$PROJECT_DIR/.claude/skills/"*.md 2>/dev/null | wc -l | tr -d ' ')
+  echo "✓ skills/ already exists — skipped"
+fi
+```
+
+**scripts/**
+```bash
+if [ ! -d "$PROJECT_DIR/.claude/scripts" ] || [ -z "$(ls -A "$PROJECT_DIR/.claude/scripts/" 2>/dev/null)" ]; then
+  mkdir -p "$PROJECT_DIR/.claude/scripts"
+  cp "$FRAMEWORK_DIR/.claude/scripts/"* "$PROJECT_DIR/.claude/scripts/" 2>/dev/null || true
+  chmod +x "$PROJECT_DIR/.claude/scripts/"*.sh 2>/dev/null || true
+  echo "✓ scripts installed"
+else
+  echo "✓ scripts/ already exists — skipped"
+fi
+```
+
+**hooks/**
+```bash
+if [ ! -d "$PROJECT_DIR/.claude/hooks" ] || [ -z "$(ls -A "$PROJECT_DIR/.claude/hooks/" 2>/dev/null)" ]; then
+  mkdir -p "$PROJECT_DIR/.claude/hooks"
+  cp "$FRAMEWORK_DIR/.claude/hooks/"*.sh "$PROJECT_DIR/.claude/hooks/" 2>/dev/null || true
+  chmod +x "$PROJECT_DIR/.claude/hooks/"*.sh 2>/dev/null || true
+  echo "✓ hooks installed"
+else
+  echo "✓ hooks/ already exists — skipped"
+fi
+```
+
+**rules/**
+```bash
+if [ ! -d "$PROJECT_DIR/.claude/rules" ] || [ -z "$(ls -A "$PROJECT_DIR/.claude/rules/" 2>/dev/null)" ]; then
+  mkdir -p "$PROJECT_DIR/.claude/rules"
+  cp "$FRAMEWORK_DIR/.claude/rules/"*.md "$PROJECT_DIR/.claude/rules/" 2>/dev/null || true
+  echo "✓ rules installed"
+else
+  echo "✓ rules/ already exists — skipped"
+fi
+```
+
+**settings.json** (nur wenn nicht vorhanden):
+```bash
+if [ ! -f "$PROJECT_DIR/.claude/settings.json" ]; then
+  cp "$FRAMEWORK_DIR/settings.json" "$PROJECT_DIR/.claude/settings.json" 2>/dev/null || true
+  echo "✓ settings.json installed"
+else
+  echo "✓ settings.json already exists — skipped"
+fi
+```
+
+Merke dir die installierten Zählwerte (`$agent_count`, `$skill_count`, `$cmd_count`) für die Zusammenfassung.
+
 ### 4. Zusammenfassung
 
 Zeige eine gebrandete, informative Zusammenfassung. Nutze Box-Drawing-Characters fuer visuelle Struktur.
@@ -215,6 +330,7 @@ Falls Stack erkannt:
  │
  │  ✓ project.json erstellt
  │  ✓ CLAUDE.md generiert
+ │  ✓ Framework installiert ({agent_count} agents, {skill_count} skills, {cmd_count} commands)
  │
  ├─ Bereit
  │
@@ -240,6 +356,7 @@ Falls weder Stack noch Framework erkannt:
  │
  │  ✓ project.json erstellt
  │  ✓ CLAUDE.md generiert
+ │  ✓ Framework installiert ({agent_count} agents, {skill_count} skills, {cmd_count} commands)
  │
  │  Stack noch nicht erkannt — kein Problem.
  │  Installiere deine Dependencies und
@@ -276,4 +393,4 @@ Falls weder Stack noch Framework erkannt:
 - **Idempotent:** Erneutes Ausf\u00fchren \u00fcberschreibt nichts. Existierende Dateien werden \u00fcbersprungen.
 - **Board-Verbindung ist NICHT Teil dieses Commands.** Daf\u00fcr `/connect-board` verwenden.
 - **VPS-Setup ist NICHT Teil dieses Commands.** Daf\u00fcr `/just-ship-vps` verwenden.
-- **Framework-Dateien (agents, skills, scripts) werden NICHT kopiert.** Das macht `setup.sh` oder das Plugin-System.
+- **Framework-Dateien (agents, skills, scripts) werden automatisch installiert** wenn `CLAUDE_PLUGIN_ROOT` gesetzt ist (Plugin-Modus). Falls nicht gesetzt, `setup.sh` verwenden.
