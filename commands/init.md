@@ -259,10 +259,16 @@ if [ -f "CLAUDE.md" ]; then
   HAS_ORGANISATION=$(grep -c "## Organisation" CLAUDE.md 2>/dev/null || echo 0)
   HAS_TRIGGERS=$(grep -c "## Konversationelle Trigger" CLAUDE.md 2>/dev/null || echo 0)
 
+  # Content markers that MUST be present in a current template
+  HAS_ROLE_MAPPING=$(grep -c "Skill → Role Mapping" CLAUDE.md 2>/dev/null || echo 0)
+  HAS_SPARRING=$(grep -c "sparring.md" CLAUDE.md 2>/dev/null || echo 0)
+
   NEEDS_MIGRATION=false
   if [ "$LINE_COUNT" -lt 50 ]; then
     NEEDS_MIGRATION=true
   elif [ "$HAS_IDENTITY" -eq 0 ] || [ "$HAS_DECISION" -eq 0 ] || [ "$HAS_ORGANISATION" -eq 0 ] || [ "$HAS_TRIGGERS" -eq 0 ]; then
+    NEEDS_MIGRATION=true
+  elif [ "$HAS_ROLE_MAPPING" -eq 0 ] || [ "$HAS_SPARRING" -eq 0 ]; then
     NEEDS_MIGRATION=true
   fi
 fi
