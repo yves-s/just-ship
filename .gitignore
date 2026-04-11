@@ -62,6 +62,7 @@ scripts/*
 !scripts/pipeline-smoke-test.sh
 !scripts/pipeline-vps-test.sh
 !scripts/detect-shopify.sh
+!scripts/sync-template.sh
 !scripts/provision-pipeline.sh
 !scripts/validate-skill-frontmatter.sh
 .worktrees/

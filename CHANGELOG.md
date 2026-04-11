@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Added
+- **Single Source of Truth for CLAUDE.md template** (T-806): `scripts/sync-template.sh` auto-generates `templates/CLAUDE.md` from the repo's `CLAUDE.md` by replacing project-specific sections with placeholders. Integrated into quality-gate hook — editing CLAUDE.md automatically regenerates the template. Template drift is now structurally impossible.
+
 ### Fixed
 - **Template CLAUDE.md synced to current state** (T-805): `templates/CLAUDE.md` was 104 lines behind the production CLAUDE.md — missing Skill Role Mapping table, Sparring flow, test-driven-development routing, and extended triggers. New projects now get the complete framework instructions on init.
 
