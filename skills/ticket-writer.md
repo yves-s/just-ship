@@ -244,18 +244,28 @@ When splitting, each resulting ticket must be independently shippable and testab
 
 ## Sizing
 
-Every ticket gets a T-shirt size to set expectations before development starts.
+Every ticket gets a T-shirt size based on **complexity and scope** — not time. With agentic dev, a typical M-ticket runs in 10-30 minutes of pipeline time, so time-based estimates are meaningless. Size by what the agent needs to navigate.
 
-| Size | Signals | Typical scope |
+| Size | Complexity signals | Autonomy profile |
 |---|---|---|
-| **S** | Single file, config change, copy update, clear fix with known cause | Hours |
-| **M** | Feature in 1 domain (FE or BE or DB), 2-5 files, clear ACs | 1-2 days |
-| **L** | Cross-domain (FE + BE + DB), multiple integration points, 6+ files | 3-5 days |
-| **XL** | Cross-repo, architecture change, migration, vague requirements | 1+ week — consider splitting |
+| **S** | Single file or domain, config change, copy update, clear fix with known root cause. 1-3 ACs. | Fully autonomous, no human review needed before merge |
+| **M** | One domain (FE or BE or DB), 2-5 files, clear ACs, well-defined scope. 3-6 ACs. | Autonomous with standard code review |
+| **L** | Cross-domain (FE + BE + DB), multiple integration points, 6+ files, some ambiguity in requirements. 5-8 ACs. | Autonomous but needs human review for design decisions |
+| **XL** | Cross-repo, architecture change, migration, vague or evolving requirements, multiple personas. 8+ ACs. | Too complex for a single autonomous run — **always split** |
 
-**When in doubt, size up.** An M that turns out to be an S is fine. An M that turns out to be an XL is a sprint risk.
+### How to size
 
-**XL is a smell.** If a ticket is XL, ask whether it can be split. Most XL tickets are actually 2-3 M tickets hiding behind a vague title.
+Focus on these signals — in order of importance:
+
+1. **Domain count** — How many domains are touched? (FE, BE, DB, infra, config). Single-domain = S or M. Multi-domain = L or XL.
+2. **Clarity of requirements** — Are the ACs precise and testable? Vague = size up. Crystal clear = size down.
+3. **AC count** — More than 8 ACs is a split signal. 3-6 is the sweet spot for M.
+4. **File spread** — 1-2 files = S. 2-5 files = M. 6+ files = L. Cross-repo = XL.
+5. **Human judgment needed** — Can an agent make all decisions autonomously, or does it need product/design input? More human input = larger size.
+
+**When in doubt, size up.** An M that turns out to be an S is fine. An M that turns out to be an XL blocks the pipeline.
+
+**XL is a split signal.** If a ticket is XL, it must be split. Most XL tickets are actually 2-3 M tickets hiding behind a vague title. Use the split strategies in the [Ticket Splitting](#ticket-splitting) section above.
 
 ## Dependencies
 
