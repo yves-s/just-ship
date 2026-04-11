@@ -8,7 +8,11 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Changed
+- **VPS infrastructure consolidated into engine repo** (T-774): All VPS deployment files (docker-compose.yml, Caddyfile, systemd units, setup-vps.sh, connect-project.sh, updater, monitoring scripts, logs.sh, tests) moved from the ops-repo back into `vps/`. Single `git clone && bash vps/setup-vps.sh` now provisions a complete VPS without needing a second repo. OPS-CONTEXT.md updated to reference engine-repo paths. Architecture description in CLAUDE.md updated
+
 ### Fixed
+- **Hardcoded container name in updater** (T-774): 4 instances of hardcoded `vps-pipeline-server-1` in `just-ship-updater.sh` replaced with `$CONTAINER_NAME` constant
 - **Token tracking deterministic** (T-772): Extracted token delta calculation from Markdown instructions into `ship-token-tracking.sh` script. Previously 97% of done tickets had 0 tokens because the agent skipped the inline bash in `/ship` step 5c. The script resolves the main repo root via `git-common-dir` (fixing worktree path mismatch), computes per-ticket deltas using start snapshots from `/develop`, and patches the Board with granular token fields. `on-session-end.sh` now delegates to the same script (fixing winner-takes-all). Synced `calculate-session-cost.sh` plugin copy with space/dot path handling
 
 ### Added

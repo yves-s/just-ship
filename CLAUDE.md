@@ -304,7 +304,7 @@ pipeline/            SDK Pipeline Runner (TypeScript)
   ├── server.ts      HTTP Server (Webhooks, /api/answer für Resume)
   └── lib/           Config, Agent-Loading, Event-Hooks
 templates/           CLAUDE.md + project.json Templates
-vps/                 Docker Build (Dockerfile + entrypoint.sh — CI only; infra moved to just-ship-ops)
+vps/                 VPS-Infrastruktur (Dockerfile, Docker Compose, Caddy, systemd Units, Setup-Scripts, Monitoring)
 .claude/             Claude Code Config (symlinks auf agents/, commands/, skills/ + settings + scripts)
 setup.sh             Install/Update Script
 ```
