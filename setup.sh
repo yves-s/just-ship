@@ -901,9 +901,10 @@ else
 
     # Extract project-specific sections from old CLAUDE.md before migration
     # Section 1: Projekt description (between "## Projekt" and next "---")
+    # Use exact match "## Projekt$" to avoid matching "## Projektstruktur"
     OLD_PROJEKT=""
-    if grep -q "^## Projekt" "$PROJECT_DIR/CLAUDE.md.bak" 2>/dev/null; then
-      OLD_PROJEKT=$(sed -n '/^## Projekt/,/^---/p' "$PROJECT_DIR/CLAUDE.md.bak" | sed '$ d')
+    if grep -q "^## Projekt$" "$PROJECT_DIR/CLAUDE.md.bak" 2>/dev/null; then
+      OLD_PROJEKT=$(sed -n '/^## Projekt$/,/^---/p' "$PROJECT_DIR/CLAUDE.md.bak" | sed '$ d')
     fi
 
     # Section 2: Code conventions (between "### Code" and next "###" or "##")
