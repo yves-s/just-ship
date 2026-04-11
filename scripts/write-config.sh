@@ -69,6 +69,7 @@ Commands:
   connect         Connect workspace using a jsp_ token (parse + save + verify)
     --token         The jsp_ token string (required)
     --project-dir   Directory containing project.json (default: ".")
+    --plugin-mode   Plugin mode: skip global config, output JSON result (for /connect-board)
 
 USAGE
   exit 1
@@ -521,14 +522,18 @@ cmd_parse_jsp() {
       process.exit(1);
     }
 
-    // Output clean JSON
-    console.log(JSON.stringify({
+    // Output clean JSON — include project_id if v3 token (p field present)
+    const out = {
       board_url: json.b,
       workspace: json.w,
       workspace_id: json.i,
       api_key: json.k,
-      version: json.v
-    }, null, 2));
+      version: json.v,
+    };
+    if (json.p && typeof json.p === 'string') {
+      out.project_id = json.p;
+    }
+    console.log(JSON.stringify(out, null, 2));
   "
 }
 
@@ -537,12 +542,13 @@ cmd_parse_jsp() {
 # ---------------------------------------------------------------------------
 
 cmd_connect() {
-  local token="" project_dir="."
+  local token="" project_dir="." plugin_mode="false"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --token) token="$2"; shift 2 ;;
       --project-dir) project_dir="$2"; shift 2 ;;
+      --plugin-mode) plugin_mode="true"; shift ;;
       *) echo "Error: Unknown option '$1' for connect"; exit 1 ;;
     esac
   done
@@ -556,7 +562,7 @@ cmd_connect() {
     exit 1
   fi
 
-  # Step 1: Parse the jsp_ token
+  # Step 1: Parse the jsp_ token (v2 and v3)
   local parsed
   parsed=$(JS_TOKEN="$token" node -e "
     const token = process.env.JS_TOKEN;
@@ -582,28 +588,128 @@ cmd_connect() {
       console.error('Error: Invalid API Key in token (must start with adp_)');
       process.exit(1);
     }
-    console.log(JSON.stringify({ b: json.b.trim(), w: json.w.trim(), i: json.i.trim(), k: json.k.trim() }));
+    const out = { b: json.b.trim(), w: json.w.trim(), i: json.i.trim(), k: json.k.trim(), v: json.v };
+    // v3: include project_id
+    if (json.p && typeof json.p === 'string') {
+      out.p = json.p.trim();
+    }
+    console.log(JSON.stringify(out));
   ") || exit 1
 
-  local board workspace workspace_id key
-  board=$(echo "$parsed" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).b)")
-  workspace=$(echo "$parsed" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).w)")
-  workspace_id=$(echo "$parsed" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).i)")
-  key=$(echo "$parsed" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).k)")
+  local board workspace workspace_id key token_version project_id_from_token
+  board=$(JS_PARSED="$parsed" node -e "process.stdout.write(JSON.parse(process.env.JS_PARSED).b)")
+  workspace=$(JS_PARSED="$parsed" node -e "process.stdout.write(JSON.parse(process.env.JS_PARSED).w)")
+  workspace_id=$(JS_PARSED="$parsed" node -e "process.stdout.write(JSON.parse(process.env.JS_PARSED).i)")
+  key=$(JS_PARSED="$parsed" node -e "process.stdout.write(JSON.parse(process.env.JS_PARSED).k)")
+  token_version=$(JS_PARSED="$parsed" node -e "process.stdout.write(String(JSON.parse(process.env.JS_PARSED).v))")
+  project_id_from_token=$(JS_PARSED="$parsed" node -e "
+    const d = JSON.parse(process.env.JS_PARSED);
+    process.stdout.write(d.p || '');
+  ")
+
+  # -------------------------------------------------------------------------
+  # Plugin mode: skip global config, output JSON result
+  # -------------------------------------------------------------------------
+  if [ "$plugin_mode" = "true" ]; then
+    local pjson="${project_dir}/project.json"
+
+    # Update project.json with workspace_id (and project_id if v3)
+    if [ -f "$pjson" ]; then
+      JS_PJSON="$pjson" \
+      JS_WORKSPACE_ID="$workspace_id" \
+      JS_PROJECT_ID="${project_id_from_token:-}" \
+      JS_BOARD_URL="$board" \
+      node -e "
+        const fs = require('fs');
+        const pj = JSON.parse(fs.readFileSync(process.env.JS_PJSON, 'utf-8'));
+        if (!pj.pipeline) pj.pipeline = {};
+        pj.pipeline.workspace_id = process.env.JS_WORKSPACE_ID;
+        if (process.env.JS_PROJECT_ID) {
+          pj.pipeline.project_id = process.env.JS_PROJECT_ID;
+        }
+        if (process.env.JS_BOARD_URL) {
+          pj.pipeline.board_url = process.env.JS_BOARD_URL;
+        }
+        // Remove old format fields if present
+        delete pj.pipeline.api_key;
+        delete pj.pipeline.api_url;
+        delete pj.pipeline.workspace;
+        delete pj.pipeline.workspace_slug;
+        delete pj.pipeline.project_name;
+        fs.writeFileSync(process.env.JS_PJSON, JSON.stringify(pj, null, 2) + '\n');
+      " || exit 1
+    fi
+
+    # Health-check: verify connection (non-blocking on network errors)
+    local http_code response_body verified="false" verify_error=""
+    response_body=$(mktemp)
+    trap "rm -f '$response_body'" EXIT
+    http_code=$(curl -s -o "$response_body" -w "%{http_code}" \
+      -H "X-Pipeline-Key: ${key}" "${board}/api/projects" 2>/dev/null || echo "000")
+
+    if [ "$http_code" = "200" ]; then
+      verified="true"
+    elif [ "$http_code" = "401" ]; then
+      verify_error="invalid_api_key"
+    else
+      verify_error="board_unreachable"
+    fi
+
+    rm -f "$response_body"
+
+    # Output structured JSON result
+    JS_WORKSPACE_ID="$workspace_id" \
+    JS_WORKSPACE_SLUG="$workspace" \
+    JS_PROJECT_ID="${project_id_from_token:-}" \
+    JS_BOARD_URL="$board" \
+    JS_API_KEY="$key" \
+    JS_VERSION="$token_version" \
+    JS_VERIFIED="$verified" \
+    JS_VERIFY_ERROR="${verify_error:-}" \
+    node -e "
+      const result = {
+        success: true,
+        workspace_id: process.env.JS_WORKSPACE_ID,
+        workspace_slug: process.env.JS_WORKSPACE_SLUG,
+        board_url: process.env.JS_BOARD_URL,
+        api_key: process.env.JS_API_KEY,
+        version: parseInt(process.env.JS_VERSION, 10),
+        verified: process.env.JS_VERIFIED === 'true',
+      };
+      if (process.env.JS_PROJECT_ID) {
+        result.project_id = process.env.JS_PROJECT_ID;
+      }
+      if (process.env.JS_VERIFY_ERROR) {
+        result.verify_error = process.env.JS_VERIFY_ERROR;
+      }
+      console.log(JSON.stringify(result, null, 2));
+    "
+
+    return 0
+  fi
+
+  # -------------------------------------------------------------------------
+  # Standard mode: write to ~/.just-ship, interactive project selection
+  # -------------------------------------------------------------------------
 
   # Step 2: Write workspace to global config (UUID-keyed, with slug and board)
   cmd_add_workspace --workspace-id "$workspace_id" --key "$key" --slug "$workspace" --board "$board" >/dev/null
 
-  # Step 3: Update project.json if it exists (write workspace_id, remove old fields)
+  # Step 3: Update project.json if it exists (write workspace_id, board_url, remove old fields)
   local pjson="${project_dir}/project.json"
   if [ -f "$pjson" ]; then
     JS_PJSON="$pjson" \
     JS_WORKSPACE_ID="$workspace_id" \
+    JS_BOARD_URL="$board" \
     node -e "
       const fs = require('fs');
       const pj = JSON.parse(fs.readFileSync(process.env.JS_PJSON, 'utf-8'));
       if (!pj.pipeline) pj.pipeline = {};
       pj.pipeline.workspace_id = process.env.JS_WORKSPACE_ID;
+      // Write board_url for plugin-native credential resolution (Tier 2)
+      if (process.env.JS_BOARD_URL) {
+        pj.pipeline.board_url = process.env.JS_BOARD_URL;
+      }
       // Remove old format fields if present
       delete pj.pipeline.api_key;
       delete pj.pipeline.api_url;
@@ -614,7 +720,30 @@ cmd_connect() {
     "
   fi
 
-  # Step 4: Validate connection and auto-link project
+  # Step 4: v3 token — use project_id directly, skip interactive selection
+  if [ -n "$project_id_from_token" ] && [ -f "$pjson" ]; then
+    cmd_set_project --workspace-id "$workspace_id" --project-id "$project_id_from_token" --project-dir "$project_dir" > /dev/null
+    echo ""
+    echo "✓ Workspace '${workspace}' verbunden"
+    echo "✓ Projekt verknüpft (via Token)"
+    # Still validate connection
+    local http_code response_body
+    response_body=$(mktemp)
+    trap "rm -f '$response_body'" EXIT
+    http_code=$(curl -s -o "$response_body" -w "%{http_code}" \
+      -H "X-Pipeline-Key: ${key}" "${board}/api/projects" 2>/dev/null || echo "000")
+    rm -f "$response_body"
+    if [ "$http_code" = "200" ]; then
+      echo "✓ Board-Verbindung verifiziert"
+    elif [ "$http_code" = "401" ]; then
+      echo "⚠ API-Key wurde abgelehnt (HTTP 401) — prüfe Board → Settings → API Keys"
+    fi
+    echo ""
+    echo "Erstelle dein erstes Ticket mit /ticket in Claude Code."
+    return 0
+  fi
+
+  # Step 5: Validate connection and auto-link project (v2 token path)
   local http_code response_body
   response_body=$(mktemp)
   trap "rm -f '$response_body'" EXIT
