@@ -835,7 +835,37 @@ if [ "$OVERWRITE_CONFIG" != "N" ]; then
 CONFIG_EOF
   echo "  ✓ project.json"
 else
-  echo "  ~ project.json (skipped)"
+  # project.json already exists — migrate missing fields from template
+  MIGRATED=$(PJ_PATH="$PROJECT_DIR/project.json" TPL_PATH="$FRAMEWORK_DIR/templates/project.json" node -e "
+    const fs = require('fs');
+    const existing = JSON.parse(fs.readFileSync(process.env.PJ_PATH, 'utf-8'));
+    const template = JSON.parse(fs.readFileSync(process.env.TPL_PATH, 'utf-8'));
+    let changed = false;
+    for (const [key, val] of Object.entries(template)) {
+      if (!(key in existing)) {
+        existing[key] = val;
+        changed = true;
+      } else if (typeof val === 'object' && val !== null && !Array.isArray(val) && typeof existing[key] === 'object') {
+        for (const [subKey, subVal] of Object.entries(val)) {
+          if (!(subKey in existing[key])) {
+            existing[key][subKey] = subVal;
+            changed = true;
+          }
+        }
+      }
+    }
+    if (changed) {
+      fs.writeFileSync(process.env.PJ_PATH, JSON.stringify(existing, null, 2) + '\n');
+      process.stdout.write('yes');
+    } else {
+      process.stdout.write('no');
+    }
+  " 2>/dev/null || echo "no")
+  if [ "$MIGRATED" = "yes" ]; then
+    echo "  ✓ project.json migrated (missing fields added)"
+  else
+    echo "  ~ project.json (skipped)"
+  fi
 fi
 
 # --- Generate settings.json ---
@@ -857,7 +887,88 @@ if [ ! -f "$PROJECT_DIR/CLAUDE.md" ]; then
   sed "s/{{PROJECT_NAME}}/${PROJECT_NAME}/g" "$FRAMEWORK_DIR/templates/CLAUDE.md" > "$PROJECT_DIR/CLAUDE.md"
   echo "  ✓ CLAUDE.md (edit with your project specifics)"
 else
-  echo "  ~ CLAUDE.md (exists, skipped)"
+  # Check if existing CLAUDE.md is incomplete (broken first install or very old version)
+  CLAUDE_LINES=$(wc -l < "$PROJECT_DIR/CLAUDE.md" | tr -d ' ')
+  HAS_KEY_SECTIONS=true
+  grep -q "## Identity" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || HAS_KEY_SECTIONS=false
+  grep -q "## Decision Authority" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || HAS_KEY_SECTIONS=false
+  grep -q "## Organisation" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || HAS_KEY_SECTIONS=false
+
+  if [ "$CLAUDE_LINES" -lt 50 ] || [ "$HAS_KEY_SECTIONS" = false ]; then
+    echo "  Migrating CLAUDE.md ($CLAUDE_LINES lines → incomplete, regenerating from template)..."
+    # Backup existing
+    cp "$PROJECT_DIR/CLAUDE.md" "$PROJECT_DIR/CLAUDE.md.bak"
+
+    # Extract project-specific sections from old CLAUDE.md before migration
+    # Section 1: Projekt description (between "## Projekt" and next "---")
+    OLD_PROJEKT=""
+    if grep -q "^## Projekt" "$PROJECT_DIR/CLAUDE.md.bak" 2>/dev/null; then
+      OLD_PROJEKT=$(sed -n '/^## Projekt/,/^---/p' "$PROJECT_DIR/CLAUDE.md.bak" | sed '$ d')
+    fi
+
+    # Section 2: Code conventions (between "### Code" and next "###" or "##")
+    OLD_CODE=""
+    if grep -q "^### Code" "$PROJECT_DIR/CLAUDE.md.bak" 2>/dev/null; then
+      OLD_CODE=$(sed -n '/^### Code/,/^###\|^##/p' "$PROJECT_DIR/CLAUDE.md.bak" | sed '$ d')
+    fi
+
+    # Section 3: Architektur structure (between "## Architektur" and next "---")
+    OLD_ARCHITEKTUR=""
+    if grep -q "^## Architektur" "$PROJECT_DIR/CLAUDE.md.bak" 2>/dev/null; then
+      OLD_ARCHITEKTUR=$(sed -n '/^## Architektur/,/^---/p' "$PROJECT_DIR/CLAUDE.md.bak" | sed '$ d')
+    fi
+
+    # Generate fresh from template
+    sed "s/{{PROJECT_NAME}}/${PROJECT_NAME}/g" "$FRAMEWORK_DIR/templates/CLAUDE.md" > "$PROJECT_DIR/CLAUDE.md"
+
+    # Restore project-specific sections if they were found
+    if [ -n "$OLD_PROJEKT" ]; then
+      # Replace the Projekt placeholder section with extracted content
+      node -e "
+        const fs = require('fs');
+        const content = fs.readFileSync(process.env.PJ_FILE, 'utf-8');
+        const old = process.env.OLD_PROJEKT;
+        // Replace Projekt section: find it and replace until ---
+        const updated = content.replace(
+          /^## Projekt\n[\s\S]*?\n---/m,
+          '## Projekt\n' + old.trim() + '\n\n---'
+        );
+        fs.writeFileSync(process.env.PJ_FILE, updated);
+      " PJ_FILE="$PROJECT_DIR/CLAUDE.md" OLD_PROJEKT="$OLD_PROJEKT"
+    fi
+
+    if [ -n "$OLD_CODE" ]; then
+      # Replace Code conventions section
+      node -e "
+        const fs = require('fs');
+        const content = fs.readFileSync(process.env.PJ_FILE, 'utf-8');
+        const old = process.env.OLD_CODE;
+        const updated = content.replace(
+          /^### Code\n[\s\S]*?\n(?=^###|^##|\Z)/m,
+          '### Code\n' + old.trim() + '\n\n'
+        );
+        fs.writeFileSync(process.env.PJ_FILE, updated);
+      " PJ_FILE="$PROJECT_DIR/CLAUDE.md" OLD_CODE="$OLD_CODE"
+    fi
+
+    if [ -n "$OLD_ARCHITEKTUR" ]; then
+      # Replace Architektur section
+      node -e "
+        const fs = require('fs');
+        const content = fs.readFileSync(process.env.PJ_FILE, 'utf-8');
+        const old = process.env.OLD_ARCHITEKTUR;
+        const updated = content.replace(
+          /^## Architektur\n[\s\S]*?\n---/m,
+          '## Architektur\n' + old.trim() + '\n\n---'
+        );
+        fs.writeFileSync(process.env.PJ_FILE, updated);
+      " PJ_FILE="$PROJECT_DIR/CLAUDE.md" OLD_ARCHITEKTUR="$OLD_ARCHITEKTUR"
+    fi
+
+    echo "  ✓ CLAUDE.md migrated (backup: CLAUDE.md.bak, project-specific content preserved)"
+  else
+    echo "  ~ CLAUDE.md ($CLAUDE_LINES lines, all sections present)"
+  fi
 fi
 
 # --- Copy write-config.sh ---
