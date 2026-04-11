@@ -835,7 +835,37 @@ if [ "$OVERWRITE_CONFIG" != "N" ]; then
 CONFIG_EOF
   echo "  ✓ project.json"
 else
-  echo "  ~ project.json (skipped)"
+  # project.json already exists — migrate missing fields from template
+  MIGRATED=$(PJ_PATH="$PROJECT_DIR/project.json" TPL_PATH="$FRAMEWORK_DIR/templates/project.json" node -e "
+    const fs = require('fs');
+    const existing = JSON.parse(fs.readFileSync(process.env.PJ_PATH, 'utf-8'));
+    const template = JSON.parse(fs.readFileSync(process.env.TPL_PATH, 'utf-8'));
+    let changed = false;
+    for (const [key, val] of Object.entries(template)) {
+      if (!(key in existing)) {
+        existing[key] = val;
+        changed = true;
+      } else if (typeof val === 'object' && val !== null && !Array.isArray(val) && typeof existing[key] === 'object') {
+        for (const [subKey, subVal] of Object.entries(val)) {
+          if (!(subKey in existing[key])) {
+            existing[key][subKey] = subVal;
+            changed = true;
+          }
+        }
+      }
+    }
+    if (changed) {
+      fs.writeFileSync(process.env.PJ_PATH, JSON.stringify(existing, null, 2) + '\n');
+      process.stdout.write('yes');
+    } else {
+      process.stdout.write('no');
+    }
+  " 2>/dev/null || echo "no")
+  if [ "$MIGRATED" = "yes" ]; then
+    echo "  ✓ project.json migrated (missing fields added)"
+  else
+    echo "  ~ project.json (skipped)"
+  fi
 fi
 
 # --- Generate settings.json ---
@@ -857,7 +887,23 @@ if [ ! -f "$PROJECT_DIR/CLAUDE.md" ]; then
   sed "s/{{PROJECT_NAME}}/${PROJECT_NAME}/g" "$FRAMEWORK_DIR/templates/CLAUDE.md" > "$PROJECT_DIR/CLAUDE.md"
   echo "  ✓ CLAUDE.md (edit with your project specifics)"
 else
-  echo "  ~ CLAUDE.md (exists, skipped)"
+  # Check if existing CLAUDE.md is incomplete (broken first install or very old version)
+  CLAUDE_LINES=$(wc -l < "$PROJECT_DIR/CLAUDE.md" | tr -d ' ')
+  HAS_KEY_SECTIONS=true
+  grep -q "## Identity" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || HAS_KEY_SECTIONS=false
+  grep -q "## Decision Authority" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || HAS_KEY_SECTIONS=false
+  grep -q "## Organisation" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || HAS_KEY_SECTIONS=false
+
+  if [ "$CLAUDE_LINES" -lt 50 ] || [ "$HAS_KEY_SECTIONS" = false ]; then
+    echo "  Migrating CLAUDE.md ($CLAUDE_LINES lines → incomplete, regenerating from template)..."
+    # Backup existing
+    cp "$PROJECT_DIR/CLAUDE.md" "$PROJECT_DIR/CLAUDE.md.bak"
+    # Generate fresh from template
+    sed "s/{{PROJECT_NAME}}/${PROJECT_NAME}/g" "$FRAMEWORK_DIR/templates/CLAUDE.md" > "$PROJECT_DIR/CLAUDE.md"
+    echo "  ✓ CLAUDE.md migrated (backup: CLAUDE.md.bak)"
+  else
+    echo "  ~ CLAUDE.md ($CLAUDE_LINES lines, all sections present)"
+  fi
 fi
 
 # --- Copy write-config.sh ---
