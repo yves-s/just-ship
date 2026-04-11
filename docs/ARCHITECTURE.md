@@ -172,6 +172,7 @@ just-ship/                         # Framework repository
 |   +-- hooks/                     # Event streaming hooks
 |   |   +-- detect-ticket.sh       # SessionStart: extract ticket from branch
 |   |   +-- detect-ticket-post.sh  # PostToolUse: re-detect ticket after branch changes
+|   |   +-- quality-gate.sh        # PostToolUse: lint + format check on Edit/Write
 |   |   +-- on-agent-start.sh      # SubagentStart: send event to Board
 |   |   +-- on-agent-stop.sh       # SubagentStop: send event to Board
 |   |   +-- on-session-end.sh      # SessionEnd: send completion event
@@ -944,7 +945,8 @@ Claude Code hooks are shell scripts triggered by lifecycle events. The framework
 | Hook | Script | Purpose |
 |------|--------|---------|
 | `SessionStart` | `detect-ticket.sh` | Extract ticket number from branch name, set `TICKET_NUMBER` env var |
-| `PostToolUse` | `detect-ticket-post.sh` | Re-detect ticket number after Bash commands (catches mid-session branch changes) |
+| `PostToolUse` (Bash) | `detect-ticket-post.sh` | Re-detect ticket number after Bash commands (catches mid-session branch changes) |
+| `PostToolUse` (Edit/Write) | `quality-gate.sh` | Run lint + format checks on the changed file. Format auto-fixes, lint errors block the agent |
 | `SubagentStart` | `on-agent-start.sh` | Send `agent_started` event to Just Ship Board |
 | `SubagentStop` | `on-agent-stop.sh` | Send `completed` event to Just Ship Board |
 | `SessionEnd` | `on-session-end.sh` | Send session completion event |
