@@ -780,8 +780,14 @@ echo "  ✓ .pipeline/ (SDK pipeline)"
 # --- Copy skills ---
 echo "Installing skills..."
 mkdir -p "$PROJECT_DIR/.claude/skills"
-cp "$FRAMEWORK_DIR/skills/"*.md "$PROJECT_DIR/.claude/skills/"
-echo "  ✓ $(ls "$FRAMEWORK_DIR/skills/"*.md | wc -l | tr -d ' ') pipeline skills"
+skill_count=0
+for d in "$FRAMEWORK_DIR/skills/"*/; do
+  [ -f "$d/SKILL.md" ] || continue
+  dname=$(basename "$d")
+  cp "$d/SKILL.md" "$PROJECT_DIR/.claude/skills/$dname.md"
+  skill_count=$((skill_count + 1))
+done
+echo "  ✓ $skill_count pipeline skills"
 
 
 # --- Copy scripts ---
