@@ -1,6 +1,7 @@
 {
   "name": "my-project",
   "description": "Project description",
+  "mode": "",
   "stack": {
     "language": "typescript",
     "framework": "react",

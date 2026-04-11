@@ -107,6 +107,7 @@ Erstelle `project.json` basierend auf der Template-Struktur und fülle die erkan
 {
   "name": "<aus package.json name, oder Verzeichnisname kebab-case>",
   "description": "<aus package.json description, oder leer>",
+  "mode": "",
   "stack": {
     "language": "<erkannte Sprache>",
     "framework": "<erkanntes Framework>",
@@ -216,6 +217,34 @@ if [ -f "project.json" ] && [ -n "$TEMPLATE_PJ" ]; then
   fi
 fi
 ```
+
+### 2.5 Mode erkennen
+
+Erkenne ob just-ship als Plugin oder Standalone installiert ist und setze das `mode`-Feld in `project.json`:
+
+```bash
+FRAMEWORK_DIR="${CLAUDE_PLUGIN_ROOT:-}"
+CURRENT_MODE=$(node -e "process.stdout.write(require('./project.json').mode || '')" 2>/dev/null || echo "")
+
+if [ -z "$CURRENT_MODE" ]; then
+  if [ -n "$FRAMEWORK_DIR" ]; then
+    NEW_MODE="plugin"
+  else
+    NEW_MODE="standalone"
+  fi
+  
+  JS_MODE="$NEW_MODE" node -e "
+    const fs = require('fs');
+    const pj = JSON.parse(fs.readFileSync('project.json', 'utf-8'));
+    pj.mode = process.env.JS_MODE;
+    fs.writeFileSync('project.json', JSON.stringify(pj, null, 2) + '\n');
+  " 2>/dev/null || true
+  
+  echo "✓ Mode: $NEW_MODE"
+fi
+```
+
+Ausgabe: `✓ Mode: {plugin|standalone}` (nur wenn neu gesetzt, nicht bei bestehendem Wert)
 
 ### 3. Zusammenfassung
 

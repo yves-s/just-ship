@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Added
+- **Mode detection: plugin vs standalone** (T-816): `project.json` gets a new `mode` field (`"plugin"` or `"standalone"`). `setup.sh` auto-sets `"standalone"` on install and update. `/init` detects mode via `CLAUDE_PLUGIN_ROOT` env var. Existing projects without mode field are migrated on next setup.sh run. Standalone mode skips framework file installation in `/init` (already done by setup.sh).
+
 ### Changed
 - **/init delegates CLAUDE.md generation to setup.sh** (T-815): `/init` no longer generates CLAUDE.md, migrates templates, or installs framework files (agents, commands, skills, scripts, hooks, rules). It now focuses solely on stack detection and `project.json` creation/migration. All CLAUDE.md and framework file management is handled by `setup.sh`, eliminating the fragile duplicated logic.
 
