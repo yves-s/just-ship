@@ -408,9 +408,11 @@ if [ "$MODE" = "update" ]; then
   fi
 
   # Skills (framework skills only — project-specific skills are never touched)
-  for f in "$FRAMEWORK_DIR/skills/"*.md; do
-    fname=$(basename "$f")
-    diff_file "$f" "$PROJECT_DIR/.claude/skills/$fname" ".claude/skills/$fname"
+  # Skills are stored as skills/<name>/SKILL.md (plugin format) but copied as flat .md files
+  for d in "$FRAMEWORK_DIR/skills/"*/; do
+    [ -f "$d/SKILL.md" ] || continue
+    dname=$(basename "$d")
+    diff_file "$d/SKILL.md" "$PROJECT_DIR/.claude/skills/$dname.md" ".claude/skills/$dname.md"
   done
 
   # Rules
@@ -495,8 +497,15 @@ if [ "$MODE" = "update" ]; then
       echo "  - ${old_skill}.md removed (replaced by Shopify AI Toolkit)"
     fi
   done
-  cp "$FRAMEWORK_DIR/skills/"*.md "$PROJECT_DIR/.claude/skills/"
-  echo "  ✓ $(ls "$FRAMEWORK_DIR/skills/"*.md | wc -l | tr -d ' ') framework skills (project-specific skills untouched)"
+  # Copy skills from subdirectory format (skills/<name>/SKILL.md) to flat format (<name>.md)
+  skill_count=0
+  for d in "$FRAMEWORK_DIR/skills/"*/; do
+    [ -f "$d/SKILL.md" ] || continue
+    dname=$(basename "$d")
+    cp "$d/SKILL.md" "$PROJECT_DIR/.claude/skills/$dname.md"
+    skill_count=$((skill_count + 1))
+  done
+  echo "  ✓ $skill_count framework skills (project-specific skills untouched)"
 
   echo "Updating rules..."
   mkdir -p "$PROJECT_DIR/.claude/rules"
