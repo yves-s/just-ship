@@ -9,6 +9,7 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 ## [Unreleased]
 
 ### Changed
+- **Init onboarding UX** (T-794): `/init` now shows branded ASCII banner, box-layout project summary with detected stack, component counts (10 Agents, 37 Skills, 18 Commands), Board connect prompt with one-line explanation, and friendly message when stack is not detected
 - **README installation and configuration docs** (T-790): Updated outdated sections — `project.json` example now shows current schema (workspace_id/project_id, no api_key/api_url), "Connecting a Project" documents `just-ship connect "jsp_..."` flow, "After Installation" shows both plugin and CLI directory structures, `--plugin-dir` development flow documented
 
 ### Added

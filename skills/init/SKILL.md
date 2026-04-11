@@ -184,31 +184,91 @@ Ausgabe: `\u2713 CLAUDE.md generiert`
 
 ### 4. Zusammenfassung
 
+Zeige eine gebrandete, informative Zusammenfassung. Nutze Box-Drawing-Characters fuer visuelle Struktur.
+
+**Immer zuerst den Banner:**
+
 ```
-\u2713 Projekt initialisiert
+ ┌─────────────────────────────────────────────┐
+ │                                             │
+ │      _ _   _ ____ _____   ____ _   _ ___ ____  │
+ │     | | | | / ___|_   _| / ___| | | |_ _|  _ \ │
+ │  _  | | | | \___ \ | |   \___ \ |_| || || |_) |│
+ │ | |_| | |_| |___) || |    ___) |  _  || ||  __/ │
+ │  \___/ \___/|____/ |_|   |____/|_| |_|___|_|    │
+ │                                             │
+ │      Your dev team. Always shipping.        │
+ │                                             │
+ └─────────────────────────────────────────────┘
+```
 
-  Name          : {name}
-  Stack         : {framework} + {language}        \u2190 nur wenn erkannt
-  Package Mgr   : {package_manager}               \u2190 nur wenn erkannt
-  Build         : {build.web}                      \u2190 nur wenn erkannt
-  Test          : {build.test}                     \u2190 nur wenn erkannt
+**Dann die Projekt-Info:**
 
-N\u00e4chster Schritt:
-  Board verbinden \u2192 /connect-board
-  Erstes Ticket  \u2192 /ticket
+Falls Stack erkannt:
+```
+ ┌─ {name}
+ │
+ │  Stack         {framework} + {language}
+ │  Package Mgr   {package_manager}
+ │  Build         {build.web}
+ │  Test          {build.test}
+ │
+ │  ✓ project.json erstellt
+ │  ✓ CLAUDE.md generiert
+ │
+ ├─ Bereit
+ │
+ │  Just Ship gibt dir 10 Agents, 37 Skills und
+ │  18 Commands — alles was du brauchst um von
+ │  Ticket zu PR autonom zu arbeiten.
+ │
+ ├─ Naechster Schritt
+ │
+ │  Das Board ist dein Projekt-Dashboard —
+ │  Tickets, Pipeline-Status und KPIs auf einen Blick.
+ │
+ │  Board verbinden  →  /connect-board
+ │  Erstes Ticket    →  /ticket
+ │  Loslegen         →  /develop
+ │
+ └─────────────────────────────────────────────
 ```
 
 Falls weder Stack noch Framework erkannt:
 ```
-\u2713 Projekt initialisiert (Basis-Konfiguration)
-
-  Stack noch nicht erkannt \u2014 wird automatisch bef\u00fcllt sobald
-  du Abh\u00e4ngigkeiten installierst und /init erneut ausf\u00fchrst.
-
-N\u00e4chster Schritt:
-  Board verbinden \u2192 /connect-board
-  Erstes Ticket  \u2192 /ticket
+ ┌─ {name}
+ │
+ │  ✓ project.json erstellt
+ │  ✓ CLAUDE.md generiert
+ │
+ │  Stack noch nicht erkannt — kein Problem.
+ │  Installiere deine Dependencies und
+ │  lauf /init nochmal — der Stack wird
+ │  automatisch erkannt.
+ │
+ ├─ Bereit
+ │
+ │  Just Ship gibt dir 10 Agents, 37 Skills und
+ │  18 Commands — alles was du brauchst um von
+ │  Ticket zu PR autonom zu arbeiten.
+ │
+ ├─ Naechster Schritt
+ │
+ │  Das Board ist dein Projekt-Dashboard —
+ │  Tickets, Pipeline-Status und KPIs auf einen Blick.
+ │
+ │  Board verbinden  →  /connect-board
+ │  Erstes Ticket    →  /ticket
+ │  Loslegen         →  /develop
+ │
+ └─────────────────────────────────────────────
 ```
+
+**Regeln fuer die Zusammenfassung:**
+- Nur Felder anzeigen die einen Wert haben (leere Felder weglassen)
+- Die Zahlen (10 Agents, 37 Skills, 18 Commands) sind die aktuellen Werte — bei Aenderungen anpassen
+- Box-Drawing-Characters fuer konsistenten Look mit Session-Summary
+- Keine ANSI-Escape-Codes — Claude Code rendert das als Markdown
 
 ## Wichtig
 
