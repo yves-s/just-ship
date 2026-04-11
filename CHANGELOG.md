@@ -13,6 +13,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 - **Auto-Epic on ticket split** (T-782): Every ticket split now automatically creates an Epic as a container before creating child tickets with `parent_ticket_id`. Trigger is the split action itself, not the ticket size. Also supports manual grouping of existing tickets under a new Epic. `/ticket` command updated to delegate split and group flows to the ticket-writer skill
 
 ### Fixed
+- **Plugin structure corrected** (T-792): Restructured plugin to match actual Claude Code Plugin API. Skills converted from flat files (`skills/backend.md`) to subdirectory format (`skills/backend/SKILL.md`). `.claude-plugin/` cleaned to contain only `plugin.json` — all other components (agents, hooks, scripts) moved to plugin root. `setup.sh` updated to read from new subdirectory format. Added `hooks/hooks.json` for plugin-native hook registration
+
+### Fixed
 - **Preview URL broken locally** (T-784): `get-preview-url.sh` never produced a preview URL on local machines — two bugs: (1) Token resolution only checked env var and VPS path (`/root/.coolify-api/token`), missing `~/.just-ship/config.json` where the token actually lives locally. (2) Script returned raw FQDN (production URL) instead of PR-specific preview URL using Coolify's `preview_url_template`. Now reads token from `config.json` as third fallback, parses `preview_url_template` from Coolify API, and constructs PR-specific URLs (e.g. `https://board-204.preview.just-ship.io`). Code review hardened: `process.env.HOME` instead of shell `$HOME` in Node, newline-delimited field parsing, env var passing for app name (injection prevention), portable sed for macOS
 
 ### Changed
