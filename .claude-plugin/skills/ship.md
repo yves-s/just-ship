@@ -282,57 +282,13 @@ SOFORT WEITER ZU SCHRITT 5c.
 
 ### 5c. Token-Tracking (nur wenn Pipeline konfiguriert)
 
-Berechne die **Ticket-spezifischen** Kosten als Delta zwischen dem Snapshot (geschrieben bei `/develop` Start) und dem aktuellen Stand. Das isoliert die Kosten pro Ticket, auch wenn mehrere Tickets in einer Session bearbeitet werden.
+Token-Delta-Berechnung und Board-Update läuft deterministisch über ein Script:
 
 ```bash
-SAFE_CWD=$(echo "$PWD" | sed 's|^/||' | sed 's|/|-|g')
-SESSION_DIR="$HOME/.claude/projects/-${SAFE_CWD}"
-SESSION_FILE=$(ls -t "$SESSION_DIR"/*.jsonl 2>/dev/null | head -1)
-
-if [ -n "$SESSION_FILE" ]; then
-  END_JSON=$(bash .claude/scripts/calculate-session-cost.sh "$(basename "$SESSION_FILE" .jsonl)" "$PWD" 2>/dev/null || echo "")
-
-  if [ -n "$END_JSON" ]; then
-    # Read start snapshot (written by /develop step 3e)
-    SNAPSHOT_FILE=".claude/.token-snapshot-T-$TICKET_NUMBER.json"
-    START_JSON='{"total_tokens":0,"estimated_cost_usd":0,"input_tokens":0,"cache_read_tokens":0,"cache_creation_tokens":0,"output_tokens":0}'
-    if [ -f "$SNAPSHOT_FILE" ]; then
-      START_JSON=$(cat "$SNAPSHOT_FILE")
-    fi
-
-    # Compute deltas for each token type
-    DELTA_JSON=$(node -e "
-      const start = JSON.parse('$START_JSON');
-      const end = JSON.parse(process.argv[1]);
-      const d = {
-        total_tokens: Math.max(0, (end.total_tokens||0) - (start.total_tokens||0)),
-        estimated_cost: parseFloat(Math.max(0, (end.estimated_cost_usd||0) - (start.estimated_cost_usd||0)).toFixed(4)),
-        input_tokens: Math.max(0, (end.input_tokens||0) - (start.input_tokens||0)),
-        cache_read_tokens: Math.max(0, (end.cache_read_tokens||0) - (start.cache_read_tokens||0)),
-        cache_creation_tokens: Math.max(0, (end.cache_creation_tokens||0) - (start.cache_creation_tokens||0)),
-        output_tokens: Math.max(0, (end.output_tokens||0) - (start.output_tokens||0)),
-      };
-      process.stdout.write(JSON.stringify(d));
-    " "$END_JSON" 2>/dev/null || echo "")
-
-    if [ -n "$DELTA_JSON" ]; then
-      DELTA_TOKENS=$(echo "$DELTA_JSON" | node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).total_tokens))" 2>/dev/null || echo "0")
-      if [ "$DELTA_TOKENS" != "0" ]; then
-        bash .claude/scripts/board-api.sh patch "tickets/$TICKET_NUMBER" "$DELTA_JSON" >/dev/null 2>&1 || true
-      fi
-    fi
-
-    # Clean up snapshot
-    rm -f "$SNAPSHOT_FILE" 2>/dev/null || true
-  fi
-fi
+bash .claude/scripts/ship-token-tracking.sh $TICKET_NUMBER
 ```
 
-Ausgabe:
-- `✓ tokens — {DELTA_TOKENS} tokens, ${DELTA_COST}` (falls Kosten berechnet)
-- Still überspringen falls keine Session-Daten oder kein Pipeline
-
-**Fallback:** Falls kein Snapshot existiert (z.B. `/ship` ohne vorheriges `/develop`), ist `START_TOKENS=0` und das Delta = Gesamtkosten der Session.
+Das Script berechnet das Delta zwischen dem Start-Snapshot (geschrieben bei `/develop` Step 3e) und dem aktuellen Session-Stand, patcht das Board mit den granularen Token-Feldern und räumt den Snapshot auf.
 
 SOFORT WEITER ZU SCHRITT 6.
 

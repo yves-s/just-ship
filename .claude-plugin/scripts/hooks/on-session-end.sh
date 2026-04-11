@@ -45,26 +45,10 @@ if [ -n "$TICKET_NUMBER" ]; then
   fi
 fi
 
-# Track token usage and estimated cost for this session
-if [ -n "$SESSION_ID" ] && [ -n "$TICKET_NUMBER" ]; then
-  COST_JSON=$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/calculate-session-cost.sh" "$SESSION_ID" "$PROJECT_ROOT" 2>/dev/null || echo "")
-
-  if [ -n "$COST_JSON" ]; then
-    NEW_TOKENS=$(echo "$COST_JSON" | node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).total_tokens || 0))" 2>/dev/null || echo "0")
-    NEW_COST=$(echo "$COST_JSON" | node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).estimated_cost_usd || 0))" 2>/dev/null || echo "0")
-
-    if [ "$NEW_TOKENS" != "0" ]; then
-      EXISTING=$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/board-api.sh" get "tickets/$TICKET_NUMBER" 2>/dev/null || echo "")
-      if [ -n "$EXISTING" ]; then
-        OLD_TOKENS=$(echo "$EXISTING" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); process.stdout.write(String(d.data?.total_tokens || 0))" 2>/dev/null || echo "0")
-        OLD_COST=$(echo "$EXISTING" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); process.stdout.write(String(d.data?.estimated_cost || 0))" 2>/dev/null || echo "0")
-
-        TOTAL_TOKENS=$(node -e "process.stdout.write(String(Number('$OLD_TOKENS') + Number('$NEW_TOKENS')))" 2>/dev/null)
-        TOTAL_COST=$(node -e "process.stdout.write(String(parseFloat((Number('$OLD_COST') + Number('$NEW_COST')).toFixed(4))))" 2>/dev/null)
-
-        bash "${CLAUDE_PLUGIN_ROOT}/scripts/board-api.sh" patch "tickets/$TICKET_NUMBER" "{\"total_tokens\": $TOTAL_TOKENS, \"estimated_cost\": $TOTAL_COST}" >/dev/null 2>&1 || true
-      fi
-    fi
+# Track token usage via ship-token-tracking.sh (delta-based, not full session)
+if [ -n "$TICKET_NUMBER" ]; then
+  if [ -f "${CLAUDE_PLUGIN_ROOT}/scripts/ship-token-tracking.sh" ]; then
+    bash "${CLAUDE_PLUGIN_ROOT}/scripts/ship-token-tracking.sh" "$TICKET_NUMBER" "$PROJECT_ROOT" 2>/dev/null || true
   fi
 fi
 
