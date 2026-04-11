@@ -902,32 +902,23 @@ else
   grep -q "## Decision Authority" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || HAS_KEY_SECTIONS=false
   grep -q "## Organisation" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || HAS_KEY_SECTIONS=false
 
-  # Template hash check: detect outdated template versions
+  # Content-based check: verify installed CLAUDE.md has all framework markers
+  # This is more robust than hash comparison — works regardless of stored state
   TEMPLATE_OUTDATED=false
   CURRENT_TPL_HASH=""
-  STORED_TPL_HASH=""
   if command -v md5 &>/dev/null; then
     CURRENT_TPL_HASH=$(md5 -q "$FRAMEWORK_DIR/templates/CLAUDE.md" 2>/dev/null || echo "")
   elif command -v md5sum &>/dev/null; then
     CURRENT_TPL_HASH=$(md5sum "$FRAMEWORK_DIR/templates/CLAUDE.md" 2>/dev/null | cut -d' ' -f1)
   fi
-  if [ -f "$PROJECT_DIR/.claude/.template-hash" ]; then
-    STORED_TPL_HASH=$(cat "$PROJECT_DIR/.claude/.template-hash")
-  fi
-  # Hash of the ACTUAL CLAUDE.md content (not the stored hash which may be stale)
-  ACTUAL_HASH=""
-  if command -v md5 &>/dev/null; then
-    ACTUAL_HASH=$(sed "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" "$FRAMEWORK_DIR/templates/CLAUDE.md" | md5 -q 2>/dev/null || echo "")
-    INSTALLED_HASH=$(md5 -q "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || echo "")
-  elif command -v md5sum &>/dev/null; then
-    ACTUAL_HASH=$(sed "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" "$FRAMEWORK_DIR/templates/CLAUDE.md" | md5sum 2>/dev/null | cut -d' ' -f1)
-    INSTALLED_HASH=$(md5sum "$PROJECT_DIR/CLAUDE.md" 2>/dev/null | cut -d' ' -f1)
-  fi
-  # Template is outdated if installed CLAUDE.md doesn't match what the current template would produce
-  # (allows for project-specific customizations by checking section presence as fallback)
-  if [ -n "$CURRENT_TPL_HASH" ] && [ -n "$STORED_TPL_HASH" ] && [ "$STORED_TPL_HASH" != "$CURRENT_TPL_HASH" ]; then
-    TEMPLATE_OUTDATED=true
-  elif [ -z "$STORED_TPL_HASH" ] && [ -n "$CURRENT_TPL_HASH" ]; then
+
+  # Check for content markers that MUST be present in a current template
+  HAS_ROLE_MAPPING=true
+  grep -q "Skill → Role Mapping" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || HAS_ROLE_MAPPING=false
+  HAS_SPARRING=true
+  grep -q "sparring.md" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || HAS_SPARRING=false
+
+  if [ "$HAS_ROLE_MAPPING" = false ] || [ "$HAS_SPARRING" = false ]; then
     TEMPLATE_OUTDATED=true
   fi
 
