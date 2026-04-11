@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Added
+- **Plugin registration via marketplace** (T-817): Created `.claude-plugin/marketplace.json` so `claude plugin marketplace add yves-s/just-ship` discovers the plugin. Added `setup.sh --register-plugin` flag that validates the plugin structure, registers the marketplace, and installs the plugin in one step. Includes error handling, idempotency checks, and verification tests.
+
 ### Fixed
 - **Standalone settings.json with local hook paths** (T-814): `setup.sh` was copying the plugin `settings.json` (with `CLAUDE_PLUGIN_ROOT` paths) into target projects — hooks never ran because the env var was never set. Now copies `templates/settings.standalone.json` with `$CLAUDE_PROJECT_DIR` paths. Existing projects with plugin paths are automatically migrated on next `setup.sh` run.
 
