@@ -46,13 +46,15 @@ for arg in "$@"; do
     --update)  MODE="update" ;;
     --auto)    MODE="auto" ;;
     --dry-run) DRY_RUN=true ;;
+    --check)   MODE="check" ;;
     --help|-h)
-      echo "Usage: setup.sh [--update] [--auto] [--dry-run]"
+      echo "Usage: setup.sh [--update] [--auto] [--dry-run] [--check]"
       echo ""
       echo "  (no flags)   Non-interactive setup (default)"
       echo "  --auto       Alias for default (backward compat)"
       echo "  --update     Update framework files only"
       echo "  --dry-run    Preview changes without applying them"
+      echo "  --check      Show drift report without changing files"
       exit 0
       ;;
     *)
@@ -61,6 +63,12 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+# --check is --update --dry-run — no duplicated logic
+if [ "$MODE" = "check" ]; then
+  DRY_RUN=true
+  MODE="update"
+fi
 
 # --- Get framework version (git short hash + date) ---
 get_framework_version() {
@@ -76,6 +84,24 @@ get_framework_version() {
 }
 
 FRAMEWORK_VERSION=$(get_framework_version)
+
+# --- Write framework version to project.json ---
+write_framework_version_to_project_json() {
+  local target_pj="$1"
+  local version="$2"
+  if [ ! -f "$target_pj" ]; then
+    return 0
+  fi
+  JS_PJ="$target_pj" JS_VER="$version" node -e "
+    const fs = require('fs');
+    const pj = JSON.parse(fs.readFileSync(process.env.JS_PJ, 'utf-8'));
+    if (!pj.framework) pj.framework = {};
+    pj.framework.version = process.env.JS_VER;
+    pj.framework.updated_at = new Date().toISOString().split('T')[0];
+    fs.writeFileSync(process.env.JS_PJ, JSON.stringify(pj, null, 2) + '\n');
+  " 2>/dev/null || echo "  ! Could not write framework version to $(basename "$target_pj") (node error or invalid JSON)"
+}
+
 
 # --- Helper: print Just Ship ASCII banner in blue ---
 print_banner() {
@@ -441,8 +467,10 @@ if [ "$MODE" = "update" ]; then
 
   if [ "$CHANGES" -eq 0 ]; then
     echo "  Everything up to date."
-    # Still update version marker so it stays in sync
-    echo "$FRAMEWORK_VERSION" > "$VERSION_FILE"
+    # Still update version marker so it stays in sync (but not in dry-run/check mode)
+    if [ "$DRY_RUN" != true ]; then
+      echo "$FRAMEWORK_VERSION" > "$VERSION_FILE"
+    fi
     echo ""
     exit 0
   fi
@@ -604,6 +632,9 @@ if [ "$MODE" = "update" ]; then
 
   # Write version
   echo "$FRAMEWORK_VERSION" > "$VERSION_FILE"
+
+  # Write framework version to project.json
+  write_framework_version_to_project_json "$PROJECT_DIR/project.json" "$FRAMEWORK_VERSION"
 
   # Sync plugin.json + marketplace.json versions from framework source
   if [ -f "$FRAMEWORK_DIR/.claude-plugin/plugin.json" ]; then
@@ -1015,6 +1046,9 @@ echo "  ✓ write-config.sh (shared config script)"
 
 # --- Write version (template hash is written during CLAUDE.md generation/migration above) ---
 echo "$FRAMEWORK_VERSION" > "$VERSION_FILE"
+
+# Write framework version to project.json
+write_framework_version_to_project_json "$PROJECT_DIR/project.json" "$FRAMEWORK_VERSION"
 
 # --- Shopify project detection ---
 echo "Detecting project type..."
