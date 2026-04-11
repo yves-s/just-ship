@@ -885,17 +885,58 @@ enable_agent_teams
 if [ ! -f "$PROJECT_DIR/CLAUDE.md" ]; then
   echo "Generating CLAUDE.md..."
   sed "s/{{PROJECT_NAME}}/${PROJECT_NAME}/g" "$FRAMEWORK_DIR/templates/CLAUDE.md" > "$PROJECT_DIR/CLAUDE.md"
+  # Write template hash after fresh generation
+  if command -v md5 &>/dev/null; then
+    md5 -q "$FRAMEWORK_DIR/templates/CLAUDE.md" > "$PROJECT_DIR/.claude/.template-hash" 2>/dev/null || true
+  elif command -v md5sum &>/dev/null; then
+    md5sum "$FRAMEWORK_DIR/templates/CLAUDE.md" 2>/dev/null | cut -d' ' -f1 > "$PROJECT_DIR/.claude/.template-hash" || true
+  fi
   echo "  ✓ CLAUDE.md (edit with your project specifics)"
 else
-  # Check if existing CLAUDE.md is incomplete (broken first install or very old version)
+  # Check if existing CLAUDE.md needs migration:
+  # 1. Incomplete (broken first install): <50 lines or missing key sections
+  # 2. Outdated template: stored hash doesn't match current template hash
   CLAUDE_LINES=$(wc -l < "$PROJECT_DIR/CLAUDE.md" | tr -d ' ')
   HAS_KEY_SECTIONS=true
   grep -q "## Identity" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || HAS_KEY_SECTIONS=false
   grep -q "## Decision Authority" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || HAS_KEY_SECTIONS=false
   grep -q "## Organisation" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || HAS_KEY_SECTIONS=false
 
-  if [ "$CLAUDE_LINES" -lt 50 ] || [ "$HAS_KEY_SECTIONS" = false ]; then
-    echo "  Migrating CLAUDE.md ($CLAUDE_LINES lines → incomplete, regenerating from template)..."
+  # Template hash check: detect outdated template versions
+  TEMPLATE_OUTDATED=false
+  CURRENT_TPL_HASH=""
+  STORED_TPL_HASH=""
+  if command -v md5 &>/dev/null; then
+    CURRENT_TPL_HASH=$(md5 -q "$FRAMEWORK_DIR/templates/CLAUDE.md" 2>/dev/null || echo "")
+  elif command -v md5sum &>/dev/null; then
+    CURRENT_TPL_HASH=$(md5sum "$FRAMEWORK_DIR/templates/CLAUDE.md" 2>/dev/null | cut -d' ' -f1)
+  fi
+  if [ -f "$PROJECT_DIR/.claude/.template-hash" ]; then
+    STORED_TPL_HASH=$(cat "$PROJECT_DIR/.claude/.template-hash")
+  fi
+  # Hash of the ACTUAL CLAUDE.md content (not the stored hash which may be stale)
+  ACTUAL_HASH=""
+  if command -v md5 &>/dev/null; then
+    ACTUAL_HASH=$(sed "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" "$FRAMEWORK_DIR/templates/CLAUDE.md" | md5 -q 2>/dev/null || echo "")
+    INSTALLED_HASH=$(md5 -q "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || echo "")
+  elif command -v md5sum &>/dev/null; then
+    ACTUAL_HASH=$(sed "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" "$FRAMEWORK_DIR/templates/CLAUDE.md" | md5sum 2>/dev/null | cut -d' ' -f1)
+    INSTALLED_HASH=$(md5sum "$PROJECT_DIR/CLAUDE.md" 2>/dev/null | cut -d' ' -f1)
+  fi
+  # Template is outdated if installed CLAUDE.md doesn't match what the current template would produce
+  # (allows for project-specific customizations by checking section presence as fallback)
+  if [ -n "$CURRENT_TPL_HASH" ] && [ -n "$STORED_TPL_HASH" ] && [ "$STORED_TPL_HASH" != "$CURRENT_TPL_HASH" ]; then
+    TEMPLATE_OUTDATED=true
+  elif [ -z "$STORED_TPL_HASH" ] && [ -n "$CURRENT_TPL_HASH" ]; then
+    TEMPLATE_OUTDATED=true
+  fi
+
+  if [ "$CLAUDE_LINES" -lt 50 ] || [ "$HAS_KEY_SECTIONS" = false ] || [ "$TEMPLATE_OUTDATED" = true ]; then
+    REASON=""
+    if [ "$CLAUDE_LINES" -lt 50 ]; then REASON="$CLAUDE_LINES lines — incomplete"; fi
+    if [ "$HAS_KEY_SECTIONS" = false ]; then REASON="missing framework sections"; fi
+    if [ "$TEMPLATE_OUTDATED" = true ]; then REASON="template updated (hash mismatch)"; fi
+    echo "  Migrating CLAUDE.md ($REASON, regenerating from template)..."
     # Backup existing
     cp "$PROJECT_DIR/CLAUDE.md" "$PROJECT_DIR/CLAUDE.md.bak"
 
@@ -967,8 +1008,12 @@ else
     fi
 
     echo "  ✓ CLAUDE.md migrated (backup: CLAUDE.md.bak, project-specific content preserved)"
+    # Write template hash AFTER successful migration
+    if [ -n "$CURRENT_TPL_HASH" ]; then
+      echo "$CURRENT_TPL_HASH" > "$PROJECT_DIR/.claude/.template-hash"
+    fi
   else
-    echo "  ~ CLAUDE.md ($CLAUDE_LINES lines, all sections present)"
+    echo "  ~ CLAUDE.md ($CLAUDE_LINES lines, all sections present, template current)"
   fi
 fi
 
@@ -977,13 +1022,8 @@ cp "$FRAMEWORK_DIR/scripts/write-config.sh" "$PROJECT_DIR/.claude/scripts/write-
 chmod +x "$PROJECT_DIR/.claude/scripts/write-config.sh"
 echo "  ✓ write-config.sh (shared config script)"
 
-# --- Write version + template hash ---
+# --- Write version (template hash is written during CLAUDE.md generation/migration above) ---
 echo "$FRAMEWORK_VERSION" > "$VERSION_FILE"
-if command -v md5 &>/dev/null; then
-  md5 -q "$FRAMEWORK_DIR/templates/CLAUDE.md" > "$PROJECT_DIR/.claude/.template-hash" 2>/dev/null || true
-elif command -v md5sum &>/dev/null; then
-  md5sum "$FRAMEWORK_DIR/templates/CLAUDE.md" 2>/dev/null | cut -d' ' -f1 > "$PROJECT_DIR/.claude/.template-hash" || true
-fi
 
 # --- Shopify project detection ---
 echo "Detecting project type..."
