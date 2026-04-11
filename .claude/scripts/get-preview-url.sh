@@ -60,35 +60,38 @@ if [ "$HOSTING_PROVIDER" = "coolify" ]; then
 
   [ -z "$COOLIFY_URL" ] || [ -z "$COOLIFY_APP_UUID" ] || [ -z "$COOLIFY_TOKEN" ] && exit 0
 
+  # Step 1: Get app details (FQDN, name, preview_url_template) — Coolify v4
+  APP_RESPONSE=$(curl -s -H "Authorization: Bearer $COOLIFY_TOKEN" \
+    "${COOLIFY_URL}/api/v1/applications/${COOLIFY_APP_UUID}" 2>/dev/null)
+
+  APP_FIELDS=$(echo "$APP_RESPONSE" | node -e "
+    let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
+      try {
+        const app = JSON.parse(d);
+        const fqdn = app.fqdn || '';
+        const name = app.name || '';
+        const tmpl = app.preview_url_template || '';
+        process.stdout.write(fqdn + '\n' + name + '\n' + tmpl);
+      } catch(e) {}
+    });
+  " 2>/dev/null)
+  FQDN=$(echo "$APP_FIELDS" | sed -n '1p')
+  APP_NAME=$(echo "$APP_FIELDS" | sed -n '2p')
+  PREVIEW_TEMPLATE=$(echo "$APP_FIELDS" | sed -n '3p')
+
+  if [ -z "$FQDN" ] || [ "$FQDN" = "null" ]; then
+    echo "[coolify-preview] No FQDN in app response -- skipping" >&2
+    exit 0
+  fi
+
+  # Step 2: Try deployments API briefly (may return empty on some Coolify versions)
+  # Cap at 10s or MAX_WAIT, whichever is smaller
+  DEPLOY_POLL_MAX=$(( MAX_WAIT < 10 ? MAX_WAIT : 10 ))
   ELAPSED=0
   INTERVAL=5
 
-  while [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
-    # Step 1: Get app details (FQDN, name, preview_url_template) — Coolify v4
-    APP_RESPONSE=$(curl -s -H "Authorization: Bearer $COOLIFY_TOKEN" \
-      "${COOLIFY_URL}/api/v1/applications/${COOLIFY_APP_UUID}" 2>/dev/null)
-
-    # Parse FQDN, name, and preview_url_template from app response
-    # Output newline-delimited so fields with spaces are handled correctly
-    APP_FIELDS=$(echo "$APP_RESPONSE" | node -e "
-      let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
-        try {
-          const app = JSON.parse(d);
-          const fqdn = app.fqdn || '';
-          const name = app.name || '';
-          const tmpl = app.preview_url_template || '';
-          process.stdout.write(fqdn + '\n' + name + '\n' + tmpl);
-        } catch(e) {}
-      });
-    " 2>/dev/null)
-    FQDN=$(echo "$APP_FIELDS" | sed -n '1p')
-    APP_NAME=$(echo "$APP_FIELDS" | sed -n '2p')
-    PREVIEW_TEMPLATE=$(echo "$APP_FIELDS" | sed -n '3p')
-
-    if [ -n "$FQDN" ] && [ "$FQDN" != "null" ] && [ -n "$APP_NAME" ]; then
-      # Step 2: Fetch all deployments and filter by application_name
-      # Coolify v4 does NOT support /applications/{uuid}/deployments
-      # APP_NAME is passed via env var to avoid shell injection in JS source
+  while [ "$ELAPSED" -lt "$DEPLOY_POLL_MAX" ] && [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
+    if [ -n "$APP_NAME" ]; then
       DEPLOY_DATA=$(curl -s -H "Authorization: Bearer $COOLIFY_TOKEN" \
         "${COOLIFY_URL}/api/v1/deployments" 2>/dev/null \
         | APP_NAME="$APP_NAME" node -e "
@@ -109,9 +112,7 @@ if [ "$HOSTING_PROVIDER" = "coolify" ]; then
       PR_ID=$(echo "$DEPLOY_DATA" | cut -d' ' -f2)
 
       if [ "$DEPLOY_STATUS" = "finished" ]; then
-        # Build preview URL using template (analog to coolify-preview.ts:buildPreviewUrl)
         if [ -n "$PREVIEW_TEMPLATE" ] && [ "$PR_ID" -gt 0 ] 2>/dev/null; then
-          # Strip protocol prefix — use portable sed (no GNU \? extension)
           DOMAIN=$(echo "$FQDN" | sed 's|^https://||;s|^http://||')
           PREVIEW_DOMAIN=$(echo "$PREVIEW_TEMPLATE" | sed "s/{{pr_id}}/$PR_ID/g" | sed "s/{{domain}}/$DOMAIN/g")
           echo "https://$PREVIEW_DOMAIN"
@@ -119,6 +120,10 @@ if [ "$HOSTING_PROVIDER" = "coolify" ]; then
           echo "$FQDN"
         fi
         exit 0
+      elif [ -n "$DEPLOY_STATUS" ]; then
+        echo "[coolify-preview] Deployment status: $DEPLOY_STATUS (${ELAPSED}s elapsed) -- polling" >&2
+      else
+        echo "[coolify-preview] No deployments found for \"$APP_NAME\" (${ELAPSED}s elapsed) -- polling" >&2
       fi
     fi
 
@@ -126,6 +131,20 @@ if [ "$HOSTING_PROVIDER" = "coolify" ]; then
     ELAPSED=$((ELAPSED + INTERVAL))
   done
 
+  # Step 3: Deployments API returned nothing — construct URL from template + PR number
+  # This handles Coolify v4 betas where /api/v1/deployments returns empty arrays
+  if [ -n "$PREVIEW_TEMPLATE" ]; then
+    PR_NUMBER=$(gh pr view --json number -q .number 2>/dev/null || echo "")
+    if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" -gt 0 ] 2>/dev/null; then
+      DOMAIN=$(echo "$FQDN" | sed 's|^https://||;s|^http://||')
+      PREVIEW_DOMAIN=$(echo "$PREVIEW_TEMPLATE" | sed "s/{{pr_id}}/$PR_NUMBER/g" | sed "s/{{domain}}/$DOMAIN/g")
+      echo "https://$PREVIEW_DOMAIN"
+      exit 0
+    fi
+  fi
+
+  # No PR found or no template — return production FQDN
+  echo "$FQDN"
   exit 0
 fi
 
