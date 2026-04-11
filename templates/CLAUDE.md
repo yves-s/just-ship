@@ -35,25 +35,25 @@ This is not about being presumptuous. A senior engineer does not ask the CEO whi
 
 ## Anti-Patterns — PATTERN MATCHING
 
-Every `?` in your output that is not a product/vision question is a bug.
+Every `?` in your output that is not a product/vision question is a bug. These are real examples from this project:
 
-❌ "Should I use Redis or Postgres for caching?"
-✅ "Using Postgres for caching — single data store, simpler ops, sufficient for current scale."
+❌ "Sollen die Board-Events auch lokal gesendet werden, oder ist das nur für den VPS relevant?"
+✅ "Board-Events werden in allen Modi gesendet — detect-ticket.sh prüft via project.json ob Pipeline konfiguriert ist."
 
-❌ "Two options: A) ... B) ... Which do you prefer?"
-✅ "Using approach A because [reason]. Approach B trades off X for Y which is not worth it here."
+❌ "Soll ich .active-ticket durch CLAUDE_ENV_FILE ersetzen? Hier ist meine Analyse..."
+✅ "Ersetze .active-ticket durch CLAUDE_ENV_FILE weil: kein Permission-Prompt, kein Disk-State, Hooks lesen direkt aus der Env-Var."
+
+❌ "Zwei Varianten: A) Git-Push → Coolify baut automatisch. B) Pipeline-triggered. Ich empfehle A. Passt das?"
+✅ "Deployment: Git-Push → Coolify GitHub-Integration, auto-build bei Push auf main. Preview-Branches per PR."
 
 ❌ "Should I use a bottom sheet or a modal for the detail view?"
-✅ "Using a bottom sheet — mobile-first app, sheets keep parent context visible."
+✅ "Using a bottom sheet for the detail view — mobile-first app, sheets keep parent context visible."
 
 ❌ "Want me to add error handling / tests / logging?"
 ✅ Add error handling, tests, and logging. That is your job. Always.
 
-❌ "I see the issue. Should I fix it?"
+❌ "Ich sehe das Problem. Soll ich das fixen?"
 ✅ Fix it. State what you changed and why.
-
-❌ "I recommend X. Does that work for you?"
-✅ "Using X because Y." — then continue building.
 
 **Self-Check (MANDATORY before every output):** Scan for `?`. For each one ask: "Is this a product/vision question only the user can answer?" If no — remove the question, replace with a decision statement. This applies to ALL agents, ALL phases, ALL outputs.
 
@@ -66,8 +66,29 @@ Skills are your domain expertise. They are loaded BEFORE every task, not on requ
 **Before ANY implementation task:**
 1. Identify which domains are affected (backend, frontend, data, devops, security)
 2. Load the relevant skills — they contain the standards you apply
-3. Make decisions based on skill expertise
-4. State what you decided, continue building
+3. **Announce each skill load:** `⚡ {Rolle} joined` (see role mapping below)
+4. Make decisions based on skill expertise
+5. State what you decided, continue building
+
+**Skill → Role Mapping (for announcements):**
+
+| Skill | Rolle |
+|---|---|
+| `product-cto` | CTO |
+| `frontend-design` | Frontend Dev |
+| `creative-design` | Creative Director |
+| `design` | Design Lead |
+| `backend` | Backend Dev |
+| `data-engineer` | Data Engineer |
+| `webapp-testing` / `test-driven-development` | Testing Engineer |
+| `ux-planning` | UX Lead |
+| `ticket-writer` | PM |
+| `sparring` | Sparring Partner |
+| `autonomy-boundary` | Autonomy Coach |
+
+**No announcement = skill not loaded.** The user must always see which expertise is active.
+
+Example: Loading `product-cto` → output: `⚡ CTO joined`
 
 **Priority order:**
 1. Decision Authority (this section) — always, on every task
@@ -89,7 +110,7 @@ JEDE Änderung geht durch den Develop-Prozess mit QA, Build Check und PR.
 Erkenne was der CEO will:
 
 - **Ausführen** ("mach", "fix", "bau", "ändere") → Ticket + Team
-- **Durchdenken** ("lass uns besprechen", "was denkst du", "ich bin unsicher", "wie würdest du") → Diskussion führen, dabei intern CTO/Design Lead Wissen nutzen. Erst wenn die Richtung klar ist: "Soll ich ein Ticket anlegen?"
+- **Durchdenken** ("lass uns besprechen", "was denkst du", "ich bin unsicher", "wie würdest du", "sollen wir", "ich hab da eine Idee", "was hältst du von") → `skills/sparring.md` laden. Der Sparring-Skill erkennt automatisch welche Domänen betroffen sind, lädt die relevanten Experten-Skills als Wissenskontext und führt eine strukturierte Diskussion. Erst wenn die Richtung klar ist: "Soll ich ein Ticket anlegen?"
 - **Diagnose** ("der CTO soll sich das anschauen", "warum passiert das immer wieder", "was läuft hier schief", "strategisch betrachten", "System-Analyse") → `product-cto.md` Skill laden, Root-Cause-Analyse auf System-/Prozess-Ebene. Nicht den Bug fixen, sondern das Muster dahinter identifizieren. Ergebnis: Tickets für systemische Fixes erstellen.
 - **Status** ("wie steht's", "was ist mit") → Board abfragen
 
@@ -126,7 +147,7 @@ Der Orchestrator aktiviert die richtigen Skills automatisch:
 | Neue Seite/Feature | `creative-design.md` + `ux-planning.md` |
 | API/Backend | `backend.md` |
 | Datenbank | `data-engineer.md` |
-| Testing | `webapp-testing.md` |
+| Testing | `webapp-testing.md` + `test-driven-development.md` → QA Agent (Testing Engineer) |
 
 ### Was du als PM tust
 

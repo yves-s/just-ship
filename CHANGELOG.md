@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Fixed
+- **Template CLAUDE.md synced to current state** (T-805): `templates/CLAUDE.md` was 104 lines behind the production CLAUDE.md — missing Skill Role Mapping table, Sparring flow, test-driven-development routing, and extended triggers. New projects now get the complete framework instructions on init.
+
 ### Changed
 - **CLAUDE.md + project.json migration** (T-802): `/init` and `setup.sh` now detect incomplete or outdated CLAUDE.md files (<50 lines or missing framework sections) and regenerate from template while preserving project-specific content (description, conventions, architecture). `project.json` gets missing fields deep-merged from template without overwriting existing values. Fixes the "once broken, always broken" problem where a bad first install could never be repaired.
 - **Init installs complete framework** (T-799): `/init` now copies all framework files (agents, commands, skills, scripts, hooks, rules, settings.json) from the plugin directory into the target project. Projects are immediately usable after init — no separate `setup.sh` step needed. All operations are idempotent. Also fixes the skills copy bug in `setup.sh` where `skills/*.md` glob matched nothing (now correctly iterates `skills/*/SKILL.md`)
