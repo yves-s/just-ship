@@ -496,7 +496,7 @@ For the full technical deep dive (architecture, API, data model), see [docs/ARCH
 Real-time agent activity via two modes:
 
 - **SDK Hooks** (Pipeline/VPS) -- `SubagentStart`, `SubagentStop`, `PostToolUse` events via Agent SDK callbacks
-- **Shell Hooks** (Interactive) -- `SessionStart`, `SubagentStart/Stop`, `SessionEnd` via `settings.json` hook config
+- **Shell Hooks** (Interactive) -- `SessionStart`, `SubagentStart/Stop`, `SessionEnd`, `PostToolUse` (Edit/Write quality gates) via `settings.json` hook config
 
 Both post to `POST /api/events` with `X-Pipeline-Key` authentication.
 

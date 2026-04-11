@@ -49,5 +49,15 @@
     "branch_prefix": "feature/",
     "commit_format": "conventional",
     "language": "de"
+  },
+  "quality_gates": {
+    "enabled": true,
+    "format": true,
+    "lint": true,
+    "ignore_patterns": [
+      ".*\\.test\\.ts$",
+      ".*\\.test\\.js$",
+      ".*\\.d\\.ts$"
+    ]
   }
 }

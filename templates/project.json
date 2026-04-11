@@ -47,5 +47,11 @@
   "conventions": {
     "commit_format": "conventional",
     "language": "de"
+  },
+  "quality_gates": {
+    "enabled": true,
+    "format": true,
+    "lint": true,
+    "ignore_patterns": []
   }
 }
