@@ -43,18 +43,20 @@ DRY_RUN=false
 
 for arg in "$@"; do
   case "$arg" in
-    --update)  MODE="update" ;;
-    --auto)    MODE="auto" ;;
-    --dry-run) DRY_RUN=true ;;
-    --check)   MODE="check" ;;
+    --update)          MODE="update" ;;
+    --auto)            MODE="auto" ;;
+    --dry-run)         DRY_RUN=true ;;
+    --check)           MODE="check" ;;
+    --register-plugin) MODE="register-plugin" ;;
     --help|-h)
-      echo "Usage: setup.sh [--update] [--auto] [--dry-run] [--check]"
+      echo "Usage: setup.sh [--update] [--auto] [--dry-run] [--check] [--register-plugin]"
       echo ""
-      echo "  (no flags)   Non-interactive setup (default)"
-      echo "  --auto       Alias for default (backward compat)"
-      echo "  --update     Update framework files only"
-      echo "  --dry-run    Preview changes without applying them"
-      echo "  --check      Show drift report without changing files"
+      echo "  (no flags)         Non-interactive setup (default)"
+      echo "  --auto             Alias for default (backward compat)"
+      echo "  --update           Update framework files only"
+      echo "  --dry-run          Preview changes without applying them"
+      echo "  --check            Show drift report without changing files"
+      echo "  --register-plugin  Register Just Ship as a Claude Code plugin (marketplace + install)"
       exit 0
       ;;
     *)
@@ -68,6 +70,61 @@ done
 if [ "$MODE" = "check" ]; then
   DRY_RUN=true
   MODE="update"
+fi
+
+# --register-plugin: register Just Ship as a Claude Code plugin
+if [ "$MODE" = "register-plugin" ]; then
+  echo ""
+  echo "=== Registering Just Ship as Claude Code Plugin ==="
+  echo ""
+
+  # Validate plugin structure first
+  if ! command -v claude &>/dev/null; then
+    echo "ERROR: claude CLI not found. Install Claude Code first."
+    exit 1
+  fi
+
+  if ! claude plugin validate "$FRAMEWORK_DIR" 2>/dev/null | grep -q "passed"; then
+    echo "ERROR: Plugin validation failed. Run 'claude plugin validate $FRAMEWORK_DIR' for details."
+    exit 1
+  fi
+
+  echo "  ✓ Plugin structure valid"
+
+  PLUGIN_MARKETPLACE_REPO="yves-s/just-ship"
+  PLUGIN_MARKETPLACE_NAME="just-ship-marketplace"
+  PLUGIN_ID="just-ship@just-ship-marketplace"
+
+  # Check if marketplace is already added (match full marketplace name to avoid false positives)
+  if claude plugin marketplace list 2>/dev/null | grep -qF "$PLUGIN_MARKETPLACE_NAME"; then
+    echo "  ✓ Just Ship marketplace already registered"
+  else
+    echo "Adding Just Ship marketplace..."
+    if ! claude plugin marketplace add "$PLUGIN_MARKETPLACE_REPO"; then
+      echo "ERROR: Failed to add marketplace. Check network access and repo name: $PLUGIN_MARKETPLACE_REPO"
+      exit 1
+    fi
+    echo "  ✓ Marketplace added"
+  fi
+
+  # Check if plugin is already installed (match full plugin id to avoid false positives)
+  if claude plugin list 2>/dev/null | grep -qF "$PLUGIN_ID"; then
+    echo "  ✓ Just Ship plugin already installed"
+    echo ""
+    echo "To update: claude plugin update $PLUGIN_ID"
+  else
+    echo "Installing Just Ship plugin..."
+    if ! claude plugin install "$PLUGIN_ID"; then
+      echo "ERROR: Plugin installation failed. Run 'claude plugin install $PLUGIN_ID' manually for details."
+      exit 1
+    fi
+    echo "  ✓ Plugin installed"
+  fi
+
+  echo ""
+  echo "Done! Just Ship is now available as a Claude Code plugin."
+  echo "Start Claude Code in any project and use /init to set up."
+  exit 0
 fi
 
 # --- Get framework version (git short hash + date) ---
