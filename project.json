@@ -1,6 +1,7 @@
 {
   "name": "just-ship",
   "description": "Portables Multi-Agent-Framework für autonome Softwareentwicklung mit Claude Code",
+  "mode": "standalone",
   "stack": {
     "language": "TypeScript / Bash",
     "framework": "",

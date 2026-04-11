@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Added
+- **Mode detection: plugin vs standalone** (T-816): `project.json` gets a new `mode` field (`"plugin"` or `"standalone"`). `setup.sh` auto-sets `"standalone"` on install and update. `/init` detects mode via `CLAUDE_PLUGIN_ROOT` env var. Existing projects without mode field are migrated on next setup.sh run. Standalone mode skips framework file installation in `/init` (already done by setup.sh).
+
 ### Fixed
 - **Standalone settings.json with local hook paths** (T-814): `setup.sh` was copying the plugin `settings.json` (with `CLAUDE_PLUGIN_ROOT` paths) into target projects — hooks never ran because the env var was never set. Now copies `templates/settings.standalone.json` with `$CLAUDE_PROJECT_DIR` paths. Existing projects with plugin paths are automatically migrated on next `setup.sh` run.
 
