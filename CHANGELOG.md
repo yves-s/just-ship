@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Fixed
+- **Standalone settings.json with local hook paths** (T-814): `setup.sh` was copying the plugin `settings.json` (with `CLAUDE_PLUGIN_ROOT` paths) into target projects — hooks never ran because the env var was never set. Now copies `templates/settings.standalone.json` with `$CLAUDE_PROJECT_DIR` paths. Existing projects with plugin paths are automatically migrated on next `setup.sh` run.
+
 ### Added
 - **Framework versioning and drift detection** (T-807): `setup.sh` now writes `framework.version` and `framework.updated_at` to `project.json` on install and update. New `--check` flag shows a drift report without changing files. Session-start rule warns when framework is older than 14 days. Prevents silent drift where installed projects miss new scripts, rules, or commands.
 - **Single Source of Truth for CLAUDE.md template** (T-806): `scripts/sync-template.sh` auto-generates `templates/CLAUDE.md` from the repo's `CLAUDE.md` by replacing project-specific sections with placeholders. Integrated into quality-gate hook — editing CLAUDE.md automatically regenerates the template. Template drift is now structurally impossible.

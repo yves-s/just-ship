@@ -463,7 +463,7 @@ if [ "$MODE" = "update" ]; then
   done
 
   # Settings
-  diff_file "$FRAMEWORK_DIR/settings.json" "$PROJECT_DIR/.claude/settings.json" ".claude/settings.json"
+  diff_file "$FRAMEWORK_DIR/templates/settings.standalone.json" "$PROJECT_DIR/.claude/settings.json" ".claude/settings.json"
 
   if [ "$CHANGES" -eq 0 ]; then
     echo "  Everything up to date."
@@ -594,8 +594,8 @@ if [ "$MODE" = "update" ]; then
   echo "  ✓ .pipeline/ (SDK pipeline)"
 
   echo "Updating settings..."
-  cp "$FRAMEWORK_DIR/settings.json" "$PROJECT_DIR/.claude/settings.json"
-  echo "  ✓ .claude/settings.json"
+  cp "$FRAMEWORK_DIR/templates/settings.standalone.json" "$PROJECT_DIR/.claude/settings.json"
+  echo "  ✓ .claude/settings.json (standalone mode)"
 
   echo "Enabling Agent Teams..."
   enable_agent_teams
@@ -899,13 +899,21 @@ else
   fi
 fi
 
-# --- Generate settings.json ---
+# --- Generate settings.json (standalone version with local hook paths) ---
 if [ ! -f "$PROJECT_DIR/.claude/settings.json" ]; then
   echo "Generating .claude/settings.json..."
-  cp "$FRAMEWORK_DIR/settings.json" "$PROJECT_DIR/.claude/settings.json"
-  echo "  ✓ .claude/settings.json"
+  cp "$FRAMEWORK_DIR/templates/settings.standalone.json" "$PROJECT_DIR/.claude/settings.json"
+  echo "  ✓ .claude/settings.json (standalone mode)"
 else
-  echo "  ~ .claude/settings.json (exists, skipped)"
+  # Migrate: if existing settings.json has CLAUDE_PLUGIN_ROOT paths, replace with local paths
+  if grep -q 'CLAUDE_PLUGIN_ROOT' "$PROJECT_DIR/.claude/settings.json" 2>/dev/null; then
+    echo "  Migrating .claude/settings.json (plugin paths → local paths)..."
+    cp "$PROJECT_DIR/.claude/settings.json" "$PROJECT_DIR/.claude/settings.json.bak"
+    cp "$FRAMEWORK_DIR/templates/settings.standalone.json" "$PROJECT_DIR/.claude/settings.json"
+    echo "  ✓ .claude/settings.json migrated (backup: settings.json.bak)"
+  else
+    echo "  ~ .claude/settings.json (local paths, skipped)"
+  fi
 fi
 
 # --- Enable Agent Teams feature flag ---
