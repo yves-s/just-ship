@@ -29,6 +29,13 @@ CWD=$(echo "$EVENT_JSON" | /usr/bin/sed -n 's/.*"cwd" *: *"\([^"]*\)".*/\1/p' | 
 
 cd "$CWD" || exit 0
 
+# ─────────────────────────────────────────────
+# Template sync: if CLAUDE.md was edited in the just-ship repo, regenerate template
+# ─────────────────────────────────────────────
+if [ "$(basename "$FILE_PATH")" = "CLAUDE.md" ] && [ -f "scripts/sync-template.sh" ]; then
+  bash scripts/sync-template.sh "$CWD" >&2 || true
+fi
+
 # Only run in projects with project.json
 [ ! -f "project.json" ] && exit 0
 
