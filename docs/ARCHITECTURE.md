@@ -326,7 +326,7 @@ Commands are markdown files in `commands/` with frontmatter metadata. They provi
 
 | Command | Purpose | Autonomous |
 |---------|---------|------------|
-| `/ticket` | Write a structured ticket (bug, feature, improvement, spike) | No -- may ask user for input |
+| `/ticket` | Write a structured ticket (bug, feature, improvement, spike). Supports splitting (auto-Epic + children) and manual grouping | No -- may ask user for input |
 | `/develop` | Pick next ticket, implement end-to-end, create PR | Yes -- fully autonomous |
 | `/ship` | Commit, push, PR, squash merge, delete branch, update board status. Supports `/ship T-{N}` | Yes -- zero questions |
 | `/just-ship-review` | Checkout branch, install deps, build, start dev server for local testing | No -- interactive |
@@ -380,7 +380,7 @@ Shipped with the framework and updated via `setup.sh --update`:
 
 | Skill | Purpose |
 |-------|---------|
-| **ticket-writer** | Writes PM-quality tickets with acceptance criteria |
+| **ticket-writer** | Writes PM-quality tickets with acceptance criteria. Handles splits (auto-Epic + children) and manual grouping |
 | **design** | Design system awareness for consistent UI |
 | **frontend-design** | Frontend component patterns |
 | **creative-design** | Greenfield design for new pages/features |

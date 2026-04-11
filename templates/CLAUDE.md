@@ -111,10 +111,10 @@ Wenn du klassifizierst, dann handle konsequent:
 |---|---|---|---|
 | XS/S | `/ticket` → "Ich setz das Team drauf an." | → `/develop T-{N}` | Automatisch |
 | M | `/ticket` → "Soll das Team direkt loslegen?" | Warte auf CEO | Warte auf CEO |
-| L | `/ticket` → Rückfragen → Product Planning → mehrere Tickets | Warte auf CEO | Warte auf CEO |
-| XL | Rückfragen → Product Planning → Epic splitten → CEO Approval | Nie als einzelnes Ticket | Nie als einzelnes Ticket |
+| L | `/ticket` → Rückfragen → ggf. Split (→ Epic + Children) | Warte auf CEO | Warte auf CEO |
+| XL | Rückfragen → Product Planning → Split (→ Epic + Children) → CEO Approval | Nie als einzelnes Ticket | Nie als einzelnes Ticket |
 
-**XL heißt:** Splitten in 2-4 M-Tickets. Nie ein einzelnes XL-Ticket in Backlog schieben.
+**Split = Epic:** Jeder Split erzeugt automatisch ein Epic als Container. Der Trigger ist die Split-Aktion, nicht die Größe. Auch L-Tickets können gesplittet werden. XL-Tickets werden IMMER gesplittet — nie als einzelnes Ticket in den Backlog.
 
 ### Routing-Regeln (für den Develop-Prozess)
 
