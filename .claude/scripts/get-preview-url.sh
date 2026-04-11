@@ -44,10 +44,18 @@ if [ "$HOSTING_PROVIDER" = "coolify" ]; then
     } catch (e) {}
   " 2>/dev/null)
 
-  # Token: env var first, then file on VPS
+  # Token resolution: env var → VPS file → ~/.just-ship/config.json
   COOLIFY_TOKEN="${COOLIFY_API_TOKEN:-}"
   if [ -z "$COOLIFY_TOKEN" ] && [ -f /root/.coolify-api/token ]; then
     COOLIFY_TOKEN=$(cat /root/.coolify-api/token 2>/dev/null)
+  fi
+  if [ -z "$COOLIFY_TOKEN" ] && [ -f "$HOME/.just-ship/config.json" ]; then
+    COOLIFY_TOKEN=$(node -e "
+      try {
+        const c = require(process.env.HOME + '/.just-ship/config.json');
+        process.stdout.write(c.coolify_api_token || '');
+      } catch (e) {}
+    " 2>/dev/null)
   fi
 
   [ -z "$COOLIFY_URL" ] || [ -z "$COOLIFY_APP_UUID" ] || [ -z "$COOLIFY_TOKEN" ] && exit 0
@@ -56,26 +64,27 @@ if [ "$HOSTING_PROVIDER" = "coolify" ]; then
   INTERVAL=5
 
   while [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
-    # Step 1: Get app details (FQDN + name) — this endpoint works in Coolify v4
+    # Step 1: Get app details (FQDN, name, preview_url_template) — Coolify v4
     APP_RESPONSE=$(curl -s -H "Authorization: Bearer $COOLIFY_TOKEN" \
       "${COOLIFY_URL}/api/v1/applications/${COOLIFY_APP_UUID}" 2>/dev/null)
 
-    FQDN=$(echo "$APP_RESPONSE" | node -e "
+    # Parse FQDN, name, and preview_url_template from app response
+    read -r FQDN APP_NAME PREVIEW_TEMPLATE <<< $(echo "$APP_RESPONSE" | node -e "
       let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
-        try { process.stdout.write(JSON.parse(d).fqdn || ''); } catch(e) {}
-      });
-    " 2>/dev/null)
-
-    APP_NAME=$(echo "$APP_RESPONSE" | node -e "
-      let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
-        try { process.stdout.write(JSON.parse(d).name || ''); } catch(e) {}
+        try {
+          const app = JSON.parse(d);
+          const fqdn = app.fqdn || '';
+          const name = app.name || '';
+          const tmpl = app.preview_url_template || '';
+          process.stdout.write(fqdn + ' ' + name + ' ' + tmpl);
+        } catch(e) {}
       });
     " 2>/dev/null)
 
     if [ -n "$FQDN" ] && [ "$FQDN" != "null" ] && [ -n "$APP_NAME" ]; then
       # Step 2: Fetch all deployments and filter by application_name
       # Coolify v4 does NOT support /applications/{uuid}/deployments
-      DEPLOY_STATUS=$(curl -s -H "Authorization: Bearer $COOLIFY_TOKEN" \
+      DEPLOY_DATA=$(curl -s -H "Authorization: Bearer $COOLIFY_TOKEN" \
         "${COOLIFY_URL}/api/v1/deployments" 2>/dev/null \
         | node -e "
           let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
@@ -83,13 +92,26 @@ if [ "$HOSTING_PROVIDER" = "coolify" ]; then
               const deps = JSON.parse(d);
               const appName = '${APP_NAME}';
               const matching = deps.filter(d => d.application_name === appName);
-              process.stdout.write(matching[0]?.status || '');
+              const latest = matching[0];
+              if (latest) {
+                process.stdout.write(latest.status + ' ' + (latest.pull_request_id || 0));
+              }
             } catch(e) {}
           });
         " 2>/dev/null)
 
+      DEPLOY_STATUS=$(echo "$DEPLOY_DATA" | cut -d' ' -f1)
+      PR_ID=$(echo "$DEPLOY_DATA" | cut -d' ' -f2)
+
       if [ "$DEPLOY_STATUS" = "finished" ]; then
-        echo "$FQDN"
+        # Build preview URL using template (analog to coolify-preview.ts:buildPreviewUrl)
+        if [ -n "$PREVIEW_TEMPLATE" ] && [ "$PR_ID" -gt 0 ] 2>/dev/null; then
+          DOMAIN=$(echo "$FQDN" | sed 's|^https\?://||')
+          PREVIEW_DOMAIN=$(echo "$PREVIEW_TEMPLATE" | sed "s/{{pr_id}}/$PR_ID/g" | sed "s/{{domain}}/$DOMAIN/g")
+          echo "https://$PREVIEW_DOMAIN"
+        else
+          echo "$FQDN"
+        fi
         exit 0
       fi
     fi
