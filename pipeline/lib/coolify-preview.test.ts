@@ -270,7 +270,7 @@ describe("coolify-preview", () => {
   });
 
   describe("waitForCoolifyPreview — timeout and errors", () => {
-    it("returns null when max wait time is exceeded (deployment stays in_progress)", async () => {
+    it("returns production FQDN when deployment timeout occurs and no PR available (AC#2: works without API data)", async () => {
       process.env.COOLIFY_API_TOKEN = "token123";
 
       global.fetch = mockFetch({
@@ -299,10 +299,10 @@ describe("coolify-preview", () => {
         coolifyMaxWaitMs: 120,
         coolifyPollIntervalMs: 50,
       });
-      expect(result).toBeNull();
+      expect(result).toBe("https://board.just-ship.io");
     });
 
-    it("returns null when no deployments match the application name", async () => {
+    it("returns production FQDN when deployments API returns empty array for app (AC#2: works when API provides no data)", async () => {
       process.env.COOLIFY_API_TOKEN = "token123";
 
       global.fetch = mockFetch({
@@ -331,7 +331,7 @@ describe("coolify-preview", () => {
         coolifyMaxWaitMs: 120,
         coolifyPollIntervalMs: 50,
       });
-      expect(result).toBeNull();
+      expect(result).toBe("https://board.just-ship.io");
     });
 
     it("handles fetch timeout gracefully", async () => {
@@ -347,22 +347,13 @@ describe("coolify-preview", () => {
       expect(result).toBeNull();
     });
 
-    it("retries when app API returns non-OK status", async () => {
+    it("returns null when app API returns non-OK status (graceful failure, AC#4)", async () => {
       process.env.COOLIFY_API_TOKEN = "token123";
-      let callCount = 0;
 
       global.fetch = vi.fn(async (url: string | URL | Request) => {
         const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
         if (urlStr.includes("/api/v1/applications/")) {
-          callCount++;
-          if (callCount === 1) {
-            return new Response("Server error", { status: 500 });
-          }
-          return jsonResponse({
-            uuid: "v7ivmdiih5421n863927r8o0",
-            name: "just-ship-board",
-            fqdn: "https://board.just-ship.io",
-          });
+          return new Response("Server error", { status: 500 });
         }
         if (urlStr.includes("/api/v1/deployments")) {
           return jsonResponse([
@@ -381,8 +372,7 @@ describe("coolify-preview", () => {
       });
 
       const result = await waitForCoolifyPreview("main", BASE_CONFIG);
-      expect(result).toBe("https://board.just-ship.io");
-      expect(callCount).toBe(2);
+      expect(result).toBeNull();
     });
   });
 
