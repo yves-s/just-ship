@@ -158,9 +158,16 @@ just-ship/                         # Framework repository
 |   +-- project.json               # Project config template
 +-- apps/
 |   +-- board/                     # Just Ship Board (Next.js)
-+-- vps/                           # Docker build files (CI only — infra moved to just-ship-ops)
++-- vps/                           # VPS infrastructure (Docker, Caddy, systemd, setup scripts, monitoring)
 |   +-- Dockerfile                  # Pipeline container image
 |   +-- entrypoint.sh               # Container startup script
+|   +-- docker-compose.yml          # Caddy + pipeline-server + Bugsink + Dozzle
+|   +-- Caddyfile                   # Reverse proxy with auto-TLS, security headers
+|   +-- setup-vps.sh                # Initial VPS provisioning
+|   +-- connect-project.sh          # Connect a project to VPS via SSH
+|   +-- just-ship-updater.sh        # Host-level update agent (zero-downtime)
+|   +-- pipeline-container-monitor.sh # Health monitoring with Telegram alerts
+|   +-- logs.sh                     # Remote Docker log viewer via SSH
 +-- .claude/
 |   +-- hooks/                     # Event streaming hooks
 |   |   +-- detect-ticket.sh       # SessionStart: extract ticket from branch

@@ -1,0 +1,65 @@
+# =============================================================================
+# just-ship-server@.service — systemd Template Unit
+#
+# Installation:
+#   sudo cp just-ship-server@.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#
+# Starten (ein Service pro Projekt):
+#   sudo systemctl enable --now just-ship-server@mein-projekt
+#
+# Voraussetzung:
+#   /home/claude-dev/.env              # Globale Keys (ANTHROPIC_API_KEY, GH_TOKEN)
+#   /home/claude-dev/.env.mein-projekt # Projekt-spezifische Config
+#
+# Projekt-Config (.env.{instance}):
+#   SUPABASE_URL=https://xxx.supabase.co
+#   SUPABASE_SERVICE_KEY=eyJ...
+#   SUPABASE_PROJECT_ID=dc2b647e-80cb-4661-8f27-ff811534a0a8
+#   PROJECT_DIR=/home/claude-dev/mein-projekt
+#   PIPELINE_SERVER_KEY=adp_...
+#   PORT=3001
+# =============================================================================
+
+[Unit]
+Description=Just Ship Pipeline Server — %i
+After=network-online.target
+Wants=network-online.target
+# Neustart wenn Netzwerk wegbricht
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=claude-dev
+Group=claude-dev
+WorkingDirectory=/home/claude-dev
+
+# Globale Keys + projektspezifische Overrides
+EnvironmentFile=/home/claude-dev/.env
+EnvironmentFile=/home/claude-dev/.env.%i
+
+ExecStart=/usr/bin/npx tsx /home/claude-dev/%i/.pipeline/server.ts
+
+# Logging (zusätzlich zu journald)
+StandardOutput=append:/home/claude-dev/pipeline-logs/server-%i.log
+StandardError=append:/home/claude-dev/pipeline-logs/server-%i.log
+
+# Automatischer Neustart bei Fehler
+Restart=on-failure
+RestartSec=10s
+
+# Sicherheitseinschränkungen
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Ressourcen-Limits (Pipeline kann intensiv sein)
+LimitNOFILE=65536
+MemoryMax=4G
+CPUQuota=200%
+
+# Timeout: Server sollte schnell stoppen
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

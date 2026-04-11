@@ -1,0 +1,7 @@
+[
+  {
+    "name": "pipeline-aime",
+    "domain": "aime.pipeline.just-ship.io",
+    "health_url": "https://aime.pipeline.just-ship.io/health"
+  }
+]

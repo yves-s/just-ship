@@ -8,6 +8,12 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Changed
+- **VPS infrastructure consolidated into engine repo** (T-774): All VPS deployment files (docker-compose.yml, Caddyfile, systemd units, setup-vps.sh, connect-project.sh, updater, monitoring scripts, logs.sh, tests) moved from the ops-repo back into `vps/`. Single `git clone && bash vps/setup-vps.sh` now provisions a complete VPS without needing a second repo. OPS-CONTEXT.md updated to reference engine-repo paths. Architecture description in CLAUDE.md updated
+
+### Fixed
+- **Hardcoded container name in updater** (T-774): 4 instances of hardcoded `vps-pipeline-server-1` in `just-ship-updater.sh` replaced with `$CONTAINER_NAME` constant
+
 ### Added
 - **Marketplace distribution** (T-751): Plugin is now installable via `claude plugin marketplace add yves-s/just-ship && claude plugin install just-ship@just-ship`. Added `marketplace.json` with plugin metadata, description, 10 keywords, and GitHub source reference. Updated `plugin.json` with homepage, repository, license, and expanded keywords. New `scripts/sync-plugin-version.sh` keeps version in sync across `plugin.json`, `marketplace.json`, and `package.json`. `setup.sh` update flow now syncs plugin version from framework source. README documents both installation paths (Plugin and CLI)
 - **Hooks & scripts migrated to plugin structure** (`.claude-plugin/scripts/`): All 5 event hooks and 16 utility scripts now live in the plugin directory alongside agents, skills, and rules from T-748. Hook scripts use `${CLAUDE_PLUGIN_ROOT}` for plugin-internal references while keeping project-relative paths (`$CWD`, `$PROJECT_ROOT`) for project files. `plugin.json` hooks updated to use plugin paths. PostToolUse hook for `detect-ticket-post.sh` added to plugin manifest. Code review fixed stale paths in `backfill-ticket-costs.sh` and `shopify-preview.sh`
