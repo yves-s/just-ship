@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Changed
+- **/init delegates CLAUDE.md generation to setup.sh** (T-815): `/init` no longer generates CLAUDE.md, migrates templates, or installs framework files (agents, commands, skills, scripts, hooks, rules). It now focuses solely on stack detection and `project.json` creation/migration. All CLAUDE.md and framework file management is handled by `setup.sh`, eliminating the fragile duplicated logic.
+
 ### Fixed
 - **Standalone settings.json with local hook paths** (T-814): `setup.sh` was copying the plugin `settings.json` (with `CLAUDE_PLUGIN_ROOT` paths) into target projects — hooks never ran because the env var was never set. Now copies `templates/settings.standalone.json` with `$CLAUDE_PROJECT_DIR` paths. Existing projects with plugin paths are automatically migrated on next `setup.sh` run.
 
