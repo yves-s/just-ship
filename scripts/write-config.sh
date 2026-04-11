@@ -476,6 +476,7 @@ cmd_parse_jsp() {
 
   JS_TOKEN="$token" \
   node -e "
+    const crypto = require('crypto');
     const token = process.env.JS_TOKEN;
 
     // Strip jsp_ prefix
@@ -485,13 +486,37 @@ cmd_parse_jsp() {
     }
     const b64 = token.slice(4);
 
-    // Decode Base64
+    // Decode and optionally decrypt token body
     let json;
+    // Fast path: try plain JSON (legacy unencrypted tokens)
     try {
-      json = JSON.parse(Buffer.from(b64, 'base64').toString('utf-8'));
-    } catch (e) {
-      console.error('Error: Could not decode token — invalid Base64 or JSON');
-      process.exit(1);
+      const plain = Buffer.from(b64, 'base64').toString('utf-8');
+      json = JSON.parse(plain);
+    } catch (_) {
+      // Encrypted path: AES-256-GCM
+      const encKey = process.env.JSP_ENCRYPTION_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!encKey) {
+        console.error('Error: Token appears to be encrypted but no decryption key is available. Set JSP_ENCRYPTION_KEY environment variable.');
+        process.exit(1);
+      }
+      try {
+        const buf = Buffer.from(b64, 'base64url');
+        const iv = buf.subarray(0, 12);
+        const authTag = buf.subarray(12, 28);
+        const ciphertext = buf.subarray(28);
+        const derivedKey = crypto.createHash('sha256').update(encKey).digest();
+        const decipher = crypto.createDecipheriv('aes-256-gcm', derivedKey, iv);
+        decipher.setAuthTag(authTag);
+        const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf-8');
+        json = JSON.parse(decrypted);
+      } catch (e) {
+        if (e.message && e.message.includes('JSON')) {
+          console.error('Error: Could not decode token — decrypted payload is not valid JSON (corrupted token)');
+        } else {
+          console.error('Error: Could not decrypt token — wrong encryption key or corrupted token');
+        }
+        process.exit(1);
+      }
     }
 
     // Validate version
@@ -565,17 +590,42 @@ cmd_connect() {
   # Step 1: Parse the jsp_ token (v2 and v3)
   local parsed
   parsed=$(JS_TOKEN="$token" node -e "
+    const crypto = require('crypto');
     const token = process.env.JS_TOKEN;
     if (!token.startsWith('jsp_')) {
       console.error('Error: Token must start with jsp_');
       process.exit(1);
     }
+    const b64 = token.slice(4);
     let json;
+    // Fast path: try plain JSON (legacy unencrypted tokens)
     try {
-      json = JSON.parse(Buffer.from(token.slice(4), 'base64').toString('utf-8'));
-    } catch (e) {
-      console.error('Error: Could not decode token — invalid Base64 or JSON');
-      process.exit(1);
+      json = JSON.parse(Buffer.from(b64, 'base64').toString('utf-8'));
+    } catch (_) {
+      // Encrypted path: AES-256-GCM
+      const encKey = process.env.JSP_ENCRYPTION_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!encKey) {
+        console.error('Error: Token appears to be encrypted but no decryption key is available. Set JSP_ENCRYPTION_KEY environment variable.');
+        process.exit(1);
+      }
+      try {
+        const buf = Buffer.from(b64, 'base64url');
+        const iv = buf.subarray(0, 12);
+        const authTag = buf.subarray(12, 28);
+        const ciphertext = buf.subarray(28);
+        const derivedKey = crypto.createHash('sha256').update(encKey).digest();
+        const decipher = crypto.createDecipheriv('aes-256-gcm', derivedKey, iv);
+        decipher.setAuthTag(authTag);
+        const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf-8');
+        json = JSON.parse(decrypted);
+      } catch (e) {
+        if (e.message && e.message.includes('JSON')) {
+          console.error('Error: Could not decode token — decrypted payload is not valid JSON (corrupted token)');
+        } else {
+          console.error('Error: Could not decrypt token — wrong encryption key or corrupted token');
+        }
+        process.exit(1);
+      }
     }
     const required = { v: 'number', b: 'string', w: 'string', i: 'string', k: 'string' };
     for (const [key, type] of Object.entries(required)) {
