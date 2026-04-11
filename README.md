@@ -460,6 +460,10 @@ Runs the pipeline 24/7 on a VPS — polls for tickets, claims them, runs the orc
 
 ## Dev Board Integration
 
+<p align="center">
+  <img src="docs/assets/Just Ship Board.png" alt="Just Ship Board — Kanban board with real-time agent activity" width="100%" />
+</p>
+
 The **[Just Ship Board](https://board.just-ship.io)** is the visual companion for the pipeline -- a Kanban board with activity timelines and project setup.
 
 ### Connecting a Project
