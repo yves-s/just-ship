@@ -69,28 +69,33 @@ if [ "$HOSTING_PROVIDER" = "coolify" ]; then
       "${COOLIFY_URL}/api/v1/applications/${COOLIFY_APP_UUID}" 2>/dev/null)
 
     # Parse FQDN, name, and preview_url_template from app response
-    read -r FQDN APP_NAME PREVIEW_TEMPLATE <<< $(echo "$APP_RESPONSE" | node -e "
+    # Output newline-delimited so fields with spaces are handled correctly
+    APP_FIELDS=$(echo "$APP_RESPONSE" | node -e "
       let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
         try {
           const app = JSON.parse(d);
           const fqdn = app.fqdn || '';
           const name = app.name || '';
           const tmpl = app.preview_url_template || '';
-          process.stdout.write(fqdn + ' ' + name + ' ' + tmpl);
+          process.stdout.write(fqdn + '\n' + name + '\n' + tmpl);
         } catch(e) {}
       });
     " 2>/dev/null)
+    FQDN=$(echo "$APP_FIELDS" | sed -n '1p')
+    APP_NAME=$(echo "$APP_FIELDS" | sed -n '2p')
+    PREVIEW_TEMPLATE=$(echo "$APP_FIELDS" | sed -n '3p')
 
     if [ -n "$FQDN" ] && [ "$FQDN" != "null" ] && [ -n "$APP_NAME" ]; then
       # Step 2: Fetch all deployments and filter by application_name
       # Coolify v4 does NOT support /applications/{uuid}/deployments
+      # APP_NAME is passed via env var to avoid shell injection in JS source
       DEPLOY_DATA=$(curl -s -H "Authorization: Bearer $COOLIFY_TOKEN" \
         "${COOLIFY_URL}/api/v1/deployments" 2>/dev/null \
-        | node -e "
+        | APP_NAME="$APP_NAME" node -e "
           let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
             try {
               const deps = JSON.parse(d);
-              const appName = '${APP_NAME}';
+              const appName = process.env.APP_NAME;
               const matching = deps.filter(d => d.application_name === appName);
               const latest = matching[0];
               if (latest) {
@@ -106,7 +111,8 @@ if [ "$HOSTING_PROVIDER" = "coolify" ]; then
       if [ "$DEPLOY_STATUS" = "finished" ]; then
         # Build preview URL using template (analog to coolify-preview.ts:buildPreviewUrl)
         if [ -n "$PREVIEW_TEMPLATE" ] && [ "$PR_ID" -gt 0 ] 2>/dev/null; then
-          DOMAIN=$(echo "$FQDN" | sed 's|^https\?://||')
+          # Strip protocol prefix — use portable sed (no GNU \? extension)
+          DOMAIN=$(echo "$FQDN" | sed 's|^https://||;s|^http://||')
           PREVIEW_DOMAIN=$(echo "$PREVIEW_TEMPLATE" | sed "s/{{pr_id}}/$PR_ID/g" | sed "s/{{domain}}/$DOMAIN/g")
           echo "https://$PREVIEW_DOMAIN"
         else
