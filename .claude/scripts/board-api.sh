@@ -11,9 +11,16 @@
 #   board-api.sh patch tickets/{N} '{"status": "in_progress"}'
 #   board-api.sh post tickets '{"title": "...", "body": "..."}'
 #
-# Environment variables (optional, auto-resolved from project.json if not set):
-#   BOARD_API_URL  — Board API base URL
-#   PIPELINE_KEY   — Auth key for Board API
+# Credential resolution (3-tier fallback):
+#   Tier 1: PIPELINE_KEY + BOARD_API_URL from environment (Plugin-native)
+#   Tier 2: PIPELINE_KEY from env + board_url from project.json → pipeline.board_url
+#   Tier 3: write-config.sh read-workspace (legacy ~/.just-ship/ fallback)
+#
+# Environment variables (auto-resolved if not set):
+#   BOARD_API_URL                      — Board API base URL
+#   PIPELINE_KEY                       — Auth key for Board API
+#   CLAUDE_USER_CONFIG_BOARD_API_KEY   — Plugin userConfig alias for PIPELINE_KEY
+#   CLAUDE_USER_CONFIG_BOARD_API_URL   — Plugin userConfig alias for BOARD_API_URL
 #
 # Exit codes:
 #   0 — Success (response body on stdout)
@@ -42,36 +49,50 @@ METHOD=$(echo "$METHOD" | tr '[:lower:]' '[:upper:]')
 # --- Resolve credentials (silently) ---
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Use environment variables if set (pipeline mode), otherwise resolve from project.json
-if [ -z "${BOARD_API_URL:-}" ] || [ -z "${PIPELINE_KEY:-}" ]; then
-  # Read workspace_id from project.json
-  WORKSPACE_ID=$(node -e "
-    try { const p = require('./project.json'); process.stdout.write(p.pipeline?.workspace_id || ''); }
-    catch(e) { process.stdout.write(''); }
-  " 2>/dev/null) || WORKSPACE_ID=""
+# Tier 0: Map plugin userConfig env vars to expected names
+: "${PIPELINE_KEY:=${CLAUDE_USER_CONFIG_BOARD_API_KEY:-}}"
+: "${BOARD_API_URL:=${CLAUDE_USER_CONFIG_BOARD_API_URL:-}}"
 
-  if [ -z "$WORKSPACE_ID" ]; then
-    exec 2>&3  # Restore stderr
-    echo '{"error": "no_pipeline_config", "message": "pipeline.workspace_id not set in project.json"}' >&2
-    exit 1
+# Tier 1: Both from environment — fully plugin-native, no file I/O
+if [ -n "${PIPELINE_KEY:-}" ] && [ -n "${BOARD_API_URL:-}" ]; then
+  : # Credentials resolved from environment
+else
+  # Tier 2: Key from env + board_url from project.json
+  if [ -n "${PIPELINE_KEY:-}" ] && [ -z "${BOARD_API_URL:-}" ]; then
+    BOARD_API_URL=$(node -e "
+      try { const p = require('./project.json'); process.stdout.write(p.pipeline?.board_url || ''); }
+      catch(e) { process.stdout.write(''); }
+    " 2>/dev/null) || BOARD_API_URL=""
   fi
 
-  # Resolve credentials via write-config.sh (output goes to variable, not terminal)
-  WS_JSON=$("$SCRIPT_DIR/write-config.sh" read-workspace --id "$WORKSPACE_ID" 2>/dev/null) || WS_JSON=""
+  # Tier 3: Legacy fallback via write-config.sh
+  if [ -z "${PIPELINE_KEY:-}" ] || [ -z "${BOARD_API_URL:-}" ]; then
+    WORKSPACE_ID=$(node -e "
+      try { const p = require('./project.json'); process.stdout.write(p.pipeline?.workspace_id || ''); }
+      catch(e) { process.stdout.write(''); }
+    " 2>/dev/null) || WORKSPACE_ID=""
 
-  if [ -z "$WS_JSON" ]; then
-    exec 2>&3  # Restore stderr
-    echo '{"error": "credentials_not_found", "message": "Could not resolve workspace credentials"}' >&2
-    exit 1
+    if [ -z "$WORKSPACE_ID" ]; then
+      exec 2>&3
+      echo '{"error": "no_pipeline_config", "message": "pipeline.workspace_id not set in project.json"}' >&2
+      exit 1
+    fi
+
+    WS_JSON=$("$SCRIPT_DIR/write-config.sh" read-workspace --id "$WORKSPACE_ID" 2>/dev/null) || WS_JSON=""
+
+    if [ -z "$WS_JSON" ]; then
+      exec 2>&3
+      echo '{"error": "credentials_not_found", "message": "Could not resolve workspace credentials"}' >&2
+      exit 1
+    fi
+
+    : "${BOARD_API_URL:=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).board_url || '')" 2>/dev/null)}"
+    : "${PIPELINE_KEY:=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).api_key || '')" 2>/dev/null)}"
   fi
 
-  # Extract board_url and api_key from JSON (silently)
-  BOARD_API_URL=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).board_url || '')" 2>/dev/null) || BOARD_API_URL=""
-  PIPELINE_KEY=$(echo "$WS_JSON" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).api_key || '')" 2>/dev/null) || PIPELINE_KEY=""
-
-  if [ -z "$BOARD_API_URL" ] || [ -z "$PIPELINE_KEY" ]; then
-    exec 2>&3  # Restore stderr
-    echo '{"error": "incomplete_credentials", "message": "board_url or api_key missing in workspace config"}' >&2
+  if [ -z "${BOARD_API_URL:-}" ] || [ -z "${PIPELINE_KEY:-}" ]; then
+    exec 2>&3
+    echo '{"error": "incomplete_credentials", "message": "board_url or api_key missing — set PIPELINE_KEY + BOARD_API_URL env vars or configure ~/.just-ship/"}' >&2
     exit 1
   fi
 fi

@@ -41,6 +41,7 @@
   "pipeline": {
     "workspace_id": "",
     "project_id": "",
+    "board_url": "",
     "skip_agents": [],
     "timeouts": {}
   },
