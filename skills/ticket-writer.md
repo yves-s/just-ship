@@ -248,10 +248,10 @@ Every ticket gets a T-shirt size based on **complexity and scope** — not time.
 
 | Size | Complexity signals | Autonomy profile |
 |---|---|---|
-| **S** | Single file or domain, config change, copy update, clear fix with known root cause. 1-3 ACs. | Fully autonomous, no human review needed before merge |
-| **M** | One domain (FE or BE or DB), 2-5 files, clear ACs, well-defined scope. 3-6 ACs. | Autonomous with standard code review |
-| **L** | Cross-domain (FE + BE + DB), multiple integration points, 6+ files, some ambiguity in requirements. 5-8 ACs. | Autonomous but needs human review for design decisions |
-| **XL** | Cross-repo, architecture change, migration, vague or evolving requirements, multiple personas. 8+ ACs. | Too complex for a single autonomous run — **always split** |
+| **S** | Single file or domain, config change, copy update, clear fix with known root cause. Up to 3 ACs. | Fully autonomous, no human review needed before merge |
+| **M** | One domain (FE or BE or DB), 2-5 files, clear ACs, well-defined scope. 4-6 ACs. | Autonomous with standard code review |
+| **L** | Cross-domain (FE + BE + DB), multiple integration points, 6+ files, some ambiguity in requirements. 7-8 ACs. | Autonomous but needs human review for product or architectural decisions |
+| **XL** | Cross-repo, architecture change, migration, vague or evolving requirements, multiple personas. 9+ ACs. | Too complex for a single autonomous run — **always split** |
 
 ### How to size
 
@@ -259,7 +259,7 @@ Focus on these signals — in order of importance:
 
 1. **Domain count** — How many domains are touched? (FE, BE, DB, infra, config). Single-domain = S or M. Multi-domain = L or XL.
 2. **Clarity of requirements** — Are the ACs precise and testable? Vague = size up. Crystal clear = size down.
-3. **AC count** — More than 8 ACs is a split signal. 3-6 is the sweet spot for M.
+3. **AC count** — More than 8 ACs is a split signal. 4-6 is the sweet spot for M.
 4. **File spread** — 1-2 files = S. 2-5 files = M. 6+ files = L. Cross-repo = XL.
 5. **Human judgment needed** — Can an agent make all decisions autonomously, or does it need product/design input? More human input = larger size.
 
