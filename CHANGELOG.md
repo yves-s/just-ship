@@ -13,6 +13,7 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ### Fixed
 - **Hardcoded container name in updater** (T-774): 4 instances of hardcoded `vps-pipeline-server-1` in `just-ship-updater.sh` replaced with `$CONTAINER_NAME` constant
+- **Token tracking deterministic** (T-772): Extracted token delta calculation from Markdown instructions into `ship-token-tracking.sh` script. Previously 97% of done tickets had 0 tokens because the agent skipped the inline bash in `/ship` step 5c. The script resolves the main repo root via `git-common-dir` (fixing worktree path mismatch), computes per-ticket deltas using start snapshots from `/develop`, and patches the Board with granular token fields. `on-session-end.sh` now delegates to the same script (fixing winner-takes-all). Synced `calculate-session-cost.sh` plugin copy with space/dot path handling
 
 ### Added
 - **Marketplace distribution** (T-751): Plugin is now installable via `claude plugin marketplace add yves-s/just-ship && claude plugin install just-ship@just-ship`. Added `marketplace.json` with plugin metadata, description, 10 keywords, and GitHub source reference. Updated `plugin.json` with homepage, repository, license, and expanded keywords. New `scripts/sync-plugin-version.sh` keeps version in sync across `plugin.json`, `marketplace.json`, and `package.json`. `setup.sh` update flow now syncs plugin version from framework source. README documents both installation paths (Plugin and CLI)

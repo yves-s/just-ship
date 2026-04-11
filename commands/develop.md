@@ -194,15 +194,22 @@ bash .claude/scripts/send-event.sh $TICKET_NUMBER orchestrator agent_started
 **3e) Token-Snapshot schreiben** (für per-Ticket-Kosten bei `/ship`):
 
 ```bash
-SAFE_CWD=$(echo "$PWD" | sed 's|^/||' | sed 's|/|-|g' | sed 's| |-|g' | sed 's|\.|-|g')
+# Resolve main repo root (in worktrees, git-common-dir is absolute → go up one level)
+GIT_COMMON=$(git rev-parse --git-common-dir 2>/dev/null) || true
+if [ -n "$GIT_COMMON" ] && [ "$GIT_COMMON" != ".git" ]; then
+  MAIN_ROOT=$(cd "$GIT_COMMON/.." && pwd)
+else
+  MAIN_ROOT="$PWD"
+fi
+SAFE_CWD=$(echo "$MAIN_ROOT" | sed 's|^/||' | sed 's|/|-|g' | sed 's| |-|g' | sed 's|\.|-|g')
 SESSION_DIR="$HOME/.claude/projects/-${SAFE_CWD}"
 SESSION_FILE=$(ls -t "$SESSION_DIR"/*.jsonl 2>/dev/null | head -1)
 if [ -n "$SESSION_FILE" ]; then
-  bash .claude/scripts/calculate-session-cost.sh "$(basename "$SESSION_FILE" .jsonl)" "$PWD" > .claude/.token-snapshot-T-$TICKET_NUMBER.json 2>/dev/null || true
+  bash .claude/scripts/calculate-session-cost.sh "$(basename "$SESSION_FILE" .jsonl)" "$MAIN_ROOT" > "$MAIN_ROOT/.claude/.token-snapshot-T-$TICKET_NUMBER.json" 2>/dev/null || true
 fi
 ```
 
-Falls das Projekt-Root ein Worktree ist, den Snapshot im Main-Repo schreiben (`.claude/` dort ist der kanonische Ort).
+Der Snapshot wird immer im Main-Repo-Root geschrieben (nicht im Worktree), da `ship-token-tracking.sh` den Snapshot dort sucht.
 
 ### 3.5 Triage — Ticket-Qualitätsprüfung
 
