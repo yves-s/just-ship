@@ -636,6 +636,23 @@ if [ "$MODE" = "update" ]; then
   # Write framework version to project.json
   write_framework_version_to_project_json "$PROJECT_DIR/project.json" "$FRAMEWORK_VERSION"
 
+  if [ -f "$PROJECT_DIR/project.json" ]; then
+    MODE_RESULT=$(JS_PJ="$PROJECT_DIR/project.json" node -e "
+      const fs = require('fs');
+      const pj = JSON.parse(fs.readFileSync(process.env.JS_PJ, 'utf-8'));
+      if (!pj.mode) {
+        pj.mode = 'standalone';
+        fs.writeFileSync(process.env.JS_PJ, JSON.stringify(pj, null, 2) + '\n');
+        process.stdout.write('set');
+      } else {
+        process.stdout.write('exists');
+      }
+    " 2>/dev/null || echo "")
+    if [ "$MODE_RESULT" = "set" ]; then
+      echo "  ✓ project.json mode set (standalone)"
+    fi
+  fi
+
   # Sync plugin.json + marketplace.json versions from framework source
   if [ -f "$FRAMEWORK_DIR/.claude-plugin/plugin.json" ]; then
     PLUGIN_VERSION=$(JS_PLUGIN_SRC="$FRAMEWORK_DIR/.claude-plugin/plugin.json" node -e "
@@ -844,6 +861,7 @@ if [ "$OVERWRITE_CONFIG" != "N" ]; then
 {
   "name": "${PROJECT_NAME}",
   "description": "${PROJECT_DESC}",
+  "mode": "standalone",
   "stack": {},
   "build": {
     "web": "",
@@ -896,6 +914,21 @@ else
     echo "  ✓ project.json migrated (missing fields added)"
   else
     echo "  ~ project.json (skipped)"
+  fi
+
+  INSTALL_MODE_RESULT=$(JS_PJ="$PROJECT_DIR/project.json" node -e "
+    const fs = require('fs');
+    const pj = JSON.parse(fs.readFileSync(process.env.JS_PJ, 'utf-8'));
+    if (!pj.mode) {
+      pj.mode = 'standalone';
+      fs.writeFileSync(process.env.JS_PJ, JSON.stringify(pj, null, 2) + '\n');
+      process.stdout.write('set');
+    } else {
+      process.stdout.write('exists');
+    }
+  " 2>/dev/null || echo "")
+  if [ "$INSTALL_MODE_RESULT" = "set" ]; then
+    echo "  ✓ project.json mode set (standalone)"
   fi
 fi
 
