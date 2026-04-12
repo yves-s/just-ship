@@ -28,11 +28,27 @@ Keine Pipeline-Verbindung noetig. Der Command funktioniert standalone in jedem P
 
 ### 1. Skills discovern
 
-Glob `.claude/skills/*.md` und lese jede Datei. Parse das YAML-Frontmatter und filtere nach `category: audit`.
+Glob `.claude/skills/*.md` und lese jede Datei. Parse das YAML-Frontmatter.
+
+**Zwei Wege, einen Skill als Audit-Skill zu erkennen:**
+
+1. **Frontmatter** (Vorrang): Skill hat `category: audit` und optional `audit_scope` im Frontmatter
+2. **Fallback-Tabelle**: Fuer bekannte Plugin-Skills die (noch) kein `category: audit` im Frontmatter haben, greift diese Zuordnung:
+
+| Skill-Name (aus Frontmatter `name:`) | audit_scope |
+|---|---|
+| `security-review` | `full` |
+| `find-bugs` | `diff` |
+| `code-review` | `both` |
+| `gha-security-review` | `full` |
+| `differential-review` | `diff` |
+| `insecure-defaults` | `full` |
+
+Falls ein Skill `category: audit` im Frontmatter hat, wird sein `audit_scope` aus dem Frontmatter genommen (Default: `both`). Falls er in der Fallback-Tabelle steht aber KEIN `category: audit` hat, wird der Scope aus der Tabelle genommen.
 
 Extrahiere fuer jeden Audit-Skill:
 - `name` — Skill-Name
-- `audit_scope` — `full`, `diff` oder `both` (Default: `both`)
+- `audit_scope` — `full`, `diff` oder `both`
 - Den gesamten Dateiinhalt als Skill-Instruktion
 
 Falls `--skills` angegeben: filtere zusaetzlich nach den angegebenen Namen.
