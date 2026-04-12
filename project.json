@@ -37,7 +37,7 @@
     "tests": "tests/"
   },
   "supabase": {
-    "project_id": "wsmnutkobalfrceavpxs"
+    "project_id": ""
   },
   "pipeline": {
     "workspace_id": "421dffa5-5f2e-44a8-bdc1-7e0f31a87149",
