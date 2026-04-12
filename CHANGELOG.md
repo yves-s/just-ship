@@ -9,6 +9,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 ## [Unreleased]
 
 ### Added
+- **`/just-ship-audit` command**: Parallel audit command that discovers `category: audit` skills via frontmatter, dispatches one agent per skill in parallel, and produces a consolidated severity-sorted report. Supports `--diff` (branch diff only) and `--skills` (filter by name) flags. Output: terminal summary + full report in `docs/audit/`.
+- **Audit frontmatter fields for skills**: Skills can now declare `category: audit` and `audit_scope: full|diff|both` in their YAML frontmatter to be discoverable by the audit command. Six plugin skills tagged: security-review, find-bugs, code-review, gha-security-review, differential-review, insecure-defaults.
+- **`parseSkillFrontmatter` function**: New exported function in `load-skills.ts` that parses YAML frontmatter from skill files including `category` and `audit_scope` fields. Used by the audit command for skill discovery.
 - **Plugin registration via marketplace** (T-817): Created `.claude-plugin/marketplace.json` so `claude plugin marketplace add yves-s/just-ship` discovers the plugin. Added `setup.sh --register-plugin` flag that validates the plugin structure, registers the marketplace, and installs the plugin in one step. Includes error handling, idempotency checks, and verification tests.
 
 ### Fixed
