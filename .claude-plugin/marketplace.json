@@ -1,0 +1,23 @@
+{
+  "name": "just-ship-marketplace",
+  "owner": {
+    "name": "Just Ship",
+    "url": "https://just-ship.io"
+  },
+  "metadata": {
+    "description": "Autonomous multi-agent development pipeline — from ticket to PR in one command",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "just-ship",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/yves-s/just-ship.git"
+      },
+      "description": "Autonomous multi-agent development pipeline — from ticket to PR in one command",
+      "version": "1.0.0",
+      "strict": true
+    }
+  ]
+}
