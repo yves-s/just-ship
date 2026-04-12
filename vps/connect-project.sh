@@ -108,6 +108,22 @@ REMOTE_HAS_GH=$(ssh "root@$VPS_HOST" "grep -c '^GH_TOKEN=.\+' /home/claude-dev/.
   || fail "GH_TOKEN fehlt in /home/claude-dev/.env auf dem VPS."
 ok "GH_TOKEN auf VPS vorhanden"
 
+# COOLIFY_API_TOKEN pruefen (soft warning, kein fail)
+HOSTING_PROVIDER=$(node -e "
+  const h = require('$PROJECT_PATH/project.json').hosting;
+  if (typeof h === 'object' && h !== null) process.stdout.write(h.provider || '');
+  else if (typeof h === 'string') process.stdout.write(h);
+" 2>/dev/null || true)
+
+if [[ "$HOSTING_PROVIDER" == "coolify" ]]; then
+  REMOTE_HAS_COOLIFY=$(ssh "root@$VPS_HOST" "grep -c '^COOLIFY_API_TOKEN=.\+' /home/claude-dev/.env 2>/dev/null || echo 0")
+  if [[ "$REMOTE_HAS_COOLIFY" -ge 1 ]]; then
+    ok "COOLIFY_API_TOKEN auf VPS vorhanden"
+  else
+    warn "COOLIFY_API_TOKEN fehlt in .env — Preview-URLs werden nicht generiert. Token in Coolify UI erstellen und in /home/claude-dev/.env eintragen."
+  fi
+fi
+
 # server-config.json existiert?
 ssh "root@$VPS_HOST" "test -f /home/claude-dev/.just-ship/server-config.json" \
   || fail "server-config.json nicht gefunden. VPS wurde noch nicht eingerichtet (Phase 1)."
