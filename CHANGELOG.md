@@ -9,6 +9,7 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 ## [Unreleased]
 
 ### Added
+- **Plugin dependency management** (T-821): `project.json` gets a new `plugins` field with `registries` (GitHub repos as plugin marketplaces) and `dependencies` (plugins to install). `setup.sh` reads these fields and runs `claude plugin marketplace add` + `claude plugin install --scope project` idempotently — both in setup and update mode. Framework ships with getsentry/skills (security-review) and trailofbits/skills (differential-review, insecure-defaults) as default registries.
 - **Mode detection: plugin vs standalone** (T-816): `project.json` gets a new `mode` field (`"plugin"` or `"standalone"`). `setup.sh` auto-sets `"standalone"` on install and update. `/init` detects mode via `CLAUDE_PLUGIN_ROOT` env var. Existing projects without mode field are migrated on next setup.sh run. Standalone mode skips framework file installation in `/init` (already done by setup.sh).
 
 ### Changed

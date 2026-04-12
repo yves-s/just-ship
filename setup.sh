@@ -207,6 +207,76 @@ ensure_gitignore() {
   echo "$pattern" >> "$gitignore"
 }
 
+# --- Helper: install plugins from project.json plugins.dependencies ---
+install_plugins_from_project() {
+  local project_dir="$1"
+  [ -f "$project_dir/project.json" ] || return 0
+
+  if ! command -v claude &>/dev/null; then
+    local has_deps
+    has_deps=$(PJ_PATH="$project_dir/project.json" node -e "
+      try {
+        const pj = JSON.parse(require('fs').readFileSync(process.env.PJ_PATH, 'utf-8'));
+        if ((pj.plugins?.dependencies || []).length > 0) process.stdout.write('yes');
+      } catch(e) {}
+    " 2>/dev/null || true)
+    if [ "$has_deps" = "yes" ]; then
+      echo "  ⚠ Plugins configured but claude CLI not found — install Claude Code first"
+    fi
+    return 0
+  fi
+
+  local registries dependencies
+  registries=$(PJ_PATH="$project_dir/project.json" node -e "
+    try {
+      const pj = JSON.parse(require('fs').readFileSync(process.env.PJ_PATH, 'utf-8'));
+      process.stdout.write((pj.plugins?.registries || []).join('\n'));
+    } catch(e) {}
+  " 2>/dev/null || true)
+
+  dependencies=$(PJ_PATH="$project_dir/project.json" node -e "
+    try {
+      const pj = JSON.parse(require('fs').readFileSync(process.env.PJ_PATH, 'utf-8'));
+      process.stdout.write((pj.plugins?.dependencies || []).join('\n'));
+    } catch(e) {}
+  " 2>/dev/null || true)
+
+  [ -n "$dependencies" ] || return 0
+
+  echo "Installing plugins..."
+
+  # Add registries (idempotent)
+  if [ -n "$registries" ]; then
+    while IFS= read -r registry; do
+      [ -z "$registry" ] && continue
+      if claude plugin marketplace list 2>/dev/null | grep -qF "$registry"; then
+        : # already configured
+      else
+        claude plugin marketplace add "$registry" 2>/dev/null || echo "  ⚠ Failed to add registry: $registry"
+      fi
+    done <<< "$registries"
+  fi
+
+  # Install dependencies (idempotent)
+  local plugin_count=0
+  local total=0
+  while IFS= read -r plugin; do
+    [ -z "$plugin" ] && continue
+    total=$((total + 1))
+    if claude plugin list 2>/dev/null | grep -qF "$plugin"; then
+      : # already installed
+    else
+      if claude plugin install "$plugin" --scope project 2>/dev/null; then
+        plugin_count=$((plugin_count + 1))
+      else
+        echo "  ⚠ Failed to install: $plugin"
+      fi
+    fi
+  done <<< "$dependencies"
+
+  echo "  ✓ $total plugins configured ($plugin_count installed)"
+}
+
 # --- Helper: enable Agent Teams feature flag in global Claude settings ---
 enable_agent_teams() {
   local global_settings="$HOME/.claude/settings.json"
@@ -716,6 +786,9 @@ if [ "$MODE" = "update" ]; then
     fi
   fi
 
+  # --- Install plugins from project.json ---
+  install_plugins_from_project "$PROJECT_DIR"
+
   echo ""
   echo "================================================"
   echo "  Update complete → $FRAMEWORK_VERSION"
@@ -1132,6 +1205,9 @@ if [ "$SHOPIFY_DETECTED" = "true" ]; then
 else
   echo "  ~ No Shopify project detected"
 fi
+
+# --- Install plugins from project.json ---
+install_plugins_from_project "$PROJECT_DIR"
 
 echo ""
 echo "================================================"
