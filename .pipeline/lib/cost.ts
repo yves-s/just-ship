@@ -1,28 +1,45 @@
-/** Token pricing per 1K tokens (input/output) in USD */
-const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  "claude-opus-4-20250514":       { input: 0.015, output: 0.075 },
-  "claude-sonnet-4-20250514":     { input: 0.003, output: 0.015 },
-  "claude-haiku-4-5-20251001":    { input: 0.0008, output: 0.004 },
+// Pricing last verified: 2026-04-10 — https://platform.claude.com/docs/en/about-claude/pricing
+// Per MTok (million tokens). Cache: 5min TTL auto-caching (read = 2% of input, create = 125% of input).
+interface ModelPricing {
+  input: number;
+  cacheRead: number;
+  cacheCreate: number;
+  output: number;
+}
+
+const COST_PER_MTOK: Record<string, ModelPricing> = {
+  "claude-opus-4-6":              { input: 5, cacheRead: 0.10, cacheCreate: 6.25, output: 25 },
+  "claude-opus-4-20250514":       { input: 5, cacheRead: 0.10, cacheCreate: 6.25, output: 25 },
+  "claude-sonnet-4-6":            { input: 3, cacheRead: 0.06, cacheCreate: 3.75, output: 15 },
+  "claude-sonnet-4-20250514":     { input: 3, cacheRead: 0.06, cacheCreate: 3.75, output: 15 },
+  "claude-haiku-4-5-20251001":    { input: 1, cacheRead: 0.02, cacheCreate: 1.25, output: 5 },
 };
 
 const MODEL_ALIASES: Record<string, string> = {
-  opus:   "claude-opus-4-20250514",
-  sonnet: "claude-sonnet-4-20250514",
+  opus:   "claude-opus-4-6",
+  sonnet: "claude-sonnet-4-6",
   haiku:  "claude-haiku-4-5-20251001",
 };
 
 /**
  * Estimate cost in USD for a given model and token count.
+ * When cacheReadTokens/cacheCreateTokens are provided, uses tiered pricing.
+ * Without cache splits, treats all inputTokens at full input price (backward compatible).
  * Falls back to Sonnet pricing if model is unknown.
  */
 export function estimateCost(
   model: string,
   inputTokens: number,
   outputTokens: number,
+  cacheReadTokens = 0,
+  cacheCreateTokens = 0,
 ): number {
   const resolvedModel = MODEL_ALIASES[model] ?? model;
-  const pricing = MODEL_PRICING[resolvedModel] ?? MODEL_PRICING["claude-sonnet-4-20250514"];
-  return (inputTokens / 1000) * pricing.input + (outputTokens / 1000) * pricing.output;
+  const p = COST_PER_MTOK[resolvedModel] ?? COST_PER_MTOK["claude-sonnet-4-6"];
+  return (inputTokens / 1_000_000) * p.input
+    + (cacheReadTokens / 1_000_000) * p.cacheRead
+    + (cacheCreateTokens / 1_000_000) * p.cacheCreate
+    + (outputTokens / 1_000_000) * p.output;
 }
 
 /**

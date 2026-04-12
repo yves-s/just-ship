@@ -5,6 +5,7 @@ export interface ServerProjectConfig {
   repo_url: string;
   project_dir: string;
   env_file: string;
+  installation_id?: number;  // per-project GitHub App installation override
 }
 
 export interface ServerConfig {
@@ -17,6 +18,11 @@ export interface ServerConfig {
     workspace_id: string;
     board_url: string;
     api_key: string;
+    github_app?: {
+      app_id: string;
+      private_key_path: string;
+      installation_id?: number;  // default for all projects
+    };
   };
   projects: Record<string, ServerProjectConfig>;
 }

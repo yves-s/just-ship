@@ -107,4 +107,66 @@ describe("resolveVerifyCommands", () => {
 
     expect(commands).toEqual([]);
   });
+
+  it("adds npm run build for shopify remix apps", () => {
+    const config: VerifyConfig = {
+      platform: "shopify",
+      variant: "remix",
+      packageJsonScripts: { build: "remix build" },
+    };
+
+    const commands = resolveVerifyCommands(config);
+
+    expect(commands).toHaveLength(1);
+    expect(commands[0]).toEqual({
+      cmd: "npm run build",
+      source: "shopify-default",
+      blocking: true,
+    });
+  });
+
+  it("does not add shopify remix defaults when verify command is configured", () => {
+    const config: VerifyConfig = {
+      verifyCommand: "npm run build && npm run lint",
+      platform: "shopify",
+      variant: "remix",
+      packageJsonScripts: {},
+    };
+
+    const commands = resolveVerifyCommands(config);
+
+    expect(commands).toHaveLength(1);
+    expect(commands[0].source).toBe("project.json");
+  });
+
+  it("adds eslint and tsc for remix when config files exist", () => {
+    const { mkdtempSync, writeFileSync, rmSync } = require("node:fs");
+    const { join } = require("node:path");
+    const os = require("node:os");
+
+    const tmpDir = mkdtempSync(join(os.tmpdir(), "verify-test-"));
+    try {
+      writeFileSync(join(tmpDir, "eslint.config.js"), "export default [];");
+      writeFileSync(join(tmpDir, "tsconfig.json"), "{}");
+
+      const config: VerifyConfig = {
+        platform: "shopify",
+        variant: "remix",
+        workDir: tmpDir,
+        packageJsonScripts: {},
+      };
+
+      const commands = resolveVerifyCommands(config);
+
+      expect(commands).toHaveLength(3);
+      expect(commands[0].cmd).toBe("npm run build");
+      expect(commands[0].blocking).toBe(true);
+      expect(commands[1].cmd).toBe("npx eslint .");
+      expect(commands[1].blocking).toBe(false);
+      expect(commands[2].cmd).toBe("npx tsc --noEmit");
+      expect(commands[2].blocking).toBe(false);
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

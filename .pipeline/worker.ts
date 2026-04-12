@@ -11,11 +11,11 @@ import { withWatchdog, saveWorktreeWIP, sendAgentFailedEvent } from "./lib/watch
 import { WorktreeManager } from "./lib/worktree-manager.ts";
 import { loadProjectConfig } from "./lib/config.ts";
 import { generateChangeSummary } from "./lib/change-summary.ts";
+import { loadGitHubAppConfig, getInstallationToken, type GitHubAppConfig } from "./lib/github-app.ts";
 
 // --- Environment validation ---
 const required = [
   "ANTHROPIC_API_KEY",
-  "GH_TOKEN",
   "SUPABASE_URL",
   "SUPABASE_SERVICE_KEY",
   "SUPABASE_PROJECT_ID",
@@ -28,6 +28,17 @@ for (const key of required) {
     process.exit(1);
   }
 }
+
+if (!process.env.GH_TOKEN && !process.env.GITHUB_APP_ID) {
+  logger.error("ERROR: Either GH_TOKEN or GITHUB_APP_ID must be set");
+  process.exit(1);
+}
+
+// Load GitHub App config (optional — falls back to GH_TOKEN)
+const githubAppConfig: GitHubAppConfig | null = loadGitHubAppConfig();
+const defaultInstallationId = process.env.GITHUB_APP_INSTALLATION_ID
+  ? Number(process.env.GITHUB_APP_INSTALLATION_ID)
+  : undefined;
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
@@ -301,6 +312,28 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
       log(`WARN: Install failed in worktree (${e instanceof Error ? e.message : "unknown"}), continuing...`);
     }
 
+    // Resolve GitHub token (installation token > GH_TOKEN env var)
+    let pipelineEnv: Record<string, string> | undefined;
+    if (githubAppConfig && defaultInstallationId) {
+      try {
+        const token = await getInstallationToken(githubAppConfig, defaultInstallationId);
+        pipelineEnv = { GH_TOKEN: token };
+        // Also authenticate gh CLI for this run (best-effort — git operations use x-access-token)
+        try {
+          execSync("gh auth login --with-token", {
+            input: token,
+            stdio: ["pipe", "pipe", "pipe"],
+            timeout: 10_000,
+          });
+        } catch { /* gh auth is best-effort */ }
+      } catch (err) {
+        log(`GitHub App token generation failed: ${err instanceof Error ? err.message : String(err)}`);
+        if (!process.env.GH_TOKEN) {
+          throw new Error("No GitHub token available: GitHub App token generation failed and GH_TOKEN not set");
+        }
+      }
+    }
+
     log(`Starting pipeline: T-${ticket.number} — ${ticket.title} (slot ${slotId})`);
 
     const result = await withWatchdog(
@@ -315,6 +348,7 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
           labels: Array.isArray(ticket.tags) ? ticket.tags.join(",") : "",
         },
         abortSignal: runAbortController.signal,
+        env: pipelineEnv,
       }),
       `T-${ticket.number}`
     );

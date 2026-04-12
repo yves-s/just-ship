@@ -31,8 +31,19 @@ export interface SkillFrontmatter {
   description: string;
   triggers: string[];
   filePath: string;
-  category?: string;
-  auditScope?: string;
+}
+
+export interface LoadedSkills {
+  /** All skill names that were resolved */
+  skillNames: string[];
+  /** Skill content filtered per agent role */
+  byRole: Map<AgentRole, string>;
+  /** Compact text index: "- {name}: {description}" per skill */
+  frontmatterIndex: string;
+  /** Approximate token count for frontmatter-only (chars / 4) */
+  totalFrontmatterTokens: number;
+  /** Approximate token count for full content (chars / 4) */
+  totalFullTokens: number;
 }
 
 /**
@@ -50,32 +61,18 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter | null 
 
   // description may be a multi-line block scalar ("> ") or inline string (with or without quotes)
   let description = "";
-  const descBlockIndicator = frontmatter.match(/^description:\s*>\s*$/m);
+  const descInlineMatch = frontmatter.match(/^description:\s*["']?([^\n"']+)["']?\s*$/m);
+  const descBlockMatch = frontmatter.match(/^description:\s*>\s*\r?\n([\s\S]*?)(?=\r?\n\w|\r?\n---$|$)/m);
 
-  if (descBlockIndicator) {
-    // Collect indented continuation lines after "description: >"
-    const lines = frontmatter.split(/\r?\n/);
-    let inBlock = false;
-    const blockLines: string[] = [];
-    for (const line of lines) {
-      if (/^description:\s*>\s*$/.test(line)) {
-        inBlock = true;
-        continue;
-      }
-      if (inBlock) {
-        if (/^\s+/.test(line)) {
-          blockLines.push(line.trim());
-        } else {
-          break;
-        }
-      }
-    }
-    description = blockLines.filter(Boolean).join(" ");
-  } else {
-    const descInlineMatch = frontmatter.match(/^description:\s*["']?([^\n"']+)["']?\s*$/m);
-    if (descInlineMatch) {
-      description = descInlineMatch[1].trim();
-    }
+  if (descBlockMatch) {
+    // Fold the block scalar: join lines, collapse newlines into spaces
+    description = descBlockMatch[1]
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .join(" ");
+  } else if (descInlineMatch) {
+    description = descInlineMatch[1].trim();
   }
 
   // triggers: parse inline `[a, b]` or multi-line `- a` format
@@ -84,9 +81,12 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter | null 
   if (triggersLineMatch) {
     const inlineValue = triggersLineMatch[1].trim();
     if (inlineValue.startsWith("[")) {
+      // Inline array: [a, b, c]
       const inner = inlineValue.replace(/^\[|\]$/g, "");
       triggers.push(...inner.split(",").map((s) => s.trim()).filter(Boolean));
     } else {
+      // Multi-line: collect all `- item` lines that follow the `triggers:` line
+      // Find the position of `triggers:` in the frontmatter, then collect subsequent `- ` lines
       const lines = frontmatter.split(/\r?\n/);
       let inTriggers = false;
       for (const line of lines) {
@@ -99,6 +99,7 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter | null 
           if (itemMatch) {
             triggers.push(itemMatch[1].trim());
           } else if (/^\S/.test(line)) {
+            // New top-level key — end of triggers block
             break;
           }
         }
@@ -106,26 +107,79 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter | null 
     }
   }
 
-  // category (e.g. "audit")
-  const categoryMatch = frontmatter.match(/^category:\s*(.+)$/m);
-  const category = categoryMatch ? categoryMatch[1].trim() : undefined;
-
-  // audit_scope — only meaningful when category is "audit"
-  const auditScopeMatch = frontmatter.match(/^audit_scope:\s*(.+)$/m);
-  const auditScope = category === "audit"
-    ? (auditScopeMatch ? auditScopeMatch[1].trim() : "both")
-    : undefined;
-
   if (!name) return null;
 
-  return { name, description, triggers, filePath: "", category, auditScope };
+  return { name, description, triggers, filePath: "" };
 }
 
-export interface LoadedSkills {
-  /** All skill names that were resolved */
-  skillNames: string[];
-  /** Skill content filtered per agent role */
-  byRole: Map<AgentRole, string>;
+/**
+ * Loads only frontmatter for all resolved skills. Returns SkillFrontmatter[].
+ * Does not load skill body content.
+ */
+export function loadSkillFrontmatters(
+  projectDir: string,
+  config: ProjectConfig,
+): SkillFrontmatter[] {
+  const skillNames = resolveSkillNames(config);
+  const frameworkSkillsDir = resolve(projectDir, "skills");
+  const installedSkillsDir = resolve(projectDir, ".claude", "skills");
+
+  const frontmatters: SkillFrontmatter[] = [];
+
+  const allNames = [...skillNames, ...(config.skills?.custom ?? [])];
+
+  for (const name of allNames) {
+    if (!isValidSkillName(name)) continue;
+
+    const frameworkPath = resolve(frameworkSkillsDir, `${name}.md`);
+    const installedPath = resolve(installedSkillsDir, `${name}.md`);
+    const filePath = existsSync(frameworkPath)
+      ? frameworkPath
+      : existsSync(installedPath)
+        ? installedPath
+        : null;
+
+    if (!filePath) continue;
+
+    const content = readFileSync(filePath, "utf-8");
+    const fm = parseSkillFrontmatter(content);
+    if (fm) {
+      frontmatters.push({ ...fm, filePath });
+    }
+  }
+
+  return frontmatters;
+}
+
+/**
+ * Reads full file content for a skill by its absolute path.
+ * Returns null if the file does not exist or cannot be read.
+ */
+export function loadSkillFull(filePath: string): string | null {
+  if (!existsSync(filePath)) {
+    logger.warn(`Skill file '${filePath}' does not exist — skipping.`);
+    return null;
+  }
+  try {
+    return readFileSync(filePath, "utf-8");
+  } catch (err) {
+    logger.warn({ err, filePath }, `Failed to read skill file — skipping.`);
+    return null;
+  }
+}
+
+/**
+ * Loads full content for a single skill by name.
+ * Searches framework dir first, then installed dir.
+ */
+export function loadSkillByName(projectDir: string, name: string): string | null {
+  if (!isValidSkillName(name)) {
+    logger.warn(`Skill name '${name}' contains invalid characters — skipping.`);
+    return null;
+  }
+  const frameworkSkillsDir = resolve(projectDir, "skills");
+  const installedSkillsDir = resolve(projectDir, ".claude", "skills");
+  return loadSkillFile(name, frameworkSkillsDir, installedSkillsDir);
 }
 
 /**
@@ -190,7 +244,30 @@ export function loadSkills(projectDir: string, config: ProjectConfig): LoadedSki
     }
   }
 
-  return { skillNames: [...skillContents.keys()], byRole };
+  // Build frontmatterIndex: compact listing of name + description for all loaded skills
+  const frontmatterParts: string[] = [];
+  let frontmatterCharCount = 0;
+  let fullCharCount = 0;
+
+  for (const [name, content] of skillContents) {
+    const fm = parseSkillFrontmatter(content);
+    const descLine = fm?.description
+      ? `- ${name}: ${fm.description}`
+      : `- ${name}`;
+    frontmatterParts.push(descLine);
+    frontmatterCharCount += descLine.length;
+    fullCharCount += content.length;
+  }
+
+  const frontmatterIndex = frontmatterParts.join("\n");
+
+  return {
+    skillNames: [...skillContents.keys()],
+    byRole,
+    frontmatterIndex,
+    totalFrontmatterTokens: Math.ceil(frontmatterCharCount / 4),
+    totalFullTokens: Math.ceil(fullCharCount / 4),
+  };
 }
 
 function resolveSkillNames(config: ProjectConfig): string[] {

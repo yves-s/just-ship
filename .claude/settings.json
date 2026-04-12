@@ -1,6 +1,5 @@
 {
   "permissions": {
-    "defaultMode": "bypassPermissions",
     "allow": [
       "Read(**)",
       "Edit(**)",
@@ -14,24 +13,13 @@
     ]
   },
   "hooks": {
-    "PermissionRequest": [
-      {
-        "matcher": "Write(**)|Edit(**)",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PermissionRequest\", \"decision\": {\"behavior\": \"allow\"}}}'"
-          }
-        ]
-      }
-    ],
     "SessionStart": [
       {
         "matcher": "startup|resume",
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/detect-ticket.sh\"",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/detect-ticket.sh\"",
             "timeout": 5
           }
         ]
@@ -43,7 +31,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/on-agent-start.sh\"",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/on-agent-start.sh\"",
             "timeout": 5
           }
         ]
@@ -55,7 +43,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/on-agent-stop.sh\"",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/on-agent-stop.sh\"",
             "timeout": 5
           }
         ]
@@ -67,7 +55,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/on-session-end.sh\"",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/on-session-end.sh\"",
             "timeout": 5
           }
         ]
@@ -79,7 +67,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/detect-ticket-post.sh\"",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/detect-ticket-post.sh\"",
             "timeout": 2
           }
         ]
@@ -89,7 +77,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/quality-gate.sh\"",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/quality-gate.sh\"",
             "timeout": 10
           }
         ]
@@ -99,7 +87,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/quality-gate.sh\"",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/quality-gate.sh\"",
             "timeout": 10
           }
         ]

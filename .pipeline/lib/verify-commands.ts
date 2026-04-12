@@ -9,6 +9,8 @@
  */
 
 import { execSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { logger } from "./logger.ts";
 
 // ---------------------------------------------------------------------------
@@ -27,6 +29,7 @@ export interface VerifyConfig {
   variant?: string;
   packageJsonScripts: Record<string, string>;
   shopifyCliAvailable?: boolean;
+  workDir?: string; // needed to check for eslint config and tsconfig.json
 }
 
 export interface VerifyCommandResult {
@@ -89,6 +92,42 @@ export function resolveVerifyCommands(config: VerifyConfig): VerifyCommand[] {
       source: "shopify-default",
       blocking: true,
     });
+  }
+
+  // 2b. Shopify remix app — npm run build + optional ESLint + optional TSC
+  if (
+    config.platform === "shopify" &&
+    config.variant === "remix" &&
+    !configuredCmd // don't add defaults if user already configured verify
+  ) {
+    commands.push({
+      cmd: "npm run build",
+      source: "shopify-default",
+      blocking: true,
+    });
+
+    if (config.workDir) {
+      const eslintConfigs = [
+        ".eslintrc", ".eslintrc.js", ".eslintrc.cjs", ".eslintrc.json", ".eslintrc.yml",
+        "eslint.config.js", "eslint.config.mjs", "eslint.config.cjs",
+      ];
+      const hasEslint = eslintConfigs.some(f => existsSync(join(config.workDir!, f)));
+      if (hasEslint) {
+        commands.push({
+          cmd: "npx eslint .",
+          source: "shopify-default",
+          blocking: false,
+        });
+      }
+
+      if (existsSync(join(config.workDir!, "tsconfig.json"))) {
+        commands.push({
+          cmd: "npx tsc --noEmit",
+          source: "shopify-default",
+          blocking: false,
+        });
+      }
+    }
   }
 
   // 3. Auto-discovered package.json scripts (advisory / non-blocking)

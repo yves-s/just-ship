@@ -1,8 +1,9 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { execSync } from "node:child_process";
-import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { loadProjectConfig, parseCliArgs, type TicketArgs } from "./lib/config.ts";
 import { loadAgents, loadOrchestratorPrompt, loadTriagePrompt, loadEnrichmentPrompt } from "./lib/load-agents.ts";
 import { createEventHooks, postPipelineEvent, postPipelineSummary, type EventConfig } from "./lib/event-hooks.ts";
@@ -20,6 +21,7 @@ import { estimateCost } from "./lib/cost.ts";
 import { checkLevel1Exists } from "./lib/artifact-verifier.ts";
 import { resolveVerifyCommands, runVerifyCommands } from "./lib/verify-commands.ts";
 import { detectScopeReduction } from "./lib/scope-guard.ts";
+import { createModelRouter } from "./lib/model-router.ts";
 
 // --- Exported pipeline function (used by worker.ts) ---
 export interface PipelineOptions {
@@ -180,7 +182,20 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
 
   // Validate branch name before any shell interpolation (toBranchName already validates,
   // but branchName may come from opts.branchName which is external input)
-  sanitizeBranchName(branchName);
+  try {
+    sanitizeBranchName(branchName);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    logger.error({ reason, branch: branchName }, "Invalid branch name");
+    return {
+      status: "failed",
+      prUrl: undefined,
+      branch: branchName,
+      project: config.name,
+      failureReason: `Invalid branch name: ${reason}`,
+      exitCode: 1,
+    };
+  }
 
   // workDir: use provided worktree directory, or fall back to projectDir (CLI mode)
   const workDir = opts.workDir ?? projectDir;
@@ -212,10 +227,15 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
   }
 
   // --- Load agents + orchestrator prompt ---
-  const agents = loadAgents(workDir);
+  const agents = loadAgents(projectDir);
   const loadedSkills = loadSkills(projectDir, config);
   if (loadedSkills.skillNames.length > 0) {
-    logger.info({ skills: loadedSkills.skillNames }, "Skills loaded");
+    logger.info({
+      skills: loadedSkills.skillNames,
+      frontmatterTokens: loadedSkills.totalFrontmatterTokens,
+      fullTokens: loadedSkills.totalFullTokens,
+      savedTokens: loadedSkills.totalFullTokens - loadedSkills.totalFrontmatterTokens,
+    }, "Skills loaded (progressive disclosure)");
   }
 
   // Filter agents by skipAgents config
@@ -235,8 +255,15 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
     }
   }
 
+  // --- Smart Model Routing: assign optimal model per agent phase ---
+  const modelRouter = createModelRouter(config.pipeline.modelRouting);
+  const routedCount = modelRouter.applyToAgents(filteredAgents);
+  if (routedCount > 0) {
+    logger.info({ routedCount }, "Model routing applied to agents");
+  }
+
   // Build orchestrator prompt with skills
-  let orchestratorPrompt = loadOrchestratorPrompt(workDir);
+  let orchestratorPrompt = loadOrchestratorPrompt(projectDir);
   const orchestratorSkills = loadedSkills.byRole.get("orchestrator");
   if (orchestratorSkills) {
     orchestratorPrompt += `\n\n${orchestratorSkills}`;
@@ -249,12 +276,18 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
     apiKey: config.pipeline.apiKey,
     ticketNumber: ticket.ticketId,
   };
+  // Build agent → model map for event tracking
+  const agentModelMap: Record<string, string> = {};
+  for (const [name, def] of Object.entries(filteredAgents)) {
+    if (def.model) agentModelMap[name] = def.model;
+  }
   const eventHooks = hasPipeline ? createEventHooks(eventConfig, {
     onPause: (reason, questionText) => {
       pauseReason = reason;
       pauseQuestion = questionText;
     },
     getLastAssistantText: () => lastAssistantText,
+    agentModelMap,
   }) : null;
   const hooks = eventHooks?.hooks ?? {};
 
@@ -268,7 +301,7 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
   // --- Triage: analyze ticket quality before orchestrator ---
   let ticketDescription = ticket.description;
   let triageResult: TriageResult | undefined;
-  const triagePrompt = loadTriagePrompt(workDir);
+  const triagePrompt = loadTriagePrompt(projectDir);
   if (triagePrompt) {
     triageResult = await runTriage(workDir, ticket, triagePrompt, eventConfig, hasPipeline, opts.env);
     ticketDescription = triageResult.description;
@@ -282,7 +315,7 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
 
   if (needsEnrichment && triageResult) {
     try {
-      const enrichmentPrompt = loadEnrichmentPrompt(workDir);
+      const enrichmentPrompt = loadEnrichmentPrompt(projectDir);
       if (enrichmentPrompt) {
         const enrichmentInput = JSON.stringify({
           title: ticket.title,
@@ -637,7 +670,7 @@ WICHTIG: Push, PR-Erstellung und Status-Updates werden automatisch von der Pipel
     }
   }
 
-  // Captured from QA phase — used in Ship phase to patch ticket and post comment
+  // Captured from QA phase — used in Ship phase to patch ticket
   let qaPreviewUrl: string | null = null;
 
   // --- Phase 3: QA with Fix Loops ---
@@ -686,6 +719,7 @@ WICHTIG: Push, PR-Erstellung und Status-Updates werden automatisch von der Pipel
       variant: config.stack.variant,
       packageJsonScripts,
       shopifyCliAvailable,
+      workDir,
     });
 
     if (verifyCommands.length > 0) {
@@ -738,14 +772,36 @@ WICHTIG: Push, PR-Erstellung und Status-Updates werden automatisch von der Pipel
         exitCode = 1;
         failureReason = "No commits produced by orchestrator";
       } else {
-        // Push branch
+        // Push branch — with rebase recovery for non-fast-forward rejection
         logger.info({ branch: branchName }, "Pushing branch");
-        execSync(`git push -u origin "${branchName}"`, {
-          cwd: workDir,
-          encoding: "utf-8",
-          timeout: 60_000,
-          stdio: "pipe",
-        });
+        try {
+          execSync(`git push -u origin "${branchName}"`, {
+            cwd: workDir,
+            encoding: "utf-8",
+            timeout: 60_000,
+            stdio: "pipe",
+          });
+        } catch (pushErr) {
+          const pushMsg = pushErr instanceof Error ? pushErr.message : String(pushErr);
+          if (pushMsg.includes("non-fast-forward") || pushMsg.includes("rejected")) {
+            logger.warn({ branch: branchName }, "Push rejected — attempting rebase recovery");
+            execSync(`git pull --rebase origin "${branchName}"`, {
+              cwd: workDir,
+              encoding: "utf-8",
+              timeout: 60_000,
+              stdio: "pipe",
+            });
+            execSync(`git push -u origin "${branchName}"`, {
+              cwd: workDir,
+              encoding: "utf-8",
+              timeout: 60_000,
+              stdio: "pipe",
+            });
+            logger.info("Rebase recovery successful");
+          } else {
+            throw pushErr; // Re-throw non-push errors
+          }
+        }
 
         // Verify branch exists on remote
         const remoteRef = execSync(`git ls-remote --heads origin "${branchName}"`, {
@@ -783,14 +839,20 @@ WICHTIG: Push, PR-Erstellung und Status-Updates werden automatisch von der Pipel
               timeout: 5_000,
             }).trim();
 
-            prUrl = execSync(
-              `gh pr create --title "${prTitle.replace(/"/g, '\\"')}" --body "## Summary\n${commitMessages}\n\n🤖 Generated by just-ship pipeline"`,
-              {
-                cwd: workDir,
-                encoding: "utf-8",
-                timeout: 30_000,
-              },
-            ).trim();
+            const bodyFile = join(tmpdir(), `pr-body-${Date.now()}.md`);
+            try {
+              writeFileSync(bodyFile, `## Summary\n${commitMessages}\n\n🤖 Generated by just-ship pipeline`);
+              prUrl = execSync(
+                `gh pr create --title "${prTitle.replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/\`/g, '\\`')}" --body-file "${bodyFile}"`,
+                {
+                  cwd: workDir,
+                  encoding: "utf-8",
+                  timeout: 30_000,
+                },
+              ).trim();
+            } finally {
+              try { unlinkSync(bodyFile); } catch { /* ignore */ }
+            }
             logger.info({ prUrl }, "PR created");
           }
 
@@ -810,29 +872,6 @@ WICHTIG: Push, PR-Erstellung und Status-Updates werden automatisch von der Pipel
             } catch {
               // Best-effort: preview_url patch is non-critical
               logger.warn("Could not patch preview_url to ticket");
-            }
-          }
-
-          // Post preview URL as ticket comment (upsert via type dedup)
-          if (hasPipeline && qaPreviewUrl) {
-            try {
-              await fetch(`${config.pipeline.apiUrl}/api/tickets/${ticket.ticketId}/comments`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-Pipeline-Key": config.pipeline.apiKey,
-                },
-                body: JSON.stringify({
-                  body: `Preview: ${qaPreviewUrl}`,
-                  author: "pipeline",
-                  type: "preview",
-                }),
-                signal: AbortSignal.timeout(8000),
-              });
-              logger.info({ previewUrl: qaPreviewUrl }, "preview comment posted to ticket");
-            } catch {
-              // Best-effort: preview comment is non-critical
-              logger.warn("Could not post preview comment to ticket");
             }
           }
         }
@@ -913,7 +952,20 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
 
   // Validate branch name before any shell interpolation (toBranchName already validates,
   // but branchName may come from opts.branchName which is external input)
-  sanitizeBranchName(branchName);
+  try {
+    sanitizeBranchName(branchName);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    logger.error({ reason, branch: branchName }, "Invalid branch name in resumePipeline");
+    return {
+      status: "failed",
+      prUrl: undefined,
+      branch: branchName,
+      project: config.name,
+      failureReason: `Invalid branch name: ${reason}`,
+      exitCode: 1,
+    };
+  }
 
   // workDir: use provided worktree directory, or fall back to projectDir (CLI mode)
   const workDir = opts.workDir ?? projectDir;
@@ -935,8 +987,16 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
     logger.warn("Could not write .active-ticket");
   }
 
-  const agents = loadAgents(workDir);
+  const agents = loadAgents(projectDir);
   const loadedSkills = loadSkills(projectDir, config);
+  if (loadedSkills.skillNames.length > 0) {
+    logger.info({
+      skills: loadedSkills.skillNames,
+      frontmatterTokens: loadedSkills.totalFrontmatterTokens,
+      fullTokens: loadedSkills.totalFullTokens,
+      savedTokens: loadedSkills.totalFullTokens - loadedSkills.totalFrontmatterTokens,
+    }, "Skills loaded (progressive disclosure)");
+  }
 
   // Filter agents by skipAgents config
   const skipAgents = config.pipeline.skipAgents ?? [];
@@ -952,6 +1012,10 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
     }
   }
 
+  // Apply model routing to resume agents
+  const resumeModelRouter = createModelRouter(config.pipeline.modelRouting);
+  resumeModelRouter.applyToAgents(filteredAgents);
+
   const hasPipeline = !!(config.pipeline.apiUrl && config.pipeline.apiKey);
   const eventConfig: EventConfig = {
     apiUrl: config.pipeline.apiUrl,
@@ -964,12 +1028,18 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
   let lastAssistantText = "";
   let newSessionId: string | undefined;
 
+  // Build agent → model map for event tracking
+  const resumeAgentModelMap: Record<string, string> = {};
+  for (const [name, def] of Object.entries(filteredAgents)) {
+    if (def.model) resumeAgentModelMap[name] = def.model;
+  }
   const eventHooks = hasPipeline ? createEventHooks(eventConfig, {
     onPause: (reason, questionText) => {
       pauseReason = reason;
       pauseQuestion = questionText;
     },
     getLastAssistantText: () => lastAssistantText,
+    agentModelMap: resumeAgentModelMap,
   }) : null;
   const hooks = eventHooks?.hooks ?? {};
 
@@ -1148,13 +1218,36 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
         exitCode = 1;
         failureReason = "No commits produced by orchestrator";
       } else {
+        // Push branch — with rebase recovery for non-fast-forward rejection
         logger.info({ branch: branchName }, "Pushing branch");
-        execSync(`git push -u origin "${branchName}"`, {
-          cwd: workDir,
-          encoding: "utf-8",
-          timeout: 60_000,
-          stdio: "pipe",
-        });
+        try {
+          execSync(`git push -u origin "${branchName}"`, {
+            cwd: workDir,
+            encoding: "utf-8",
+            timeout: 60_000,
+            stdio: "pipe",
+          });
+        } catch (pushErr) {
+          const pushMsg = pushErr instanceof Error ? pushErr.message : String(pushErr);
+          if (pushMsg.includes("non-fast-forward") || pushMsg.includes("rejected")) {
+            logger.warn({ branch: branchName }, "Push rejected — attempting rebase recovery");
+            execSync(`git pull --rebase origin "${branchName}"`, {
+              cwd: workDir,
+              encoding: "utf-8",
+              timeout: 60_000,
+              stdio: "pipe",
+            });
+            execSync(`git push -u origin "${branchName}"`, {
+              cwd: workDir,
+              encoding: "utf-8",
+              timeout: 60_000,
+              stdio: "pipe",
+            });
+            logger.info("Rebase recovery successful");
+          } else {
+            throw pushErr; // Re-throw non-push errors
+          }
+        }
 
         const remoteRef = execSync(`git ls-remote --heads origin "${branchName}"`, {
           cwd: workDir,
@@ -1184,10 +1277,16 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
               encoding: "utf-8",
               timeout: 5_000,
             }).trim();
-            prUrl = execSync(
-              `gh pr create --title "${prTitle.replace(/"/g, '\\"')}" --body "## Summary\n${commitMessages}\n\n🤖 Generated by just-ship pipeline"`,
-              { cwd: workDir, encoding: "utf-8", timeout: 30_000 },
-            ).trim();
+            const bodyFile = join(tmpdir(), `pr-body-${Date.now()}.md`);
+            try {
+              writeFileSync(bodyFile, `## Summary\n${commitMessages}\n\n🤖 Generated by just-ship pipeline`);
+              prUrl = execSync(
+                `gh pr create --title "${prTitle.replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/\`/g, '\\`')}" --body-file "${bodyFile}"`,
+                { cwd: workDir, encoding: "utf-8", timeout: 30_000 },
+              ).trim();
+            } finally {
+              try { unlinkSync(bodyFile); } catch { /* ignore */ }
+            }
           }
           logger.info({ prUrl }, "Ship complete");
         }

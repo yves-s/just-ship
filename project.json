@@ -60,7 +60,12 @@
     "dependencies": [
       {
         "plugin": "sentry-skills@sentry-skills",
-        "skills": ["security-review", "find-bugs", "code-review", "gha-security-review"]
+        "skills": [
+          "security-review",
+          "find-bugs",
+          "code-review",
+          "gha-security-review"
+        ]
       },
       "differential-review@trailofbits",
       "insecure-defaults@trailofbits"
@@ -77,7 +82,7 @@
     ]
   },
   "framework": {
-    "version": "ff2f899 (2026-04-11)",
-    "updated_at": "2026-04-11"
+    "version": "a36db5a (2026-04-12)",
+    "updated_at": "2026-04-12"
   }
 }
