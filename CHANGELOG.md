@@ -9,6 +9,7 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 ## [Unreleased]
 
 ### Fixed
+- **Plugin skills copied to project after installation** (T-826): `setup.sh` now copies SKILL.md files from the plugin cache (`~/.claude/plugins/cache/`) into `.claude/skills/` after `claude plugin install`. Skills are prefixed as `plugin--{name}--{skill}.md` to distinguish from framework skills. Stale plugin skills are cleaned up on each update. Previously, plugins were installed but skills were only in the global cache — invisible to users and agents.
 - **project.json deep-merge on update** (T-825): `setup.sh --update` now automatically adds missing fields from `templates/project.json` into existing project configurations. Previously, new framework fields (e.g. `plugins`) were silently absent after updates, breaking features that depend on them. Deep-merge adds missing top-level and nested keys without overwriting existing values.
 
 ### Added
