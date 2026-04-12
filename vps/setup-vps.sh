@@ -138,6 +138,14 @@ if [ -z "${PIPELINE_SECRET:-}" ]; then
   echo "  PIPELINE_SECRET generiert (wird in .env gespeichert)"
 fi
 
+if [ -z "${COOLIFY_API_TOKEN:-}" ]; then
+  echo ""
+  echo "  Coolify API Token (leer lassen falls kein Coolify):"
+  echo "  → In Coolify UI unter Settings → API Tokens erstellen"
+  read -rsp "  COOLIFY_API_TOKEN: " COOLIFY_API_TOKEN
+  echo ""
+fi
+
 # Bugsink secrets auto-generieren
 BUGSINK_SECRET_KEY=$(openssl rand -base64 50)
 BUGSINK_ADMIN_PASSWORD=$(openssl rand -base64 32)
@@ -156,6 +164,13 @@ BUGSINK_SECRET_KEY=${BUGSINK_SECRET_KEY}
 BUGSINK_ADMIN_EMAIL=admin@localhost
 BUGSINK_ADMIN_PASSWORD=${BUGSINK_ADMIN_PASSWORD}
 ENVEOF
+
+# COOLIFY_API_TOKEN nur schreiben wenn gesetzt (optional)
+if [ -n "${COOLIFY_API_TOKEN:-}" ]; then
+  echo "" >> "$ENV_FILE"
+  echo "# Coolify (optional — fuer Preview-Deployments)" >> "$ENV_FILE"
+  echo "COOLIFY_API_TOKEN=${COOLIFY_API_TOKEN}" >> "$ENV_FILE"
+fi
 
 chmod 600 "$ENV_FILE"
 chown claude-dev:claude-dev "$ENV_FILE"
