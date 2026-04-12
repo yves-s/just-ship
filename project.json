@@ -58,7 +58,10 @@
       "trailofbits/skills"
     ],
     "dependencies": [
-      "sentry-skills@sentry-skills",
+      {
+        "plugin": "sentry-skills@sentry-skills",
+        "skills": ["security-review", "find-bugs", "code-review", "gha-security-review"]
+      },
       "differential-review@trailofbits",
       "insecure-defaults@trailofbits"
     ]

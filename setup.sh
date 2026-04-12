@@ -289,7 +289,11 @@ install_plugins_from_project() {
   " 2>/dev/null || echo '{"registries":[],"dependencies":[]}')
 
   registries=$(echo "$plugin_data" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));process.stdout.write(d.registries.join('\n'))" 2>/dev/null || true)
-  dependencies=$(echo "$plugin_data" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));process.stdout.write(d.dependencies.join('\n'))" 2>/dev/null || true)
+  # Extract plugin identifiers (string deps stay as-is, object deps → plugin field)
+  dependencies=$(echo "$plugin_data" | node -e "
+    const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));
+    process.stdout.write(d.dependencies.map(dep => typeof dep === 'string' ? dep : dep.plugin).join('\n'));
+  " 2>/dev/null || true)
 
   [ -n "$dependencies" ] || return 0
 
@@ -352,9 +356,21 @@ install_plugins_from_project() {
     [ -f "$stale" ] && rm "$stale"
   done
 
+  # Build a skill filter map from plugin_data (for object-style deps with "skills" array)
+  local skill_filter
+  skill_filter=$(echo "$plugin_data" | node -e "
+    const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
+    const filter = {};
+    for (const dep of d.dependencies) {
+      if (typeof dep === 'object' && dep.plugin && Array.isArray(dep.skills)) {
+        filter[dep.plugin] = dep.skills;
+      }
+    }
+    process.stdout.write(JSON.stringify(filter));
+  " 2>/dev/null || echo '{}')
+
   while IFS= read -r plugin; do
     [ -z "$plugin" ] && continue
-    # Parse "plugin-name@marketplace" → extract plugin name for file prefix
     local plugin_name="${plugin%%@*}"
 
     # Find the plugin's install path from installed_plugins.json
@@ -374,7 +390,14 @@ install_plugins_from_project() {
       continue
     fi
 
-    # Find all SKILL.md files in the plugin's skills/ directory
+    # Get allowed skills for this plugin (empty = all)
+    local allowed_skills
+    allowed_skills=$(PLUGIN="$plugin" FILTER="$skill_filter" node -e "
+      const f = JSON.parse(process.env.FILTER);
+      const skills = f[process.env.PLUGIN];
+      process.stdout.write(skills ? skills.join('\n') : '');
+    " 2>/dev/null || true)
+
     local skills_src="$cache_dir/skills"
     [ -d "$skills_src" ] || continue
 
@@ -382,7 +405,12 @@ install_plugins_from_project() {
       [ -f "$skill_dir/SKILL.md" ] || continue
       local skill_name
       skill_name=$(basename "$skill_dir")
-      # Prefix with plugin-- to distinguish from framework skills
+
+      # If a skills filter exists for this plugin, skip skills not in the list
+      if [ -n "$allowed_skills" ]; then
+        echo "$allowed_skills" | grep -qxF "$skill_name" || continue
+      fi
+
       cp "$skill_dir/SKILL.md" "$skills_dir/plugin--${plugin_name}--${skill_name}.md"
       skill_count=$((skill_count + 1))
     done
