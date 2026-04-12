@@ -319,6 +319,61 @@ install_plugins_from_project() {
   done <<< "$dependencies"
 
   echo "  ✓ $total plugins configured ($plugin_count installed)"
+
+  # Copy SKILL.md files from plugin cache into project's .claude/skills/
+  # This is the "npm install → node_modules/" step — plugins are in the cache,
+  # but skills must be in .claude/skills/ for agents and users to see them.
+  local skills_dir="$project_dir/.claude/skills"
+  mkdir -p "$skills_dir"
+  local skill_count=0
+
+  # Remove stale plugin skills before copying fresh ones.
+  # If a plugin was removed from project.json, its plugin--*--*.md files would
+  # otherwise accumulate indefinitely since the framework skills update path
+  # only touches non-prefixed files.
+  for stale in "$skills_dir"/plugin--*.md; do
+    [ -f "$stale" ] && rm "$stale"
+  done
+
+  while IFS= read -r plugin; do
+    [ -z "$plugin" ] && continue
+    # Parse "plugin-name@marketplace" → extract plugin name for file prefix
+    local plugin_name="${plugin%%@*}"
+
+    # Find the plugin's install path from installed_plugins.json
+    local cache_dir
+    cache_dir=$(PLUGIN="$plugin" node -e "
+      const fs = require('fs');
+      const path = require('path');
+      const ipPath = path.join(process.env.HOME, '.claude', 'plugins', 'installed_plugins.json');
+      try {
+        const ip = JSON.parse(fs.readFileSync(ipPath, 'utf-8'));
+        const entries = ip.plugins?.[process.env.PLUGIN] || [];
+        if (entries.length > 0) process.stdout.write(entries[entries.length - 1].installPath || '');
+      } catch(e) {}
+    " 2>/dev/null || true)
+
+    if [ -z "$cache_dir" ] || [ ! -d "$cache_dir" ]; then
+      continue
+    fi
+
+    # Find all SKILL.md files in the plugin's skills/ directory
+    local skills_src="$cache_dir/skills"
+    [ -d "$skills_src" ] || continue
+
+    for skill_dir in "$skills_src"/*/; do
+      [ -f "$skill_dir/SKILL.md" ] || continue
+      local skill_name
+      skill_name=$(basename "$skill_dir")
+      # Prefix with plugin-- to distinguish from framework skills
+      cp "$skill_dir/SKILL.md" "$skills_dir/plugin--${plugin_name}--${skill_name}.md"
+      skill_count=$((skill_count + 1))
+    done
+  done <<< "$dependencies"
+
+  if [ "$skill_count" -gt 0 ]; then
+    echo "  ✓ $skill_count plugin skills copied to .claude/skills/"
+  fi
 }
 
 # --- Helper: enable Agent Teams feature flag in global Claude settings ---
