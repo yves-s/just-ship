@@ -277,14 +277,26 @@ install_plugins_from_project() {
   # Read from project, fall back to framework defaults if project has none
   local registries dependencies
   local plugin_data
+  # Framework plugins always win — they define the standard plugin set.
+  # Project can add extra plugins but cannot override the framework defaults.
   plugin_data=$(PROJ_PJ="$project_dir/project.json" FW_PJ="$FRAMEWORK_DIR/project.json" node -e "
     try {
       const fs = require('fs');
       const proj = JSON.parse(fs.readFileSync(process.env.PROJ_PJ, 'utf-8'));
       const fw = fs.existsSync(process.env.FW_PJ) ? JSON.parse(fs.readFileSync(process.env.FW_PJ, 'utf-8')) : {};
-      const regs = (proj.plugins?.registries?.length ? proj.plugins.registries : fw.plugins?.registries) || [];
-      const deps = (proj.plugins?.dependencies?.length ? proj.plugins.dependencies : fw.plugins?.dependencies) || [];
-      console.log(JSON.stringify({ registries: regs, dependencies: deps }));
+      const fwRegs = fw.plugins?.registries || [];
+      const fwDeps = fw.plugins?.dependencies || [];
+      const projRegs = proj.plugins?.registries || [];
+      const projDeps = proj.plugins?.dependencies || [];
+      // Merge: framework deps first, then any project-only deps not already covered
+      const fwPluginIds = new Set(fwDeps.map(d => typeof d === 'string' ? d : d.plugin));
+      const extraDeps = projDeps.filter(d => {
+        const id = typeof d === 'string' ? d : d.plugin;
+        return !fwPluginIds.has(id);
+      });
+      const mergedRegs = [...new Set([...fwRegs, ...projRegs])];
+      const mergedDeps = [...fwDeps, ...extraDeps];
+      console.log(JSON.stringify({ registries: mergedRegs, dependencies: mergedDeps }));
     } catch(e) { console.log(JSON.stringify({ registries: [], dependencies: [] })); }
   " 2>/dev/null || echo '{"registries":[],"dependencies":[]}')
 
@@ -330,14 +342,14 @@ install_plugins_from_project() {
 
   echo "  ✓ $total plugins configured ($plugin_count installed)"
 
-  # Persist resolved plugins back to project.json (so next run doesn't need framework fallback)
+  # Persist resolved plugins back to project.json (always overwrite — framework is source of truth)
   PROJ_PJ="$project_dir/project.json" RESOLVED="$plugin_data" node -e "
     const fs = require('fs');
     const pj = JSON.parse(fs.readFileSync(process.env.PROJ_PJ, 'utf-8'));
     const resolved = JSON.parse(process.env.RESOLVED);
     if (!pj.plugins) pj.plugins = {};
-    if (!pj.plugins.registries?.length && resolved.registries.length) pj.plugins.registries = resolved.registries;
-    if (!pj.plugins.dependencies?.length && resolved.dependencies.length) pj.plugins.dependencies = resolved.dependencies;
+    pj.plugins.registries = resolved.registries;
+    pj.plugins.dependencies = resolved.dependencies;
     fs.writeFileSync(process.env.PROJ_PJ, JSON.stringify(pj, null, 2) + '\n');
   " 2>/dev/null || true
 
