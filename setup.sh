@@ -103,6 +103,50 @@ write_framework_version_to_project_json() {
 }
 
 
+# --- Deep-merge missing fields from template into project.json ---
+# Adds fields that exist in the template but not in the project.
+# Never overwrites existing values. Handles nested objects (1 level deep).
+deep_merge_project_json() {
+  local project_pj="$1"
+  local template_pj="$2"
+  [ -f "$project_pj" ] || return 0
+  [ -f "$template_pj" ] || return 0
+
+  local result node_err
+  node_err=$(mktemp)
+  result=$(PROJ_PJ="$project_pj" TMPL_PJ="$template_pj" node -e "
+    const fs = require('fs');
+    const proj = JSON.parse(fs.readFileSync(process.env.PROJ_PJ, 'utf-8'));
+    const tmpl = JSON.parse(fs.readFileSync(process.env.TMPL_PJ, 'utf-8'));
+    let added = 0;
+    for (const key of Object.keys(tmpl)) {
+      if (proj[key] === undefined) {
+        proj[key] = tmpl[key];
+        added++;
+      } else if (
+        typeof tmpl[key] === 'object' && tmpl[key] !== null && !Array.isArray(tmpl[key]) &&
+        typeof proj[key] === 'object' && proj[key] !== null && !Array.isArray(proj[key])
+      ) {
+        for (const subkey of Object.keys(tmpl[key])) {
+          if (proj[key][subkey] === undefined) {
+            proj[key][subkey] = tmpl[key][subkey];
+            added++;
+          }
+        }
+      }
+    }
+    if (added > 0) {
+      fs.writeFileSync(process.env.PROJ_PJ, JSON.stringify(proj, null, 2) + '\n');
+    }
+    console.log(added);
+  " 2>"$node_err" || { echo "  ! project.json merge failed: $(cat "$node_err")" >&2; rm -f "$node_err"; return 1; })
+  rm -f "$node_err"
+
+  if [ "$result" -gt 0 ] 2>/dev/null; then
+    echo "  ✓ project.json: $result missing fields added from template"
+  fi
+}
+
 # --- Helper: print Just Ship ASCII banner in blue ---
 print_banner() {
   local blue='\033[1;34m'
@@ -786,6 +830,9 @@ if [ "$MODE" = "update" ]; then
     fi
   fi
 
+  # --- Deep-merge missing fields into project.json ---
+  deep_merge_project_json "$PROJECT_DIR/project.json" "$FRAMEWORK_DIR/templates/project.json"
+
   # --- Install plugins from project.json ---
   install_plugins_from_project "$PROJECT_DIR"
 
@@ -796,7 +843,6 @@ if [ "$MODE" = "update" ]; then
   echo ""
   echo "Untouched:"
   echo "  ~ CLAUDE.md"
-  echo "  ~ project.json"
   echo "  ~ .claude/skills/*"
 
   echo ""
@@ -957,52 +1003,24 @@ if [ "$OVERWRITE_CONFIG" != "N" ]; then
 CONFIG_EOF
   echo "  ✓ project.json"
 else
-  # project.json already exists — migrate missing fields from template
-  MIGRATED=$(PJ_PATH="$PROJECT_DIR/project.json" TPL_PATH="$FRAMEWORK_DIR/templates/project.json" node -e "
-    const fs = require('fs');
-    const existing = JSON.parse(fs.readFileSync(process.env.PJ_PATH, 'utf-8'));
-    const template = JSON.parse(fs.readFileSync(process.env.TPL_PATH, 'utf-8'));
-    let changed = false;
-    for (const [key, val] of Object.entries(template)) {
-      if (!(key in existing)) {
-        existing[key] = val;
-        changed = true;
-      } else if (typeof val === 'object' && val !== null && !Array.isArray(val) && typeof existing[key] === 'object') {
-        for (const [subKey, subVal] of Object.entries(val)) {
-          if (!(subKey in existing[key])) {
-            existing[key][subKey] = subVal;
-            changed = true;
-          }
-        }
-      }
-    }
-    if (changed) {
-      fs.writeFileSync(process.env.PJ_PATH, JSON.stringify(existing, null, 2) + '\n');
-      process.stdout.write('yes');
-    } else {
-      process.stdout.write('no');
-    }
-  " 2>/dev/null || echo "no")
-  if [ "$MIGRATED" = "yes" ]; then
-    echo "  ✓ project.json migrated (missing fields added)"
-  else
-    echo "  ~ project.json (skipped)"
-  fi
+  # project.json already exists — deep-merge missing fields from template
+  deep_merge_project_json "$PROJECT_DIR/project.json" "$FRAMEWORK_DIR/templates/project.json"
+fi
 
-  INSTALL_MODE_RESULT=$(JS_PJ="$PROJECT_DIR/project.json" node -e "
-    const fs = require('fs');
-    const pj = JSON.parse(fs.readFileSync(process.env.JS_PJ, 'utf-8'));
-    if (!pj.mode) {
-      pj.mode = 'standalone';
-      fs.writeFileSync(process.env.JS_PJ, JSON.stringify(pj, null, 2) + '\n');
-      process.stdout.write('set');
-    } else {
-      process.stdout.write('exists');
-    }
-  " 2>/dev/null || echo "")
-  if [ "$INSTALL_MODE_RESULT" = "set" ]; then
-    echo "  ✓ project.json mode set (standalone)"
-  fi
+# Ensure mode field exists (both fresh install and existing project)
+INSTALL_MODE_RESULT=$(JS_PJ="$PROJECT_DIR/project.json" node -e "
+  const fs = require('fs');
+  const pj = JSON.parse(fs.readFileSync(process.env.JS_PJ, 'utf-8'));
+  if (!pj.mode) {
+    pj.mode = 'standalone';
+    fs.writeFileSync(process.env.JS_PJ, JSON.stringify(pj, null, 2) + '\n');
+    process.stdout.write('set');
+  } else {
+    process.stdout.write('exists');
+  }
+" 2>/dev/null || echo "")
+if [ "$INSTALL_MODE_RESULT" = "set" ]; then
+  echo "  ✓ project.json mode set (standalone)"
 fi
 
 # --- Generate settings.json (standalone version with local hook paths) ---
