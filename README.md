@@ -127,6 +127,7 @@ Sensitive values are stored in your system keychain. Non-sensitive config goes t
 | `/spike-review` | Review completed spike, summarize findings, create follow-up tickets. Supports `--auto` | Both |
 | `/just-ship-review` | Checkout branch, install deps, build, start dev server for local testing | No |
 | `/recover` | Recover stuck pipeline ticket — resume from partial work or restart clean. Supports `/recover T-{N}` | Yes |
+| `/just-ship-audit` | Discover `category: audit` skills, dispatch parallel agents, consolidated report. Supports `--diff` and `--skills` | No |
 | `/just-ship-status` | Show all branches, PRs, board status, worktrees, and cleanup recommendations | -- |
 | `/init` | Auto-detect stack, create `project.json` (CLAUDE.md handled by `setup.sh`) | Yes |
 | `/setup-just-ship` | Full setup: stack detection + Board connection + Sidekick install | Interactive |
