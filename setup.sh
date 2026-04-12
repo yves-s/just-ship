@@ -252,16 +252,20 @@ ensure_gitignore() {
 }
 
 # --- Helper: install plugins from project.json plugins.dependencies ---
+# Reads plugins from the project's project.json. If the project has no plugins
+# configured, falls back to the framework's project.json (default plugins).
 install_plugins_from_project() {
   local project_dir="$1"
   [ -f "$project_dir/project.json" ] || return 0
 
   if ! command -v claude &>/dev/null; then
     local has_deps
-    has_deps=$(PJ_PATH="$project_dir/project.json" node -e "
+    has_deps=$(PROJ_PJ="$project_dir/project.json" FW_PJ="$FRAMEWORK_DIR/project.json" node -e "
       try {
-        const pj = JSON.parse(require('fs').readFileSync(process.env.PJ_PATH, 'utf-8'));
-        if ((pj.plugins?.dependencies || []).length > 0) process.stdout.write('yes');
+        const proj = JSON.parse(require('fs').readFileSync(process.env.PROJ_PJ, 'utf-8'));
+        const fw = require('fs').existsSync(process.env.FW_PJ) ? JSON.parse(require('fs').readFileSync(process.env.FW_PJ, 'utf-8')) : {};
+        const deps = (proj.plugins?.dependencies?.length ? proj.plugins.dependencies : fw.plugins?.dependencies) || [];
+        if (deps.length > 0) process.stdout.write('yes');
       } catch(e) {}
     " 2>/dev/null || true)
     if [ "$has_deps" = "yes" ]; then
@@ -270,20 +274,22 @@ install_plugins_from_project() {
     return 0
   fi
 
+  # Read from project, fall back to framework defaults if project has none
   local registries dependencies
-  registries=$(PJ_PATH="$project_dir/project.json" node -e "
+  local plugin_data
+  plugin_data=$(PROJ_PJ="$project_dir/project.json" FW_PJ="$FRAMEWORK_DIR/project.json" node -e "
     try {
-      const pj = JSON.parse(require('fs').readFileSync(process.env.PJ_PATH, 'utf-8'));
-      process.stdout.write((pj.plugins?.registries || []).join('\n'));
-    } catch(e) {}
-  " 2>/dev/null || true)
+      const fs = require('fs');
+      const proj = JSON.parse(fs.readFileSync(process.env.PROJ_PJ, 'utf-8'));
+      const fw = fs.existsSync(process.env.FW_PJ) ? JSON.parse(fs.readFileSync(process.env.FW_PJ, 'utf-8')) : {};
+      const regs = (proj.plugins?.registries?.length ? proj.plugins.registries : fw.plugins?.registries) || [];
+      const deps = (proj.plugins?.dependencies?.length ? proj.plugins.dependencies : fw.plugins?.dependencies) || [];
+      console.log(JSON.stringify({ registries: regs, dependencies: deps }));
+    } catch(e) { console.log(JSON.stringify({ registries: [], dependencies: [] })); }
+  " 2>/dev/null || echo '{"registries":[],"dependencies":[]}')
 
-  dependencies=$(PJ_PATH="$project_dir/project.json" node -e "
-    try {
-      const pj = JSON.parse(require('fs').readFileSync(process.env.PJ_PATH, 'utf-8'));
-      process.stdout.write((pj.plugins?.dependencies || []).join('\n'));
-    } catch(e) {}
-  " 2>/dev/null || true)
+  registries=$(echo "$plugin_data" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));process.stdout.write(d.registries.join('\n'))" 2>/dev/null || true)
+  dependencies=$(echo "$plugin_data" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));process.stdout.write(d.dependencies.join('\n'))" 2>/dev/null || true)
 
   [ -n "$dependencies" ] || return 0
 
@@ -319,6 +325,17 @@ install_plugins_from_project() {
   done <<< "$dependencies"
 
   echo "  ✓ $total plugins configured ($plugin_count installed)"
+
+  # Persist resolved plugins back to project.json (so next run doesn't need framework fallback)
+  PROJ_PJ="$project_dir/project.json" RESOLVED="$plugin_data" node -e "
+    const fs = require('fs');
+    const pj = JSON.parse(fs.readFileSync(process.env.PROJ_PJ, 'utf-8'));
+    const resolved = JSON.parse(process.env.RESOLVED);
+    if (!pj.plugins) pj.plugins = {};
+    if (!pj.plugins.registries?.length && resolved.registries.length) pj.plugins.registries = resolved.registries;
+    if (!pj.plugins.dependencies?.length && resolved.dependencies.length) pj.plugins.dependencies = resolved.dependencies;
+    fs.writeFileSync(process.env.PROJ_PJ, JSON.stringify(pj, null, 2) + '\n');
+  " 2>/dev/null || true
 
   # Copy SKILL.md files from plugin cache into project's .claude/skills/
   # This is the "npm install → node_modules/" step — plugins are in the cache,
