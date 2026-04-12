@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Removed
+- **Project-specific Supabase IDs from framework** (T-831): Removed `.claude/rules/supabase-db-routing.md` which contained hardcoded Aime database IDs and was copied to every installed project via `setup.sh`. Cleared `supabase.project_id` in `project.json`. Deleted obsolete `tmp/ticket-workflow-supabase.md` migration doc.
+
 ### Added
 - **`/just-ship-audit` command**: Parallel audit command that discovers `category: audit` skills via frontmatter, dispatches one agent per skill in parallel, and produces a consolidated severity-sorted report. Supports `--diff` (branch diff only) and `--skills` (filter by name) flags. Output: terminal summary + full report in `docs/audit/`.
 - **Audit frontmatter fields for skills**: Skills can now declare `category: audit` and `audit_scope: full|diff|both` in their YAML frontmatter to be discoverable by the audit command. Six plugin skills tagged: security-review, find-bugs, code-review, gha-security-review, differential-review, insecure-defaults.
