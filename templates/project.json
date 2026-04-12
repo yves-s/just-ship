@@ -50,6 +50,10 @@
     "commit_format": "conventional",
     "language": "de"
   },
+  "plugins": {
+    "registries": [],
+    "dependencies": []
+  },
   "quality_gates": {
     "enabled": true,
     "format": true,

@@ -52,6 +52,17 @@
     "commit_format": "conventional",
     "language": "de"
   },
+  "plugins": {
+    "registries": [
+      "getsentry/skills",
+      "trailofbits/skills"
+    ],
+    "dependencies": [
+      "sentry-skills@sentry-skills",
+      "differential-review@trailofbits",
+      "insecure-defaults@trailofbits"
+    ]
+  },
   "quality_gates": {
     "enabled": true,
     "format": true,
