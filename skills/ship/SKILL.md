@@ -145,15 +145,34 @@ fi
 
 SOFORT WEITER ZU SCHRITT 3b.
 
-### 3b. Preview URL (Vercel)
+### 3b. Preview URL (Vercel, Shopify oder Coolify)
 
-**Nur ausführen wenn `hosting.provider` gesetzt ist.** Das Script prüft selbst ob Vercel als Hosting-Provider konfiguriert ist und exitet graceful wenn nicht. Bei nicht gesetztem `hosting`-Feld wird dieser gesamte Schritt übersprungen — kein API-Call, kein Warten.
+**Nur ausführen wenn `hosting.provider` gesetzt ist.** Die Scripts prüfen selbst ob ein Hosting-Provider konfiguriert ist und exiten graceful wenn nicht. Bei nicht gesetztem `hosting`-Feld wird dieser gesamte Schritt übersprungen — kein API-Call, kein Warten.
 
-**WICHTIG:** Die Preview-URL MUSS eine Vercel-Deployment-URL sein (z.B. `https://<project>-<hash>.vercel.app`). NIEMALS einen GitHub-Link, PR-URL oder Repository-URL als `preview_url` setzen. Das `preview_url`-Feld ist ausschließlich für die live deployete Vorschau.
+**WICHTIG:** Die Preview-URL MUSS eine Deployment-URL sein (z.B. `https://<project>-<hash>.vercel.app`, `https://<store>.myshopify.com/?preview_theme_id=...` oder `https://<app>.coolify-domain.tld`). NIEMALS einen GitHub-Link, PR-URL oder Repository-URL als `preview_url` setzen. Das `preview_url`-Feld ist ausschließlich für die live deployete Vorschau.
 
 ```bash
-# get-preview-url.sh checks hosting.provider internally and exits if not "vercel"
-PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)
+# Read hosting provider from project.json (supports object and legacy string format)
+HOSTING_PROVIDER=$(node -e "
+  const c = require('./project.json');
+  const h = c.hosting;
+  if (typeof h === 'object' && h !== null) {
+    process.stdout.write(h.provider || '');
+  } else if (typeof h === 'string') {
+    process.stdout.write(h);
+  }
+")
+
+if [ "$HOSTING_PROVIDER" = "shopify" ]; then
+  PREVIEW_URL=$(bash .claude/scripts/shopify-dev.sh start "T-${TICKET_NUMBER}" "${TITLE}")
+elif [ "$HOSTING_PROVIDER" = "vercel" ]; then
+  PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)
+elif [ "$HOSTING_PROVIDER" = "coolify" ]; then
+  PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 60)
+else
+  # No hosting provider configured — skip preview URL entirely
+  PREVIEW_URL=""
+fi
 ```
 
 Falls eine URL gefunden wurde (`$PREVIEW_URL` nicht leer):

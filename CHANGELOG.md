@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Fixed
+- **Coolify preview URL end-to-end** — `implement.md` and `ship.md` (all 6 copies across `commands/`, `skills/`, `.claude/skills/`) now support Coolify and Shopify as hosting providers instead of hardcoding Vercel-only. Removed 15s deploy-poll cap in `coolify-preview.ts` that prevented the VPS pipeline from waiting long enough for Coolify deployments to finish (now uses the full `coolifyMaxWaitMs` config value, default 5 minutes).
+
 ### Changed
 - **Connect-flow: project-local credentials** — `just-ship connect` now writes API key to `.env.local` (gitignored, `chmod 600`) instead of global `~/.just-ship/config.json`. `board-api.sh` reads `.env.local` as Tier 2 in its 4-tier credential fallback chain. `/connect-board` in Claude Code becomes a status-check only — tokens are redirected to `just-ship connect` in the terminal. `setup.sh` ensures `.env.local` is in `.gitignore`.
 - **Server-side token redemption** — Encrypted `jsp_` tokens are now redeemed via Board API (`/api/connect/redeem`) when no local decryption key is available. Eliminates the need for `JSP_ENCRYPTION_KEY` on developer machines. Fallback chain: plain base64 → local AES-256-GCM → Board API redemption.
