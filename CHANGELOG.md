@@ -8,6 +8,10 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Changed
+- **Connect-flow: project-local credentials** — `just-ship connect` now writes API key to `.env.local` (gitignored, `chmod 600`) instead of global `~/.just-ship/config.json`. `board-api.sh` reads `.env.local` as Tier 2 in its 4-tier credential fallback chain. `/connect-board` in Claude Code becomes a status-check only — tokens are redirected to `just-ship connect` in the terminal. `setup.sh` ensures `.env.local` is in `.gitignore`.
+- **Server-side token redemption** — Encrypted `jsp_` tokens are now redeemed via Board API (`/api/connect/redeem`) when no local decryption key is available. Eliminates the need for `JSP_ENCRYPTION_KEY` on developer machines. Fallback chain: plain base64 → local AES-256-GCM → Board API redemption.
+
 ### Removed
 - **Project-specific Supabase IDs from framework** (T-831): Removed `.claude/rules/supabase-db-routing.md` which contained hardcoded Aime database IDs and was copied to every installed project via `setup.sh`. Cleared `supabase.project_id` in `project.json`. Deleted obsolete `tmp/ticket-workflow-supabase.md` migration doc.
 
