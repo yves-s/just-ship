@@ -143,6 +143,7 @@ just-ship/                         # Framework repository
 |   +-- backend.md                 # Backend patterns
 |   +-- data-engineer.md           # Database patterns
 |   +-- webapp-testing.md          # Testing strategy (pyramid, frameworks, mocking) + Playwright
+|   +-- plugin-security-gate/      # Plugin security scanning (prompt injection, supply chain)
 +-- pipeline/                      # SDK pipeline runner (TypeScript)
 |   +-- run.ts                     # Single execution (CLI or imported by worker)
 |   +-- run.sh                     # Bash wrapper for run.ts
@@ -389,6 +390,7 @@ Shipped with the framework and updated via `setup.sh --update`:
 | **backend** | Backend patterns and API design |
 | **data-engineer** | Database migration and RLS patterns |
 | **webapp-testing** | Testing strategy (test pyramid, framework selection, mocking) + Playwright visual testing |
+| **plugin-security-gate** | Scans third-party plugins for prompt injection, credential harvesting, and supply chain risks |
 
 ### Superpowers Plugin
 
@@ -1100,11 +1102,12 @@ claude
 2. Copies agents, commands, skills, scripts, hooks to `.claude/`.
 3. Copies pipeline runner to `.pipeline/`.
 4. Installs pipeline dependencies (`npm install`).
-5. Installs the superpowers plugin.
-6. Generates `project.json` (interactive prompts for project name and description).
-7. Generates `CLAUDE.md` from template.
-8. Generates `settings.json` with permissions and hook configuration.
-9. Writes version marker to `.claude/.pipeline-version`.
+5. Installs plugins from `project.json` (registries + dependencies).
+6. Runs plugin security gate (`scripts/scan-plugin-security.sh`) — blocks installation on critical findings (prompt injection, credential harvesting, persistence).
+7. Generates `project.json` (interactive prompts for project name and description).
+8. Generates `CLAUDE.md` from template.
+9. Generates `settings.json` with permissions and hook configuration.
+10. Writes version marker to `.claude/.pipeline-version`.
 
 ### Updating
 

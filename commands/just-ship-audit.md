@@ -17,11 +17,13 @@ Keine Pipeline-Verbindung noetig. Der Command funktioniert standalone in jedem P
 /just-ship-audit                                    # Full Audit, alle discovered Skills
 /just-ship-audit --diff                             # Nur Branch-Diff gegen main
 /just-ship-audit --skills security-review,find-bugs # Nur bestimmte Skills
+/just-ship-audit --no-filter                        # Alle Findings ohne FP-Filter
 ```
 
 `$ARGUMENTS` wird geparsed:
 - Enthält `--diff` → Diff-Modus (nur `diff` und `both` Skills)
 - Enthält `--skills skill1,skill2` → nur diese Skills ausfuehren
+- Enthält `--no-filter` → FP-Filter deaktiviert, alle Findings werden reported
 - Leer oder ohne Flags → Full-Modus (nur `full` und `both` Skills)
 
 ## Ausfuehrung
@@ -43,6 +45,7 @@ Glob `.claude/skills/*.md` und lese jede Datei. Parse das YAML-Frontmatter.
 | `gha-security-review` | `full` |
 | `differential-review` | `diff` |
 | `insecure-defaults` | `full` |
+| `plugin-security-gate` | `full` |
 
 Falls ein Skill `category: audit` im Frontmatter hat, wird sein `audit_scope` aus dem Frontmatter genommen (Default: `both`). Falls er in der Fallback-Tabelle steht aber KEIN `category: audit` hat, wird der Scope aus der Tabelle genommen.
 
@@ -151,6 +154,53 @@ Nachdem alle Agents fertig sind:
 3. **Sortieren:** Critical → High → Medium → Low. Innerhalb einer Severity-Stufe nach Location sortieren.
 
 4. **Zaehlen:** Findings pro Severity-Stufe zaehlen.
+
+### 4a. False-Positive Filter
+
+Nach der Konsolidierung wird jedes Finding gegen eine Exclusion-Tabelle geprueft. Findings die matchen werden als `filtered: true` markiert und erscheinen NICHT im Report, aber werden im Summary als "Filtered" gezaehlt.
+
+**Exclusion Precedents** (basierend auf Anthropic Security Review + Framework-Kontext):
+
+| Regel | Beschreibung | Beispiel |
+|---|---|---|
+| ENV_TRUSTED | Umgebungsvariablen (`process.env.*`, `os.environ.*`, `env.get()`) sind server-kontrolliert, kein Attacker-Input | `const url = process.env.API_URL` ist kein SSRF |
+| UUID_UNGUESSABLE | UUIDs/ULIDs als Identifier sind nicht brute-forceable | `findById(uuid)` ist kein IDOR |
+| FRAMEWORK_ESCAPING | React JSX, Angular Templates, Vue Templates escapen per Default — kein XSS ohne `dangerouslySetInnerHTML` / `v-html` / `[innerHTML]` | `<div>{userInput}</div>` in React ist safe |
+| ORM_PARAMETERIZED | ORM Queries (Prisma, Drizzle, SQLAlchemy, ActiveRecord) parametrisieren per Default | `prisma.user.findMany({ where: { name } })` ist kein SQLi |
+| SHELL_TRUSTED | Shell-Scripts die nicht via HTTP/WebSocket aufgerufen werden, verarbeiten keinen Attacker-Input | `setup.sh` ist kein Command Injection Vector |
+| TEST_FIXTURE | Findings in Test-Dateien (`*.test.*`, `*.spec.*`, `__tests__/`, `test/`, `tests/`) sind keine Production-Vulnerabilities | Hardcoded Token in `auth.test.ts` ist kein Secret Leak |
+| EXAMPLE_FILE | Findings in Example/Template-Dateien (`.example`, `.template`, `.sample`, `templates/`) | Default-Passwort in `env.example` ist expected |
+| DOCS_ONLY | Findings in Dokumentation (`docs/`, `*.md`, `README*`) sind keine Code-Vulnerabilities | SQL-Beispiel in README ist kein SQLi |
+| CONFIG_BUILDTIME | Build-Time Config die zur Deployment-Zeit ersetzt wird (Docker ARG, CI/CD Substitution) | `ARG NODE_ENV=development` in Dockerfile |
+| INTERNAL_API | Endpoints die nur von internen Services aufgerufen werden (Webhook-Handler mit Signature-Verification, localhost-only) | Webhook mit HMAC-Verification ist kein Auth-Bypass |
+| CLIENT_ONLY | Client-seitiger Code braucht keine Server-Auth-Checks | React-Komponente ohne Auth-Check ist kein Auth-Bypass |
+| SKILL_MARKDOWN | Findings in Skill-Definitionen (`.claude/skills/*.md`, `skills/*/SKILL.md`) sind Agent-Instruktionen, kein ausfuehrbarer Code | SQL-Pattern in security-review Skill ist kein SQLi |
+| GENERATED_CODE | Auto-generierte Dateien (Lock-Files, Type-Defs, Build-Output) | `package-lock.json`, `*.d.ts`, `dist/` |
+
+**Anwendung:**
+
+Fuer jedes Finding nach der Deduplizierung:
+1. Pruefe ob die `location` auf eine der Exclusion-Regeln matcht (Dateipfad-basiert: TEST_FIXTURE, EXAMPLE_FILE, DOCS_ONLY, SKILL_MARKDOWN, GENERATED_CODE)
+2. Pruefe ob die `description` auf eine der semantischen Regeln matcht (ENV_TRUSTED, UUID_UNGUESSABLE, FRAMEWORK_ESCAPING, ORM_PARAMETERIZED, SHELL_TRUSTED, CONFIG_BUILDTIME, INTERNAL_API, CLIENT_ONLY)
+3. Falls eine Regel matcht: markiere als `"filtered": true, "filter_reason": "{REGEL_NAME}"` und entferne aus der Report-Liste
+4. Falls keine Regel matcht: Finding bleibt im Report
+
+**Confidence Gate:**
+Zusaetzlich zur Exclusion-Tabelle wird der Confidence-Level geprueft:
+- `confidence: "high"` → bleibt im Report
+- `confidence: "medium"` → bleibt im Report, aber nur in Severity `critical` oder `high`. Medium-Confidence Findings mit Severity `medium` oder `low` werden gefiltert mit `filter_reason: "LOW_SIGNAL"` (medium confidence + low severity = zu viel Noise)
+
+**Im Report:**
+Die Summary-Tabelle bekommt eine neue Zeile:
+```
+| Filtered (FP) | {count} |
+```
+
+Am Ende des Reports, nach allen Severity-Sektionen, eine neue Sektion:
+```markdown
+## Filtered (False Positives)
+{count} findings were filtered by the false-positive heuristic. To see all unfiltered findings, run `/just-ship-audit --no-filter`.
+```
 
 ### 5. Report schreiben
 

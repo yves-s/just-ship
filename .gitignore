@@ -65,6 +65,7 @@ scripts/*
 !scripts/sync-template.sh
 !scripts/provision-pipeline.sh
 !scripts/validate-skill-frontmatter.sh
+!scripts/scan-plugin-security.sh
 .worktrees/
 
 # Git worktrees

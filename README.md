@@ -127,7 +127,7 @@ Sensitive values are stored in your system keychain. Non-sensitive config goes t
 | `/spike-review` | Review completed spike, summarize findings, create follow-up tickets. Supports `--auto` | Both |
 | `/just-ship-review` | Checkout branch, install deps, build, start dev server for local testing | No |
 | `/recover` | Recover stuck pipeline ticket — resume from partial work or restart clean. Supports `/recover T-{N}` | Yes |
-| `/just-ship-audit` | Discover `category: audit` skills, dispatch parallel agents, consolidated report. Supports `--diff` and `--skills` | No |
+| `/just-ship-audit` | Discover `category: audit` skills, dispatch parallel agents, FP-filtered consolidated report. Supports `--diff`, `--skills`, `--no-filter` | No |
 | `/just-ship-status` | Show all branches, PRs, board status, worktrees, and cleanup recommendations | -- |
 | `/init` | Auto-detect stack, create `project.json` (CLAUDE.md handled by `setup.sh`) | Yes |
 | `/setup-just-ship` | Full setup: stack detection + Board connection + Sidekick install | Interactive |
@@ -235,6 +235,7 @@ Shipped with the pipeline:
 | **data-engineer** | Database migration and RLS patterns |
 | **sparring** | Strategic discussion partner with automatic domain expert triage |
 | **webapp-testing** | Testing strategy (test pyramid, framework selection, mocking) + Playwright visual testing |
+| **plugin-security-gate** | Scans third-party plugins for prompt injection, credential harvesting, and supply chain risks |
 
 ### Shopify AI Toolkit
 

@@ -487,6 +487,21 @@ install_plugins_from_project() {
 
   if [ "$skill_count" -gt 0 ]; then
     echo "  ✓ $skill_count plugin skills copied to .claude/skills/"
+
+    # Run plugin security gate — scan installed plugin skills for dangerous patterns
+    local scan_script="$FRAMEWORK_DIR/scripts/scan-plugin-security.sh"
+    if [ -f "$scan_script" ]; then
+      if ! bash "$scan_script" "$skills_dir"; then
+        echo ""
+        echo "  ⚠ Plugin security scan found critical issues."
+        echo "  Removing blocked plugin skills..."
+        for stale in "$skills_dir"/plugin--*.md; do
+          [ -f "$stale" ] && rm "$stale"
+        done
+        echo "  Plugin skills removed. Fix the issues and re-run setup.sh."
+        return 1
+      fi
+    fi
   fi
 }
 
