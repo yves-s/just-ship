@@ -144,11 +144,11 @@ export async function waitForCoolifyPreview(
   const fqdn = app.fqdn;
   const appName = app.name;
 
-  // Step 2: Poll deployments API (capped at 15s from NOW, after app fetch completed)
+  // Step 2: Poll deployments API using the configured max wait time.
   // Resetting the timer here ensures the app fetch latency (up to 10s) does not eat
   // into the deployment poll window.
   const pollStart = Date.now();
-  const deployPollMax = Math.min(15_000, config.coolifyMaxWaitMs);
+  const deployPollMax = config.coolifyMaxWaitMs;
 
   while (Date.now() - pollStart < deployPollMax) {
     try {

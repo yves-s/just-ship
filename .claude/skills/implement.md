@@ -240,21 +240,42 @@ EOF
 
 **NICHT mergen.** Der PR bleibt offen bis der User freigibt (via `/ship` oder "passt").
 
-### 9. Vercel Preview URL
+### 9. Preview URL (Vercel, Shopify oder Coolify)
 
-**Immer ausführen** — das Script erkennt automatisch ob ein Vercel-Deployment existiert und returned leer wenn nicht. Kein Config-Gate nötig.
+**Nur ausführen wenn `hosting.provider` gesetzt ist.** Die Scripts prüfen selbst ob ein Hosting-Provider konfiguriert ist und exiten graceful wenn nicht. Bei nicht gesetztem `hosting`-Feld wird dieser gesamte Schritt übersprungen — kein API-Call, kein Warten.
 
-**WICHTIG:** Die Preview-URL MUSS eine Vercel-Deployment-URL sein (z.B. `https://<project>-<hash>.vercel.app`). NIEMALS einen GitHub-Link, PR-URL oder Repository-URL als Preview-URL verwenden.
+**WICHTIG:** Die Preview-URL MUSS eine Deployment-URL sein (z.B. `https://<project>-<hash>.vercel.app`, `https://<store>.myshopify.com/?preview_theme_id=...` oder `https://<app>.coolify-domain.tld`). NIEMALS einen GitHub-Link, PR-URL oder Repository-URL als Preview-URL verwenden.
 
 ```bash
-PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)
+# Read hosting provider from project.json (supports object and legacy string format)
+HOSTING_PROVIDER=$(node -e "
+  const c = require('./project.json');
+  const h = c.hosting;
+  if (typeof h === 'object' && h !== null) {
+    process.stdout.write(h.provider || '');
+  } else if (typeof h === 'string') {
+    process.stdout.write(h);
+  }
+")
+
+if [ "$HOSTING_PROVIDER" = "shopify" ]; then
+  PREVIEW_URL=$(bash .claude/scripts/shopify-dev.sh start "T-${TICKET_NUMBER}" "${TITLE}")
+elif [ "$HOSTING_PROVIDER" = "vercel" ]; then
+  PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 30)
+elif [ "$HOSTING_PROVIDER" = "coolify" ]; then
+  PREVIEW_URL=$(bash .claude/scripts/get-preview-url.sh 60)
+else
+  # No hosting provider configured — skip preview URL entirely
+  PREVIEW_URL=""
+fi
 ```
 
 Falls eine URL gefunden wurde, nur ausgeben:
 - `✓ preview — {PREVIEW_URL}`
-- `✓ preview — kein Vercel-Deployment gefunden, übersprungen` (falls keine URL)
+- `✓ preview — kein Deployment gefunden, übersprungen` (falls Deployment-Script keine URL lieferte)
+- `✓ preview — übersprungen (kein Preview-Deployment konfiguriert)` (falls kein Hosting-Provider gesetzt)
 
-**Kein Fehler wenn keine URL gefunden wird.** Projekte ohne Vercel-Integration überspringen diesen Schritt automatisch.
+**Kein Fehler wenn keine URL gefunden wird.** Die Scripts exiten immer mit Code 0. Projekte ohne Vercel-, Shopify- oder Coolify-Integration überspringen diesen Schritt automatisch.
 
 ### Abschluss-Ausgabe
 
