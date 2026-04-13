@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Added
+- **Audit completeness rule** (T-841): New `.claude/rules/audit-completeness.md` forces all audit agents to include a Pre-Conclusion Audit section listing reviewed files, checked items, and unverified areas. Prevents false negatives from agent hallucination.
+
 ### Fixed
 - **Coolify preview URL end-to-end** — `implement.md` and `ship.md` (all 6 copies across `commands/`, `skills/`, `.claude/skills/`) now support Coolify and Shopify as hosting providers instead of hardcoding Vercel-only. Removed 15s deploy-poll cap in `coolify-preview.ts` that prevented the VPS pipeline from waiting long enough for Coolify deployments to finish (now uses the full `coolifyMaxWaitMs` config value, default 5 minutes).
 
