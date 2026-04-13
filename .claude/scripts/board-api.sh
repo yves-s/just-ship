@@ -11,10 +11,11 @@
 #   board-api.sh patch tickets/{N} '{"status": "in_progress"}'
 #   board-api.sh post tickets '{"title": "...", "body": "..."}'
 #
-# Credential resolution (3-tier fallback):
+# Credential resolution (4-tier fallback):
 #   Tier 1: PIPELINE_KEY + BOARD_API_URL from environment (Plugin-native)
-#   Tier 2: PIPELINE_KEY from env + board_url from project.json → pipeline.board_url
-#   Tier 3: write-config.sh read-workspace (legacy ~/.just-ship/ fallback)
+#   Tier 2: .env.local in project directory (project-local credentials)
+#   Tier 3: PIPELINE_KEY from env + board_url from project.json → pipeline.board_url
+#   Tier 4: write-config.sh read-workspace (legacy ~/.just-ship/ fallback)
 #
 # Environment variables (auto-resolved if not set):
 #   BOARD_API_URL                      — Board API base URL
@@ -57,7 +58,17 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [ -n "${PIPELINE_KEY:-}" ] && [ -n "${BOARD_API_URL:-}" ]; then
   : # Credentials resolved from environment
 else
-  # Tier 2: Key from env + board_url from project.json
+  # Tier 2: Read from .env.local (project-local credentials)
+  if [ -z "${PIPELINE_KEY:-}" ] || [ -z "${BOARD_API_URL:-}" ]; then
+    if [ -f ".env.local" ]; then
+      local_key=$(grep '^JSP_BOARD_API_KEY=' .env.local 2>/dev/null | cut -d= -f2- || true)
+      local_url=$(grep '^JSP_BOARD_API_URL=' .env.local 2>/dev/null | cut -d= -f2- || true)
+      : "${PIPELINE_KEY:=${local_key:-}}"
+      : "${BOARD_API_URL:=${local_url:-}}"
+    fi
+  fi
+
+  # Tier 3: Key from env + board_url from project.json
   if [ -n "${PIPELINE_KEY:-}" ] && [ -z "${BOARD_API_URL:-}" ]; then
     BOARD_API_URL=$(node -e "
       try { const p = require('./project.json'); process.stdout.write(p.pipeline?.board_url || ''); }
@@ -65,7 +76,7 @@ else
     " 2>/dev/null) || BOARD_API_URL=""
   fi
 
-  # Tier 3: Legacy fallback via write-config.sh
+  # Tier 4: Legacy fallback via write-config.sh
   if [ -z "${PIPELINE_KEY:-}" ] || [ -z "${BOARD_API_URL:-}" ]; then
     WORKSPACE_ID=$(node -e "
       try { const p = require('./project.json'); process.stdout.write(p.pipeline?.workspace_id || ''); }
@@ -92,7 +103,7 @@ else
 
   if [ -z "${BOARD_API_URL:-}" ] || [ -z "${PIPELINE_KEY:-}" ]; then
     exec 2>&3
-    echo '{"error": "incomplete_credentials", "message": "board_url or api_key missing — set PIPELINE_KEY + BOARD_API_URL env vars or configure ~/.just-ship/"}' >&2
+    echo '{"error": "incomplete_credentials", "message": "board_url or api_key missing — set PIPELINE_KEY + BOARD_API_URL env vars, add to .env.local, or configure ~/.just-ship/"}' >&2
     exit 1
   fi
 fi
