@@ -44,8 +44,11 @@ if [ "$HOSTING_PROVIDER" = "coolify" ]; then
     } catch (e) {}
   " 2>/dev/null)
 
-  # Token resolution: env var → VPS file → ~/.just-ship/config.json
+  # Token resolution: env var → .env.local → VPS file → ~/.just-ship/config.json
   COOLIFY_TOKEN="${COOLIFY_API_TOKEN:-}"
+  if [ -z "$COOLIFY_TOKEN" ] && [ -f .env.local ]; then
+    COOLIFY_TOKEN=$(grep '^COOLIFY_API_TOKEN=' .env.local 2>/dev/null | cut -d'=' -f2-)
+  fi
   if [ -z "$COOLIFY_TOKEN" ] && [ -f /root/.coolify-api/token ]; then
     COOLIFY_TOKEN=$(cat /root/.coolify-api/token 2>/dev/null)
   fi
