@@ -768,6 +768,36 @@ if [ "$MODE" = "update" ]; then
     # Still update version marker so it stays in sync (but not in dry-run/check mode)
     if [ "$DRY_RUN" != true ]; then
       echo "$FRAMEWORK_VERSION" > "$VERSION_FILE"
+
+      # Shopify plugin injection runs even when no framework files changed —
+      # the plugin entry may be missing if the project was updated before this feature landed.
+      IS_SHOPIFY_QUICK=$(node -e "
+        try {
+          const c = JSON.parse(require('fs').readFileSync('$PROJECT_DIR/project.json', 'utf-8'));
+          console.log(c.stack?.platform === 'shopify' ? 'yes' : 'no');
+        } catch(e) { console.log('no'); }
+      " 2>/dev/null || echo "no")
+
+      if [ "$IS_SHOPIFY_QUICK" = "yes" ]; then
+        node -e "
+          const fs = require('fs');
+          const pjPath = '$PROJECT_DIR/project.json';
+          try {
+            const pj = JSON.parse(fs.readFileSync(pjPath, 'utf-8'));
+            const reg = 'Shopify/shopify-ai-toolkit';
+            const dep = 'shopify-plugin@shopify-plugin';
+            if (!pj.plugins) pj.plugins = {};
+            if (!Array.isArray(pj.plugins.registries)) pj.plugins.registries = [];
+            if (!Array.isArray(pj.plugins.dependencies)) pj.plugins.dependencies = [];
+            let changed = false;
+            if (!pj.plugins.registries.includes(reg)) { pj.plugins.registries.push(reg); changed = true; }
+            const hasPlugin = pj.plugins.dependencies.some(d => (typeof d === 'string' ? d : d.plugin) === dep);
+            if (!hasPlugin) { pj.plugins.dependencies.push(dep); changed = true; }
+            if (changed) { fs.writeFileSync(pjPath, JSON.stringify(pj, null, 2) + '\n'); console.log('added'); }
+          } catch(e) {}
+        " 2>/dev/null | grep -q 'added' && echo "  ✓ Shopify AI Toolkit added to plugins"
+        install_plugins_from_project "$PROJECT_DIR"
+      fi
     fi
     echo ""
     exit 0
