@@ -769,21 +769,22 @@ if [ "$MODE" = "update" ]; then
     if [ "$DRY_RUN" != true ]; then
       echo "$FRAMEWORK_VERSION" > "$VERSION_FILE"
 
-      # Shopify plugin injection runs even when no framework files changed —
-      # the plugin entry may be missing if the project was updated before this feature landed.
-      IS_SHOPIFY_QUICK=$(node -e "
-        try {
-          const c = JSON.parse(require('fs').readFileSync('$PROJECT_DIR/project.json', 'utf-8'));
-          console.log(c.stack?.platform === 'shopify' ? 'yes' : 'no');
-        } catch(e) { console.log('no'); }
-      " 2>/dev/null || echo "no")
+      # Shopify plugin injection: use detect-shopify.sh (file-based detection),
+      # not stack.platform — the field may be empty on projects installed before auto-detection.
+      QUICK_DETECT=$("$FRAMEWORK_DIR/scripts/detect-shopify.sh" 2>/dev/null || echo '{"detected":false}')
+      QUICK_IS_SHOPIFY=$(echo "$QUICK_DETECT" | node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).detected))" 2>/dev/null || echo "false")
 
-      if [ "$IS_SHOPIFY_QUICK" = "yes" ]; then
+      if [ "$QUICK_IS_SHOPIFY" = "true" ]; then
+        # Also set stack.platform if not already set
         node -e "
           const fs = require('fs');
           const pjPath = '$PROJECT_DIR/project.json';
+          const detected = JSON.parse(process.env.DETECT_JSON);
           try {
             const pj = JSON.parse(fs.readFileSync(pjPath, 'utf-8'));
+            if (!pj.stack) pj.stack = {};
+            if (!pj.stack.platform) pj.stack.platform = 'shopify';
+            if (!pj.stack.variant && detected.variant) pj.stack.variant = detected.variant;
             const reg = 'Shopify/shopify-ai-toolkit';
             const dep = 'shopify-plugin@shopify-plugin';
             if (!pj.plugins) pj.plugins = {};
@@ -795,7 +796,7 @@ if [ "$MODE" = "update" ]; then
             if (!hasPlugin) { pj.plugins.dependencies.push(dep); changed = true; }
             if (changed) { fs.writeFileSync(pjPath, JSON.stringify(pj, null, 2) + '\n'); console.log('added'); }
           } catch(e) {}
-        " 2>/dev/null | grep -q 'added' && echo "  ✓ Shopify AI Toolkit added to plugins"
+        " DETECT_JSON="$QUICK_DETECT" 2>/dev/null | grep -q 'added' && echo "  ✓ Shopify AI Toolkit added to plugins"
         install_plugins_from_project "$PROJECT_DIR"
       fi
     fi
