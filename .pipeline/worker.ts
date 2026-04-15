@@ -334,6 +334,29 @@ async function runWorkerSlot(ticket: Ticket): Promise<void> {
       }
     }
 
+    // Inject Shopify env vars from project metadata
+    if (config.stack.platform === "shopify") {
+      // Fetch shopify_store_url from project data (stored in Board database via Supabase REST)
+      try {
+        const projectData = await supabaseGet<Array<{ shopify_store_url: string | null }>>(
+          `/rest/v1/projects?id=eq.${SUPABASE_PROJECT_ID}&select=shopify_store_url`
+        );
+        const shopifyStoreUrl = projectData?.[0]?.shopify_store_url;
+        if (shopifyStoreUrl) {
+          pipelineEnv = {
+            ...(pipelineEnv ?? {}),
+            SHOPIFY_STORE_URL: shopifyStoreUrl,
+          };
+          log(`Injected SHOPIFY_STORE_URL: ${shopifyStoreUrl}`);
+        } else {
+          log(`WARN: Project is Shopify type but shopify_store_url is not set in database`);
+        }
+      } catch (err) {
+        log(`WARN: Failed to fetch shopify_store_url from project: ${err instanceof Error ? err.message : "unknown"}`);
+      }
+      // SHOPIFY_CLI_THEME_TOKEN comes from local .env on VPS — passed through automatically via process.env.
+    }
+
     log(`Starting pipeline: T-${ticket.number} — ${ticket.title} (slot ${slotId})`);
 
     const result = await withWatchdog(
