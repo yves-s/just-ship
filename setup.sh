@@ -775,16 +775,14 @@ if [ "$MODE" = "update" ]; then
       QUICK_IS_SHOPIFY=$(echo "$QUICK_DETECT" | node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).detected))" 2>/dev/null || echo "false")
 
       if [ "$QUICK_IS_SHOPIFY" = "true" ]; then
-        # Also set stack.platform if not already set
+        # Set stack.platform and inject Shopify AI Toolkit plugin
         node -e "
           const fs = require('fs');
           const pjPath = '$PROJECT_DIR/project.json';
-          const detected = JSON.parse(process.env.DETECT_JSON);
           try {
             const pj = JSON.parse(fs.readFileSync(pjPath, 'utf-8'));
             if (!pj.stack) pj.stack = {};
             if (!pj.stack.platform) pj.stack.platform = 'shopify';
-            if (!pj.stack.variant && detected.variant) pj.stack.variant = detected.variant;
             const reg = 'Shopify/shopify-ai-toolkit';
             const dep = 'shopify-plugin@shopify-plugin';
             if (!pj.plugins) pj.plugins = {};
@@ -796,7 +794,7 @@ if [ "$MODE" = "update" ]; then
             if (!hasPlugin) { pj.plugins.dependencies.push(dep); changed = true; }
             if (changed) { fs.writeFileSync(pjPath, JSON.stringify(pj, null, 2) + '\n'); console.log('added'); }
           } catch(e) {}
-        " DETECT_JSON="$QUICK_DETECT" 2>/dev/null | grep -q 'added' && echo "  ✓ Shopify AI Toolkit added to plugins"
+        " 2>/dev/null | grep -q 'added' && echo "  ✓ Shopify AI Toolkit added to plugins"
         install_plugins_from_project "$PROJECT_DIR"
       fi
     fi
