@@ -784,7 +784,7 @@ if [ "$MODE" = "update" ]; then
             if (!pj.stack) pj.stack = {};
             if (!pj.stack.platform) pj.stack.platform = 'shopify';
             const reg = 'Shopify/shopify-ai-toolkit';
-            const dep = 'shopify-plugin@shopify-plugin';
+            const dep = 'shopify-plugin@shopify-ai-toolkit';
             if (!pj.plugins) pj.plugins = {};
             if (!Array.isArray(pj.plugins.registries)) pj.plugins.registries = [];
             if (!Array.isArray(pj.plugins.dependencies)) pj.plugins.dependencies = [];
@@ -962,7 +962,7 @@ if [ "$MODE" = "update" ]; then
       try {
         const pj = JSON.parse(fs.readFileSync(pjPath, 'utf-8'));
         const reg = 'Shopify/shopify-ai-toolkit';
-        const dep = 'shopify-plugin@shopify-plugin';
+        const dep = 'shopify-plugin@shopify-ai-toolkit';
         if (!pj.plugins) pj.plugins = {};
         if (!Array.isArray(pj.plugins.registries)) pj.plugins.registries = [];
         if (!Array.isArray(pj.plugins.dependencies)) pj.plugins.dependencies = [];
@@ -1459,7 +1459,7 @@ if [ "$SHOPIFY_DETECTED" = "true" ]; then
     try {
       const pj = JSON.parse(fs.readFileSync(pjPath, 'utf-8'));
       const reg = 'Shopify/shopify-ai-toolkit';
-      const dep = 'shopify-plugin@shopify-plugin';
+      const dep = 'shopify-plugin@shopify-ai-toolkit';
       if (!pj.plugins) pj.plugins = {};
       if (!Array.isArray(pj.plugins.registries)) pj.plugins.registries = [];
       if (!Array.isArray(pj.plugins.dependencies)) pj.plugins.dependencies = [];
