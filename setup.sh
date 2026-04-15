@@ -926,6 +926,25 @@ if [ "$MODE" = "update" ]; then
       } catch(e) {}
     " 2>/dev/null
 
+    # Add Shopify AI Toolkit plugin to project.json
+    node -e "
+      const fs = require('fs');
+      const pjPath = '$PROJECT_DIR/project.json';
+      try {
+        const pj = JSON.parse(fs.readFileSync(pjPath, 'utf-8'));
+        const reg = 'Shopify/shopify-ai-toolkit';
+        const dep = 'shopify-plugin@shopify-plugin';
+        if (!pj.plugins) pj.plugins = {};
+        if (!Array.isArray(pj.plugins.registries)) pj.plugins.registries = [];
+        if (!Array.isArray(pj.plugins.dependencies)) pj.plugins.dependencies = [];
+        let changed = false;
+        if (!pj.plugins.registries.includes(reg)) { pj.plugins.registries.push(reg); changed = true; }
+        const hasPlugin = pj.plugins.dependencies.some(d => (typeof d === 'string' ? d : d.plugin) === dep);
+        if (!hasPlugin) { pj.plugins.dependencies.push(dep); changed = true; }
+        if (changed) { fs.writeFileSync(pjPath, JSON.stringify(pj, null, 2) + '\n'); console.log('added'); }
+      } catch(e) {}
+    " 2>/dev/null | grep -q 'added' && echo "  ✓ Shopify AI Toolkit added to plugins"
+
     add_shopify_mcp_server "$PROJECT_DIR/.claude/settings.json"
   fi
 
@@ -1403,6 +1422,25 @@ if [ "$SHOPIFY_DETECTED" = "true" ]; then
     fs.writeFileSync(pjPath, JSON.stringify(pj, null, 2) + '\n');
   " PJ_PATH="$PROJECT_DIR/project.json" DETECT_JSON="$DETECT_RESULT"
   echo "  ✓ project.json updated with Shopify config"
+
+  # Add Shopify AI Toolkit plugin to project.json
+  node -e "
+    const fs = require('fs');
+    const pjPath = '$PROJECT_DIR/project.json';
+    try {
+      const pj = JSON.parse(fs.readFileSync(pjPath, 'utf-8'));
+      const reg = 'Shopify/shopify-ai-toolkit';
+      const dep = 'shopify-plugin@shopify-plugin';
+      if (!pj.plugins) pj.plugins = {};
+      if (!Array.isArray(pj.plugins.registries)) pj.plugins.registries = [];
+      if (!Array.isArray(pj.plugins.dependencies)) pj.plugins.dependencies = [];
+      let changed = false;
+      if (!pj.plugins.registries.includes(reg)) { pj.plugins.registries.push(reg); changed = true; }
+      const hasPlugin = pj.plugins.dependencies.some(d => (typeof d === 'string' ? d : d.plugin) === dep);
+      if (!hasPlugin) { pj.plugins.dependencies.push(dep); changed = true; }
+      if (changed) { fs.writeFileSync(pjPath, JSON.stringify(pj, null, 2) + '\n'); console.log('added'); }
+    } catch(e) {}
+  " 2>/dev/null | grep -q 'added' && echo "  ✓ Shopify AI Toolkit added to plugins"
 
   # Add Shopify AI Toolkit MCP server to .claude/settings.json
   add_shopify_mcp_server "$PROJECT_DIR/.claude/settings.json"

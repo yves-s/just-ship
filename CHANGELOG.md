@@ -9,6 +9,7 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 ## [Unreleased]
 
 ### Added
+- **Shopify AI Toolkit auto-install**: `setup.sh` now automatically adds `shopify-plugin@shopify-plugin` (registry: `Shopify/shopify-ai-toolkit`) to `plugins.dependencies` for Shopify projects (`stack.platform === "shopify"`). Works in both fresh setup and `--update` paths. The existing `install_plugins_from_project()` handles installation.
 - **Audit completeness rule** (T-841): New `.claude/rules/audit-completeness.md` forces all audit agents to include a Pre-Conclusion Audit section listing reviewed files, checked items, and unverified areas. Prevents false negatives from agent hallucination.
 
 ### Fixed
