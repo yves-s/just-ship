@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/logos/lockup-horizontal-dark.svg" alt="Just Ship — From ticket to ship. Autonomously." height="60" />
+  <img src="public/logos/lockup-horizontal-light.svg" alt="Just Ship — From ticket to ship. Autonomously." height="60" />
 </p>
 
 <p align="center">
