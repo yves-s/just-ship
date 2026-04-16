@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/logos/png/social/banner-1280x420.png" alt="Just Ship — From ticket to ship. Autonomously." width="100%" />
+  <img src="public/logos/just-ship-logos-preview.png" alt="Just Ship — From ticket to ship. Autonomously." width="100%" />
 </p>
 
 <p align="center">
@@ -48,39 +48,7 @@ Two modes of operation:
 
 Two ways to install — choose the one that fits your workflow:
 
-### Path A: Plugin (recommended)
-
-Install as a Claude Code plugin via the Just Ship marketplace:
-
-```bash
-# 1. Add the marketplace
-claude plugin marketplace add yves-s/just-ship
-
-# 2. Install the plugin
-claude plugin install just-ship@just-ship
-```
-
-Then configure your project:
-```bash
-cd /path/to/your-project
-claude
-# Inside Claude Code:
-/init
-```
-
-**Update:**
-```bash
-claude plugin update just-ship@just-ship
-```
-
-**For development/testing (load from local directory):**
-```bash
-claude --plugin-dir /path/to/just-ship
-```
-
-This loads the plugin directly from a local checkout instead of the marketplace. Useful for contributing to the framework or testing changes before publishing. The local directory must contain a `.claude-plugin/plugin.json`.
-
-### Path B: CLI (`setup.sh`)
+### Path A: CLI (`setup.sh`) — Recommended
 
 Full installation with CLI wrapper and VPS pipeline support:
 
@@ -103,7 +71,17 @@ just-ship self-update   # pull latest framework
 just-ship update        # apply updates to current project
 ```
 
-### After installation (both paths)
+### Path B: Plugin _(Coming soon)_
+
+Plugin distribution via the Claude Code marketplace is not yet available. For local development and testing, you can load the plugin directly from a checkout:
+
+```bash
+claude --plugin-dir /path/to/just-ship
+```
+
+The local directory must contain a `.claude-plugin/plugin.json`. This is useful for contributing to the framework or testing unreleased changes.
+
+### After installation
 
 Configure your credentials:
 - **Board API Key** — from your [Just Ship Board](https://board.just-ship.io) workspace settings
@@ -111,8 +89,6 @@ Configure your credentials:
 - **Project ID** — your project UUID
 
 Sensitive values are stored in your system keychain. Non-sensitive config goes to `settings.json`.
-
-> **When to use which:** Plugin installation is the simplest way to get started. Use the CLI path if you need the full autonomous VPS pipeline or prefer `just-ship` as a shell command.
 
 ---
 
@@ -414,14 +390,13 @@ Project-specific instructions -- architecture, conventions, domain knowledge. Ge
 - Git + [GitHub CLI](https://cli.github.com/) (`gh`)
 - Node.js >= 18
 
-### Plugin Installation
+### Plugin Installation _(Coming soon)_
+
+Marketplace distribution is not yet available. Use the CLI path below, or load from a local checkout for development:
 
 ```bash
-claude plugin marketplace add yves-s/just-ship
-claude plugin install just-ship@just-ship
+claude --plugin-dir /path/to/just-ship
 ```
-
-Update: `claude plugin update just-ship@just-ship`
 
 ### CLI Installation
 
