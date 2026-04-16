@@ -857,7 +857,25 @@ WICHTIG: Push, PR-Erstellung und Status-Updates werden automatisch von der Pipel
           }
 
           // Patch ticket with preview_url if available from QA phase
-          if (hasPipeline && qaPreviewUrl) {
+          // For Shopify projects: generate preview via shopify-preview.sh
+          let previewUrl = qaPreviewUrl;
+          if (!previewUrl && config.stack?.platform === "shopify") {
+            try {
+              const shopifyResult = execSync(
+                `bash .claude/scripts/shopify-preview.sh push "T-${ticket.ticketId}" "${ticket.title.replace(/"/g, '\\"')}"`,
+                { cwd: workDir, timeout: 120_000, encoding: "utf-8" }
+              );
+              const url = shopifyResult.trim();
+              if (url.startsWith("http")) {
+                previewUrl = url;
+                logger.info({ previewUrl }, "Shopify preview URL generated");
+              }
+            } catch (err) {
+              logger.warn({ err }, "Could not generate Shopify preview URL");
+            }
+          }
+
+          if (hasPipeline && previewUrl) {
             try {
               await fetch(`${config.pipeline.apiUrl}/api/tickets/${ticket.ticketId}`, {
                 method: "PATCH",
@@ -865,10 +883,10 @@ WICHTIG: Push, PR-Erstellung und Status-Updates werden automatisch von der Pipel
                   "Content-Type": "application/json",
                   "X-Pipeline-Key": config.pipeline.apiKey,
                 },
-                body: JSON.stringify({ preview_url: qaPreviewUrl }),
+                body: JSON.stringify({ preview_url: previewUrl }),
                 signal: AbortSignal.timeout(8000),
               });
-              logger.info({ previewUrl: qaPreviewUrl }, "preview_url patched to ticket");
+              logger.info({ previewUrl }, "preview_url patched to ticket");
             } catch {
               // Best-effort: preview_url patch is non-critical
               logger.warn("Could not patch preview_url to ticket");

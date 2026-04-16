@@ -13,6 +13,7 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 - **README installation path**: Removed non-functional Claude Code marketplace plugin commands (`claude plugin marketplace add`, `claude plugin install`). CLI (`setup.sh`) is now the recommended installation path. Plugin section marked as "Coming soon" with local `--plugin-dir` fallback for development.
 
 ### Added
+- **Shopify Board Integration**: Pipeline worker injects `SHOPIFY_STORE_URL` env var from Board project metadata for Shopify-typed projects. Pipeline generates Shopify theme preview URLs via `shopify-preview.sh` and patches them to ticket `preview_url` after completion.
 - **Shopify AI Toolkit auto-install**: `setup.sh` now automatically adds `shopify-plugin@shopify-plugin` (registry: `Shopify/shopify-ai-toolkit`) to `plugins.dependencies` for Shopify projects (`stack.platform === "shopify"`). Works in both fresh setup and `--update` paths. The existing `install_plugins_from_project()` handles installation.
 - **Audit completeness rule** (T-841): New `.claude/rules/audit-completeness.md` forces all audit agents to include a Pre-Conclusion Audit section listing reviewed files, checked items, and unverified areas. Prevents false negatives from agent hallucination.
 
