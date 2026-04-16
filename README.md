@@ -1,9 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="public/logos/lockup-horizontal-light.svg">
-    <source media="(prefers-color-scheme: light)" srcset="public/logos/lockup-horizontal-dark.svg">
-    <img src="public/logos/lockup-horizontal-dark.svg" alt="Just Ship — From ticket to ship. Autonomously." height="60" />
-  </picture>
+  <img src="public/logos/lockup-horizontal-dark.svg" alt="Just Ship — From ticket to ship. Autonomously." height="60" />
 </p>
 
 <p align="center">
