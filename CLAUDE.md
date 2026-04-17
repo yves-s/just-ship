@@ -113,9 +113,9 @@ Skills are your domain expertise. They are loaded BEFORE every task, not on requ
 | Skill | Rolle |
 |---|---|
 | `product-cto` | CTO |
+| `design-lead` | Design Lead |
 | `frontend-design` | Frontend Dev |
 | `creative-design` | Creative Director |
-| `design` | Design Lead |
 | `backend` | Backend Dev |
 | `data-engineer` | Data Engineer |
 | `webapp-testing` / `test-driven-development` | Testing Engineer |
@@ -131,7 +131,7 @@ Example: Loading `product-cto` → output: `⚡ CTO joined`
 **Priority order:**
 1. Decision Authority (this section) — always, on every task
 2. Domain skill for the task (backend, frontend-design, data-engineer, etc.)
-3. Cross-cutting skills (autonomy-boundary, product-cto) for features that span domains
+3. Cross-cutting skills (autonomy-boundary, product-cto, design-lead) for features that span domains — `product-cto` for architecture/ops/security; `design-lead` for product-structure/interaction-philosophy/cross-feature consistency. The two are peers.
 
 **When a technical question arises:** Do not ask the user. Load the relevant skill. The skill contains the expert answer.
 
@@ -181,11 +181,16 @@ Der Orchestrator aktiviert die richtigen Skills automatisch:
 
 | Ticket-Typ | Skills die geladen werden |
 |---|---|
-| UI/Frontend | `design.md` + `frontend-design.md` |
-| Neue Seite/Feature | `creative-design.md` + `ux-planning.md` |
+| UI/Frontend | `frontend-design.md` |
+| Neue Seite/Feature | `design-lead.md` (frame first) + `ux-planning.md` + `creative-design.md` (bei Greenfield) |
+| Produkt-Struktur / Interaction-Philosophie / Design-System-Richtung | `design-lead.md` |
+| Cross-Feature-Konsistenz-Review | `design-lead.md` |
+| Architektur / Performance / Ops / Security-Strategie | `product-cto.md` |
 | API/Backend | `backend.md` |
 | Datenbank | `data-engineer.md` |
 | Testing | `webapp-testing.md` + `test-driven-development.md` → QA Agent (Testing Engineer) |
+
+**Peer-Regel:** `design-lead` und `product-cto` sind gleichberechtigt. Bei Cross-Cutting-Entscheidungen (Technik + UX) laufen beide. Bei reinen Design-/Produkt-Struktur-Fragen entscheidet `design-lead` allein. Bei reinen Architektur-/Ops-Fragen entscheidet `product-cto` allein.
 
 ### Was du als PM tust
 

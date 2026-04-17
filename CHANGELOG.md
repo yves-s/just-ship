@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Added
+- **Design Lead skill** (T-872): New `skills/design-lead/SKILL.md` establishes a strategic Design/Product-UX authority as a peer to `product-cto`. Owns product-structure, interaction-philosophy, design-system-direction, and cross-feature-consistency decisions — one level above the existing executor skills (`creative-design`, `frontend-design`, `ux-planning`). Output format mirrors `product-cto` (TL;DR / Principle / Decision / Implications / Follow-up for Executors / Watch Out). `CLAUDE.md` and `templates/CLAUDE.md` updated: role mapping adds `design-lead | Design Lead` (removes stale `design` entry), Priority order and Routing-Regeln route strategic design/product-structure work to `design-lead`, and a peer-rule clarifies when `design-lead` and `product-cto` run alone vs. together.
+
 ### Changed
 - **Decision Authority rule sharpened** (T-871): `CLAUDE.md` and `.claude/rules/decision-authority-enforcement.md` now frame the boundary around "implementation" (including design, UX, interaction, IA, product structure) instead of just "technical" questions. Added an 8-row Litmus-Test table (CEO vs. Executor), a positive 5-step flow for resolving uncertainty (name domain → load skill → apply principle → state decision → continue), and Design/UX anti-pattern examples. Escalation is now explicitly reserved for decisions that change *what product exists*, not *how it is built*.
 
