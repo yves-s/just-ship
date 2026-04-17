@@ -33,14 +33,17 @@ When the topic arrives, scan it for domain signals and load the matching expert 
 
 ### Signal → Expert Mapping
 
+Strategic signals (cross-feature, product-level, philosophy) load `design-lead` / `product-cto`. Executor signals (one concrete component, page, or flow) load `frontend-design` / `creative-design` / `ux-planning`. When a topic is both, load the strategist *and* the executor — strategy frames, executor fills in.
+
 | Signals in topic | Domain | Skill to read |
 |---|---|---|
-| UI, screens, components, layout, design system, colors, spacing, animation | **Design** | `skills/frontend-design.md` |
-| New product, brand, visual identity, landing page, aesthetics, "how should it look" | **Creative** | `skills/creative-design.md` |
-| User flow, navigation, onboarding, IA, mobile vs desktop, interaction patterns | **UX** | `skills/ux-planning.md` |
-| Architecture, API design, performance, caching, scaling, monitoring, resilience, deployment | **Architecture** | `skills/product-cto.md` |
-| Database, schema, migrations, RLS, queries, data model, normalize vs denormalize | **Data** | `skills/data-engineer.md` |
-| Endpoints, webhooks, business logic, background jobs, integrations, queues | **Backend** | `skills/backend.md` |
+| Product structure, interaction philosophy, design-system direction, cross-feature consistency, "how should this feel across the product", primary unit, navigation shape, sheet-vs-modal-vs-page defaults | **Design Strategy** | `skills/design-lead/SKILL.md` |
+| Architecture, API design, performance, caching, scaling, monitoring, resilience, deployment, ops strategy | **Architecture** | `skills/product-cto/SKILL.md` |
+| UI, screens, components, layout, tokens, colors, spacing, animation (for one concrete surface) | **Design Execution** | `skills/frontend-design/SKILL.md` |
+| New product, brand, visual identity, landing page, aesthetics, "how should it look" (one concrete greenfield surface) | **Creative Execution** | `skills/creative-design/SKILL.md` |
+| User flow, navigation, onboarding, IA, mobile vs desktop, interaction patterns (for one specific feature) | **UX Execution** | `skills/ux-planning/SKILL.md` |
+| Database, schema, migrations, RLS, queries, data model, normalize vs denormalize | **Data** | `skills/data-engineer/SKILL.md` |
+| Endpoints, webhooks, business logic, background jobs, integrations, queues | **Backend** | `skills/backend/SKILL.md` |
 
 ### How to Load
 
@@ -49,15 +52,20 @@ When the topic arrives, scan it for domain signals and load the matching expert 
 3. Announce which experts joined: `Experts am Tisch: CTO, Design Lead, UX Lead` (using the role names from the Skill → Role Mapping in CLAUDE.md).
 4. Apply the loaded expertise throughout the entire discussion.
 
-**Always load at minimum one skill.** If the topic is vague and doesn't clearly map, default to `product-cto.md` — the CTO always has a seat at the table.
+**Always load at minimum one skill.**
+- If the topic is a vague *design- or product-strategy* question ("how should the app feel?", "is this the right structure?", "should we lean more on X pattern across the product?"), default to `design-lead/SKILL.md` — the Design Lead owns product-level UX and structure.
+- If the topic is a vague *technical / architecture* question, default to `product-cto/SKILL.md`.
+- If it's unclear between the two, load both — `design-lead` and `product-cto` are peers and often decide together.
 
 ### Multi-Domain Example
 
 Topic: "Ich will ein Dashboard bauen, bin mir aber unsicher über den Ansatz"
-- "Dashboard" → Design (layout, data density) + UX (information hierarchy, user flows)
-- "Ansatz" → Architecture (data flow, real-time vs polling) + possibly Data (schema)
-- Load: `frontend-design.md`, `ux-planning.md`, `product-cto.md`
-- Announce: `Experts am Tisch: CTO, Frontend Dev, UX Lead`
+- "Dashboard" → product structure and interaction philosophy (cross-feature, strategic) → **Design Lead**
+- "Ansatz" → data flow, real-time vs polling, performance → **CTO**
+- Load: `design-lead/SKILL.md`, `product-cto/SKILL.md`
+- Announce: `Experts am Tisch: Design Lead, CTO`
+
+Executor skills (`frontend-design`, `ux-planning`, `creative-design`) only join when the topic has already narrowed to *one concrete surface* and the strategic framing is settled.
 
 ## Structured Discussion Flow
 
