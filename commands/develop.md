@@ -172,6 +172,10 @@ git fetch origin main
 BRANCH="{abgeleiteter-prefix}/{ticket-nummer}-{kurzbeschreibung}"
 WORKTREE_DIR=".worktrees/T-$TICKET_NUMBER"
 git worktree add "$WORKTREE_DIR" -b "$BRANCH" origin/main
+
+# Symlink .env.local from repo root into worktree (credentials for board-api.sh etc.)
+REPO_ROOT=$(git rev-parse --show-toplevel)
+ln -sf "$REPO_ROOT/.env.local" "$WORKTREE_DIR/.env.local" 2>/dev/null || true
 ```
 
 Danach: **Alle weiteren Schritte (4-11) im Worktree-Verzeichnis ausführen.** Nutze `$WORKTREE_DIR` als Arbeitsverzeichnis für alle Bash-Befehle (`cwd`), Read, Edit, Glob, Grep.
