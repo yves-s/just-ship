@@ -111,6 +111,26 @@ const PORT = Number(process.env.PORT ?? serverConfig?.server.port ?? "3001");
 // --- In-memory running set (idempotency guard) ---
 const runningTickets = new Set<number>();
 
+// --- In-memory ENV input store (for prototype launch flow) ---
+const envInputWaiters = new Map<string, {
+  resolve: (values: Record<string, string>) => void;
+  timeout: ReturnType<typeof setTimeout>;
+}>();
+
+function waitForEnvInputFromBoard(
+  projectId: string,
+  _envKeys: Array<{ key: string; hint?: string }>,
+): Promise<Record<string, string>> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      envInputWaiters.delete(projectId);
+      reject(new Error("ENV input timed out after 30 minutes"));
+    }, 30 * 60 * 1000);
+
+    envInputWaiters.set(projectId, { resolve, timeout });
+  });
+}
+
 // Per-ticket metadata for observability (replaces single pipelineState lock)
 interface RunningTicketInfo {
   ticketNumber: number;
@@ -340,6 +360,89 @@ async function handleLaunch(ticketNumber: number, res: ServerResponse, projectId
       ticket_number: ticketNumber,
       message: "Ticket is already being processed by this server",
     });
+    return;
+  }
+
+  // --- Prototype Launch mode ---
+  const launchType = launchBody?.launch_type as string | undefined;
+  if (launchType === "prototype") {
+    const projectIdForLaunch = launchBody!.project_id as string;
+    const repoUrlForLaunch = launchBody!.repo_url as string;
+    const githubOwner = launchBody!.github_owner as string;
+    const githubRepo = launchBody!.github_repo as string;
+    const githubDefaultBranch = (launchBody!.github_default_branch as string) ?? "main";
+    const githubInstallationId = launchBody!.github_installation_id as number | undefined;
+    const coolifyBaseUrl = launchBody!.coolify_base_url as string;
+    const coolifyServerId = launchBody!.coolify_server_id as string | undefined;
+
+    if (!projectIdForLaunch || !repoUrlForLaunch || !githubOwner || !githubRepo) {
+      sendJson(res, 400, {
+        status: "bad_request",
+        ticket_number: ticketNumber,
+        message: "Prototype launch requires: project_id, repo_url, github_owner, github_repo",
+      });
+      return;
+    }
+
+    // Resolve GitHub token
+    let ghToken: string | undefined;
+    if (githubInstallationId && githubAppConfig) {
+      try {
+        ghToken = await resolveGitHubToken({ installationId: githubInstallationId, appConfig: githubAppConfig }) ?? undefined;
+      } catch (err) {
+        log(`[Launch] Failed to generate installation token: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    if (!ghToken) ghToken = process.env.GH_TOKEN;
+    if (!ghToken) {
+      sendJson(res, 400, {
+        status: "bad_request",
+        ticket_number: ticketNumber,
+        message: "No GitHub token available for cloning",
+      });
+      return;
+    }
+
+    // Reserve in-memory
+    runningTickets.add(ticketNumber);
+
+    // Respond immediately
+    sendJson(res, 202, {
+      status: "queued",
+      ticket_number: ticketNumber,
+      message: "Prototype launch started",
+    });
+
+    // Import and run launch pipeline in background
+    // Dynamic import: launch-pipeline lives in .pipeline/lib/ (outside pipeline/ tsconfig rootDir)
+    // @ts-ignore -- runtime-only dynamic import, resolved by tsx/bun at execution time
+    const launchMod: { executeLaunchPipeline: (opts: Record<string, unknown>) => Promise<{ status: string; previewUrl?: string; prUrl?: string }> } = await import("../.pipeline/lib/launch-pipeline.ts");
+    const { apiUrl, apiKey } = getApiCredentials();
+
+    (async () => {
+      try {
+        const result = await launchMod.executeLaunchPipeline({
+          projectId: projectIdForLaunch,
+          repoUrl: repoUrlForLaunch,
+          githubToken: ghToken!,
+          githubOwner,
+          githubRepo,
+          githubDefaultBranch,
+          coolifyBaseUrl,
+          coolifyServerId,
+          eventConfig: { apiUrl, apiKey, ticketNumber: String(ticketNumber) },
+          waitForEnvInput: (envKeys: Array<{ key: string; hint?: string }>) => waitForEnvInputFromBoard(projectIdForLaunch, envKeys),
+        });
+
+        log(`[Launch] Pipeline finished: ${result.status} -- ${result.previewUrl ?? "no preview"}`);
+      } catch (err) {
+        log(`[Launch] Pipeline crashed: ${err instanceof Error ? err.message : String(err)}`);
+        Sentry.captureException(err);
+      } finally {
+        runningTickets.delete(ticketNumber);
+      }
+    })();
+
     return;
   }
 
@@ -1287,6 +1390,47 @@ async function handleAnswerRoute(req: IncomingMessage, res: ServerResponse): Pro
   })();
 }
 
+async function handleLaunchEnvRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+
+  const projectId = body.project_id as string | undefined;
+  if (!projectId) {
+    sendJson(res, 400, { status: "bad_request", message: "Missing required field: project_id" });
+    return;
+  }
+
+  if (!applyRateLimit(rateLimiters.launch, projectId, "/api/launch/env", res)) return;
+
+  const envVars = body.env_vars as Record<string, string> | undefined;
+  if (!envVars || typeof envVars !== "object" || Array.isArray(envVars)) {
+    sendJson(res, 400, { status: "bad_request", message: "Missing or invalid field: env_vars (must be an object)" });
+    return;
+  }
+
+  // SECURITY: Validate all env_vars values are strings
+  for (const [key, value] of Object.entries(envVars)) {
+    if (typeof key !== "string" || typeof value !== "string") {
+      sendJson(res, 400, { status: "bad_request", message: `Invalid env_vars: all keys and values must be strings (invalid: ${key})` });
+      return;
+    }
+  }
+
+  const waiter = envInputWaiters.get(projectId);
+  if (!waiter) {
+    sendJson(res, 404, { status: "not_found", message: "No pending ENV input for this project" });
+    return;
+  }
+
+  clearTimeout(waiter.timeout);
+  waiter.resolve(envVars);
+  envInputWaiters.delete(projectId);
+
+  sendJson(res, 200, { status: "ok", message: "ENV values received" });
+}
+
 async function handleShipRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (!requirePipelineKey(req, res)) return;
 
@@ -1423,6 +1567,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   if (method === "POST") {
     switch (url) {
       case "/api/launch":      return handleLaunchRoute(req, res);
+      case "/api/launch/env":  return handleLaunchEnvRoute(req, res);
       case "/api/events":      return handleEventsRoute(req, res);
       case "/api/answer":      return handleAnswerRoute(req, res);
       case "/api/ship":        return handleShipRoute(req, res);

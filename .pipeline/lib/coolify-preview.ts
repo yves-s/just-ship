@@ -217,3 +217,214 @@ export async function waitForCoolifyPreview(
   console.error(`[coolify-preview] No PR deployment found -- returning production FQDN`);
   return fqdn;
 }
+
+/**
+ * Create a new application in Coolify for prototype deployment.
+ * Uses the Coolify v4 API to create a public GitHub-based application.
+ */
+export async function createCoolifyApp(opts: {
+  name: string;
+  repoUrl: string;
+  branch: string;
+  buildCommand: string;
+  installCommand: string;
+  startCommand: string;
+  port: number;
+  baseUrl: string;
+  serverId?: string;
+}): Promise<{ uuid: string; fqdn: string }> {
+  const token = process.env.COOLIFY_API_TOKEN;
+  if (!token) throw new Error("COOLIFY_API_TOKEN not set");
+
+  const cleanBaseUrl = opts.baseUrl.replace(/\/$/, "");
+
+  // Step 1: Get available servers if serverId not provided
+  let serverId = opts.serverId;
+  if (!serverId) {
+    const serversRes = await fetch(`${cleanBaseUrl}/api/v1/servers`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!serversRes.ok) throw new Error(`Failed to list servers: HTTP ${serversRes.status}`);
+    const servers = (await serversRes.json()) as Array<{ uuid: string }>;
+    if (servers.length === 0) throw new Error("No servers available in Coolify");
+    serverId = servers[0].uuid;
+  }
+
+  // Step 2: Create the application
+  const safeName = opts.name
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 50);
+
+  const createRes = await fetch(`${cleanBaseUrl}/api/v1/applications/public`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      server_uuid: serverId,
+      project_uuid: undefined,
+      environment_name: "production",
+      git_repository: opts.repoUrl,
+      git_branch: opts.branch,
+      build_pack: "nixpacks",
+      ports_exposes: String(opts.port),
+      name: safeName,
+      build_command: opts.buildCommand,
+      install_command: opts.installCommand,
+      start_command: opts.startCommand,
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (!createRes.ok) {
+    const body = await createRes.text().catch(() => "");
+    throw new Error(`Failed to create Coolify app: HTTP ${createRes.status} — ${body}`);
+  }
+
+  const appData = (await createRes.json()) as { uuid: string; fqdn?: string };
+  const fqdn = appData.fqdn ?? `https://${safeName}.just-ship.app`;
+
+  console.error(`[coolify] App created: ${appData.uuid} (${fqdn})`);
+  return { uuid: appData.uuid, fqdn };
+}
+
+/**
+ * Set environment variables on a Coolify application.
+ */
+export async function setCoolifyEnvVars(
+  appUuid: string,
+  envVars: Record<string, string>,
+  baseUrl: string,
+): Promise<void> {
+  const token = process.env.COOLIFY_API_TOKEN;
+  if (!token) throw new Error("COOLIFY_API_TOKEN not set");
+
+  const cleanBaseUrl = baseUrl.replace(/\/$/, "");
+
+  for (const [key, value] of Object.entries(envVars)) {
+    const res = await fetch(`${cleanBaseUrl}/api/v1/applications/${appUuid}/envs`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        key,
+        value,
+        is_build_time: false,
+        is_preview: false,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!res.ok) {
+      console.error(`[coolify] Failed to set env var ${key}: HTTP ${res.status}`);
+    }
+  }
+
+  console.error(`[coolify] Set ${Object.keys(envVars).length} env vars on ${appUuid}`);
+}
+
+/**
+ * Trigger a deployment (build + start) on a Coolify application.
+ * Returns the deployment UUID.
+ */
+export async function triggerCoolifyBuild(
+  appUuid: string,
+  baseUrl: string,
+): Promise<string> {
+  const token = process.env.COOLIFY_API_TOKEN;
+  if (!token) throw new Error("COOLIFY_API_TOKEN not set");
+
+  const cleanBaseUrl = baseUrl.replace(/\/$/, "");
+
+  const res = await fetch(`${cleanBaseUrl}/api/v1/applications/${appUuid}/restart`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Failed to trigger build: HTTP ${res.status} — ${body}`);
+  }
+
+  const data = (await res.json()) as { deployment_uuid?: string; message?: string };
+  const deploymentUuid = data.deployment_uuid ?? "unknown";
+
+  console.error(`[coolify] Build triggered: ${deploymentUuid}`);
+  return deploymentUuid;
+}
+
+/**
+ * Wait for a specific Coolify deployment to reach "finished" state.
+ * Returns the application FQDN on success, throws on failure or timeout.
+ */
+export async function waitForCoolifyDeployment(
+  appUuid: string,
+  baseUrl: string,
+  timeoutMs = 300_000,
+  pollIntervalMs = 10_000,
+): Promise<string> {
+  const token = process.env.COOLIFY_API_TOKEN;
+  if (!token) throw new Error("COOLIFY_API_TOKEN not set");
+
+  const cleanBaseUrl = baseUrl.replace(/\/$/, "");
+  const startTime = Date.now();
+
+  // Get app FQDN first
+  const appRes = await fetch(`${cleanBaseUrl}/api/v1/applications/${appUuid}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!appRes.ok) throw new Error(`Failed to fetch app details: HTTP ${appRes.status}`);
+  const app = (await appRes.json()) as { fqdn?: string; name?: string };
+  const fqdn = app.fqdn;
+  if (!fqdn) throw new Error("App has no FQDN configured");
+
+  // Poll deployments
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      const deploymentsRes = await fetch(`${cleanBaseUrl}/api/v1/deployments`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        signal: AbortSignal.timeout(10_000),
+      });
+
+      if (deploymentsRes.ok) {
+        const allDeployments = (await deploymentsRes.json()) as CoolifyDeployment[];
+        const appDeployments = allDeployments.filter(d => d.application_name === app.name);
+        const latest = appDeployments[0];
+
+        if (latest) {
+          if (latest.status === "finished") {
+            console.error(`[coolify] Deployment finished: ${fqdn}`);
+            return fqdn;
+          }
+          if (latest.status === "failed" || latest.status === "cancelled") {
+            throw new Error(`Deployment ${latest.status} (uuid: ${latest.deployment_uuid})`);
+          }
+          const elapsed = Math.round((Date.now() - startTime) / 1000);
+          console.error(`[coolify] Deployment status: ${latest.status} (${elapsed}s elapsed)`);
+        }
+      }
+    } catch (err) {
+      if (err instanceof Error && (err.message.includes("failed") || err.message.includes("cancelled"))) {
+        throw err;
+      }
+      console.error(`[coolify] Poll error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    await sleep(pollIntervalMs);
+  }
+
+  throw new Error(`Deployment timed out after ${timeoutMs / 1000}s`);
+}

@@ -186,3 +186,82 @@ export async function postPipelineSummary(
     metadata: { tokens_used: totals.inputTokens + totals.outputTokens },
   });
 }
+
+// --- Launch Pipeline Events ---
+
+export interface LaunchStepInfo {
+  id: string;
+  label: string;
+  status: "pending";
+  parallel?: boolean;
+}
+
+export interface LaunchStackInfo {
+  framework: string | null;
+  database: string | null;
+  styling: string | null;
+  language: string;
+  packageManager: string;
+}
+
+/**
+ * Post analyze_complete event — sent after prototype analysis finishes.
+ * Board uses this to show the detected stack and planned steps in the Progress View.
+ */
+export async function postAnalyzeComplete(
+  config: EventConfig,
+  stack: LaunchStackInfo,
+  steps: LaunchStepInfo[],
+): Promise<void> {
+  await postEvent(config, {
+    event_type: "analyze_complete",
+    agent_type: "launch",
+    metadata: { stack, steps },
+  });
+}
+
+/**
+ * Post step_update event — sent when a launch step starts, completes, or fails.
+ */
+export async function postStepUpdate(
+  config: EventConfig,
+  stepId: string,
+  status: "started" | "completed" | "failed",
+  error?: string,
+): Promise<void> {
+  await postEvent(config, {
+    event_type: "step_update",
+    agent_type: "launch",
+    metadata: { step_id: stepId, status, ...(error ? { error } : {}) },
+  });
+}
+
+/**
+ * Post env_input_required event — sent when the pipeline needs ENV variable values from the user.
+ * Board shows an ENV input form in response.
+ */
+export async function postEnvInputRequired(
+  config: EventConfig,
+  envKeys: Array<{ key: string; hint?: string; defaultValue?: string }>,
+): Promise<void> {
+  await postEvent(config, {
+    event_type: "env_input_required",
+    agent_type: "launch",
+    metadata: { env_keys: envKeys },
+  });
+}
+
+/**
+ * Post launch_complete event — sent when deployment is live with a preview URL.
+ */
+export async function postLaunchComplete(
+  config: EventConfig,
+  previewUrl: string,
+  prUrl?: string,
+): Promise<void> {
+  await postEvent(config, {
+    event_type: "launch_complete",
+    agent_type: "launch",
+    metadata: { preview_url: previewUrl, ...(prUrl ? { pr_url: prUrl } : {}) },
+  });
+}

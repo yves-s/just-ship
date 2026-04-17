@@ -8,6 +8,11 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Added
+- **Prototype to Production Pipeline**: New launch pipeline that analyzes a GitHub repo, detects stack/gaps, and deploys to Just Ship Cloud. Includes prototype analyzer (`prototype-analyzer.ts`), launch orchestration (`launch-pipeline.ts`), Coolify app provisioning (create, env vars, build, deploy), and launch event types for Board Progress View integration.
+- **`/api/launch/env` endpoint**: Accepts environment variable values from the Board UI during a launch pipeline run. Uses in-memory Promise resolution with 30-minute timeout.
+- **`launch_type: "prototype"` in `/api/launch`**: New launch mode that triggers the full prototype-to-production flow instead of the standard ticket-based pipeline.
+
 ### Fixed
 - **README banner image**: Replaced broken `public/logos/png/social/banner-1280x420.png` reference with existing `public/logos/just-ship-logos-preview.png`
 - **README installation path**: Removed non-functional Claude Code marketplace plugin commands (`claude plugin marketplace add`, `claude plugin install`). CLI (`setup.sh`) is now the recommended installation path. Plugin section marked as "Coming soon" with local `--plugin-dir` fallback for development.
