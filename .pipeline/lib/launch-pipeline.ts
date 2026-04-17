@@ -49,8 +49,21 @@ export interface LaunchResult {
  */
 export async function executeLaunchPipeline(opts: LaunchOptions): Promise<LaunchResult> {
   const { eventConfig } = opts;
-  const tempDir = `/tmp/launch-${opts.projectId}-${Date.now()}`;
+
+  // SECURITY: Sanitize projectId to prevent path traversal and command injection
+  const safeProjectId = opts.projectId.replace(/[^a-zA-Z0-9_-]/g, "-");
+  const tempDir = `/tmp/launch-${safeProjectId}-${Date.now()}`;
   const launchBranch = "just-ship/launch";
+
+  // SECURITY: Validate user-supplied values used in shell commands
+  const ownerRepoPattern = /^[a-zA-Z0-9._-]+$/;
+  if (!ownerRepoPattern.test(opts.githubOwner) || !ownerRepoPattern.test(opts.githubRepo)) {
+    return { status: "failed", error: "Invalid github_owner or github_repo — must contain only alphanumeric, dots, hyphens, and underscores" };
+  }
+  const branchPattern = /^[a-zA-Z0-9._/-]+$/;
+  if (!branchPattern.test(opts.githubDefaultBranch)) {
+    return { status: "failed", error: "Invalid github_default_branch — must contain only alphanumeric, dots, hyphens, slashes, and underscores" };
+  }
 
   try {
     // --- Phase 1: Clone ---
@@ -179,9 +192,10 @@ export async function executeLaunchPipeline(opts: LaunchOptions): Promise<Launch
     // --- Phase 7: Create PR ---
     let prUrl: string | undefined;
     try {
+      // SECURITY: Pass GH_TOKEN via env instead of shell interpolation to prevent token leakage via shell metacharacters
       const prOutput = execSync(
-        `GH_TOKEN="${opts.githubToken}" gh pr create --title "feat: make production-ready (Just Ship Launch)" --body "Automated by Just Ship Launch Pipeline" --base "${opts.githubDefaultBranch}" --head "${launchBranch}"`,
-        { cwd: tempDir, encoding: "utf-8", stdio: "pipe", timeout: 30_000 }
+        `gh pr create --title "feat: make production-ready (Just Ship Launch)" --body "Automated by Just Ship Launch Pipeline" --base "${opts.githubDefaultBranch}" --head "${launchBranch}"`,
+        { cwd: tempDir, encoding: "utf-8", stdio: "pipe", timeout: 30_000, env: { ...process.env, GH_TOKEN: opts.githubToken } }
       ).trim();
       prUrl = prOutput;
     } catch (err) {

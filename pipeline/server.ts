@@ -1402,10 +1402,20 @@ async function handleLaunchEnvRoute(req: IncomingMessage, res: ServerResponse): 
     return;
   }
 
+  if (!applyRateLimit(rateLimiters.launch, projectId, "/api/launch/env", res)) return;
+
   const envVars = body.env_vars as Record<string, string> | undefined;
-  if (!envVars || typeof envVars !== "object") {
+  if (!envVars || typeof envVars !== "object" || Array.isArray(envVars)) {
     sendJson(res, 400, { status: "bad_request", message: "Missing or invalid field: env_vars (must be an object)" });
     return;
+  }
+
+  // SECURITY: Validate all env_vars values are strings
+  for (const [key, value] of Object.entries(envVars)) {
+    if (typeof key !== "string" || typeof value !== "string") {
+      sendJson(res, 400, { status: "bad_request", message: `Invalid env_vars: all keys and values must be strings (invalid: ${key})` });
+      return;
+    }
   }
 
   const waiter = envInputWaiters.get(projectId);
