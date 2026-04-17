@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Changed
+- **Decision Authority rule sharpened** (T-871): `CLAUDE.md` and `.claude/rules/decision-authority-enforcement.md` now frame the boundary around "implementation" (including design, UX, interaction, IA, product structure) instead of just "technical" questions. Added an 8-row Litmus-Test table (CEO vs. Executor), a positive 5-step flow for resolving uncertainty (name domain → load skill → apply principle → state decision → continue), and Design/UX anti-pattern examples. Escalation is now explicitly reserved for decisions that change *what product exists*, not *how it is built*.
+
 ### Added
 - **Worktree .env.local symlink** (T-857): Worktrees now automatically get a symlink to the repo root's `.env.local` after creation. Applies to `/develop`, `/implement`, VPS pipeline worker (`worktree-manager.ts`), and `/review` (safety-net for existing worktrees). Eliminates manual `.env.local` copying that was required for `board-api.sh` and other credential-dependent scripts to work in worktrees.
 
