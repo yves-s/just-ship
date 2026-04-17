@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Added
+- **Worktree .env.local symlink** (T-857): Worktrees now automatically get a symlink to the repo root's `.env.local` after creation. Applies to `/develop`, `/implement`, VPS pipeline worker (`worktree-manager.ts`), and `/review` (safety-net for existing worktrees). Eliminates manual `.env.local` copying that was required for `board-api.sh` and other credential-dependent scripts to work in worktrees.
+
 ### Fixed
 - **README banner image**: Replaced broken `public/logos/png/social/banner-1280x420.png` reference with existing `public/logos/just-ship-logos-preview.png`
 - **README installation path**: Removed non-functional Claude Code marketplace plugin commands (`claude plugin marketplace add`, `claude plugin install`). CLI (`setup.sh`) is now the recommended installation path. Plugin section marked as "Coming soon" with local `--plugin-dir` fallback for development.

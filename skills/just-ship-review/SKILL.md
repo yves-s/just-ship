@@ -105,6 +105,14 @@ fi
 
 Falls Worktree vorhanden: **Alle weiteren Schritte im Worktree-Verzeichnis ausfuehren.**
 
+Safety-Net: Falls `.env.local` im Worktree fehlt, Symlink nachholen:
+```bash
+if [ -n "$WORK_DIR" ] && [ ! -e "$WORK_DIR/.env.local" ]; then
+  REPO_ROOT=$(git rev-parse --show-toplevel)
+  ln -sf "$REPO_ROOT/.env.local" "$WORK_DIR/.env.local" 2>/dev/null || true
+fi
+```
+
 #### Kein Worktree — normaler Checkout
 
 ```bash

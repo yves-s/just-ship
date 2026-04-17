@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { existsSync, readdirSync, rmSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, rmSync, readFileSync, symlinkSync, unlinkSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { sanitizeBranchName } from "./sanitize.ts";
 import { logger } from "./logger.ts";
@@ -254,6 +254,18 @@ export class WorktreeManager {
 
     // Create the worktree with a new branch based on origin/main
     this._git(`worktree add "${workDir}" -b "${branchName}" origin/main`);
+
+    // Symlink .env.local from repo root into worktree (credentials for board-api.sh etc.)
+    const envLocalSrc = join(this.projectDir, ".env.local");
+    const envLocalDst = join(workDir, ".env.local");
+    if (existsSync(envLocalSrc)) {
+      try {
+        if (existsSync(envLocalDst)) unlinkSync(envLocalDst);
+        symlinkSync(envLocalSrc, envLocalDst);
+      } catch {
+        // Best-effort — don't block worktree creation
+      }
+    }
 
     const slot: Slot = { slotId, branchName, workDir, status: "active" };
     this.slots.set(slotId, slot);
