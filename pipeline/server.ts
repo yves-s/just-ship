@@ -35,6 +35,11 @@ import {
   ValidationError as SidekickValidationError,
   BoardApiError as SidekickBoardApiError,
 } from "./lib/sidekick-create.ts";
+import {
+  validateConverseRequest,
+  processTurn as processConverseTurn,
+  SessionBusyError as SidekickSessionBusyError,
+} from "./lib/sidekick-converse.ts";
 
 // --- Mode detection ---
 const SERVER_CONFIG_PATH = process.env.SERVER_CONFIG_PATH;
@@ -154,6 +159,9 @@ const rateLimiters = {
   // Lower cap for project creation — larger structural impact than a ticket,
   // and the Sidekick only legitimately calls this once per idea.
   sidekickCreateProject: new RateLimiter({ windowMs: 60_000, maxRequests: 5 }),
+  // Converse is per-project. Each session uses 1-3 calls; 30/min/project keeps
+  // per-user throughput healthy while blocking abusive callers.
+  sidekickConverse: new RateLimiter({ windowMs: 60_000, maxRequests: 30 }),
 };
 
 function recordRun(record: RunRecord) {
@@ -1456,6 +1464,50 @@ async function handleSidekickCreateProjectRoute(req: IncomingMessage, res: Serve
   }
 }
 
+async function handleSidekickConverseRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+
+  const projectIdForRL = (body.project_id as string | undefined) ?? "unknown";
+  if (!applyRateLimit(rateLimiters.sidekickConverse, projectIdForRL, "/api/sidekick/converse", res)) return;
+
+  let validated;
+  try {
+    validated = validateConverseRequest(body);
+  } catch (err) {
+    if (err instanceof SidekickValidationError) {
+      sendJson(res, 400, { status: "bad_request", message: err.message });
+      return;
+    }
+    throw err;
+  }
+
+  const { apiUrl, apiKey } = getApiCredentials();
+  try {
+    const result = await processConverseTurn(validated, { apiUrl, apiKey });
+    const status = result.status === "final" ? 201 : 200;
+    sendJson(res, status, result as unknown as Record<string, unknown>);
+  } catch (err) {
+    if (err instanceof SidekickSessionBusyError) {
+      // A second request raced the first one for the same session_id.
+      // Tell the caller to retry after the in-flight turn resolves.
+      sendJson(res, 409, { status: "session_busy", message: err.message });
+      return;
+    }
+    if (err instanceof SidekickBoardApiError) {
+      const status = err.status && err.status >= 400 && err.status < 500 ? err.status : 502;
+      log(`Sidekick converse failed: ${err.message}`);
+      sendJson(res, status, { status: "upstream_error", message: err.message });
+      return;
+    }
+    log(`Sidekick converse crashed: ${err instanceof Error ? err.message : String(err)}`);
+    Sentry.captureException(err);
+    sendJson(res, 500, { status: "error", message: "Internal server error" });
+  }
+}
+
 async function handleShipRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (!requirePipelineKey(req, res)) return;
 
@@ -1598,6 +1650,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       case "/api/sidekick/create":   return handleSidekickCreateRoute(req, res);
       case "/api/sidekick/update":   return handleSidekickUpdateRoute(req, res);
       case "/api/sidekick/create-project": return handleSidekickCreateProjectRoute(req, res);
+      case "/api/sidekick/converse":       return handleSidekickConverseRoute(req, res);
       case "/api/ship":              return handleShipRoute(req, res);
       case "/api/update":      return handleUpdateRoute(req, res);
       case "/api/drain":       return handleDrainRoute(req, res);
