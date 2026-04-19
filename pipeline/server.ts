@@ -24,6 +24,7 @@ import type { PipelineCheckpoint } from "./lib/checkpoint.ts";
 import { decideResume } from "./lib/resume.ts";
 import { toBranchName, log } from "./lib/utils.ts";
 import { RateLimiter } from "./lib/rate-limiter.ts";
+import { classify, type ProjectContext } from "./lib/sidekick-classifier.ts";
 
 // --- Mode detection ---
 const SERVER_CONFIG_PATH = process.env.SERVER_CONFIG_PATH;
@@ -137,6 +138,7 @@ const rateLimiters = {
   events: new RateLimiter({ windowMs: 60_000, maxRequests: 100 }),
   ship: new RateLimiter({ windowMs: 60_000, maxRequests: 10 }),
   answer: new RateLimiter({ windowMs: 60_000, maxRequests: 30 }),
+  classify: new RateLimiter({ windowMs: 60_000, maxRequests: 30 }),
 };
 
 function recordRun(record: RunRecord) {
@@ -1287,6 +1289,46 @@ async function handleAnswerRoute(req: IncomingMessage, res: ServerResponse): Pro
   })();
 }
 
+async function handleClassifyRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+
+  const projectIdForRL = (body.project_id as string | undefined) ?? "unknown";
+  if (!applyRateLimit(rateLimiters.classify, projectIdForRL, "/api/sidekick/classify", res)) return;
+
+  const text = body.text;
+  if (typeof text !== "string" || !text.trim()) {
+    sendJson(res, 400, { status: "bad_request", message: "Missing or invalid field: text" });
+    return;
+  }
+
+  // project_context is accepted as-is from the caller. The classifier reads all fields
+  // via optional chaining, so non-conforming values (missing fields, wrong types) degrade
+  // silently rather than throwing. No deep validation needed here.
+  const projectContext = body.project_context as ProjectContext | undefined;
+
+  try {
+    const result = await classify({
+      text,
+      projectContext,
+    });
+    sendJson(res, 200, {
+      status: "ok",
+      category: result.category,
+      confidence: result.confidence,
+      reasoning: result.reasoning,
+      fallback_applied: result.fallback_applied,
+    });
+  } catch (err) {
+    // classify() handles SDK errors internally and returns a fallback result.
+    // We only land here on input validation throws (e.g. empty text after trim race).
+    const reason = err instanceof Error ? err.message : "Unknown error";
+    sendJson(res, 400, { status: "bad_request", message: reason });
+  }
+}
+
 async function handleShipRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (!requirePipelineKey(req, res)) return;
 
@@ -1422,10 +1464,11 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   // --- POST routes ---
   if (method === "POST") {
     switch (url) {
-      case "/api/launch":      return handleLaunchRoute(req, res);
-      case "/api/events":      return handleEventsRoute(req, res);
-      case "/api/answer":      return handleAnswerRoute(req, res);
-      case "/api/ship":        return handleShipRoute(req, res);
+      case "/api/launch":            return handleLaunchRoute(req, res);
+      case "/api/events":            return handleEventsRoute(req, res);
+      case "/api/answer":            return handleAnswerRoute(req, res);
+      case "/api/sidekick/classify": return handleClassifyRoute(req, res);
+      case "/api/ship":              return handleShipRoute(req, res);
       case "/api/update":      return handleUpdateRoute(req, res);
       case "/api/drain":       return handleDrainRoute(req, res);
       case "/api/force-drain": return handleForceDrainRoute(req, res);
