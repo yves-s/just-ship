@@ -87,6 +87,26 @@ LIMIT 1;
 
 **Kein Ticket gefunden:** User informieren und stoppen.
 
+### 1.5 Epic-Guardrail
+
+Prüfe `ticket_type` aus dem Ticket-JSON. Epics sind Container — sie werden nicht direkt entwickelt, sondern über ihre Children. Ein Versuch, ein Epic via `/develop` zu starten, ist fast immer ein Denkfehler (Child gemeint) und muss sofort abgebrochen werden.
+
+```bash
+TICKET_TYPE=$(echo "$TICKET_JSON" | node -e "
+  try {
+    const j = JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));
+    process.stdout.write(String(j?.data?.ticket_type || j?.ticket_type || ''));
+  } catch(e) { process.stdout.write(''); }
+" 2>/dev/null)
+
+if [ "$TICKET_TYPE" = "epic" ]; then
+  echo "✗ Epics are containers — pick a child ticket." >&2
+  exit 1
+fi
+```
+
+**Kein Worktree, kein Branch, kein Status-Update.** Diese Prüfung läuft VOR Schritt 2, damit `/develop T-{epic}` keinen Side-Effect hat.
+
 ### 2. Ticket übernehmen + TICKET_NUMBER setzen
 
 Zeige kurz an: `▶ Ticket T-{N}: {title}` — dann direkt weiter, NICHT auf Bestätigung warten.
