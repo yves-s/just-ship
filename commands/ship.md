@@ -335,6 +335,28 @@ Hinweis: `summary` wird mitgesendet damit das Board eine Zusammenfassung des abg
 UPDATE public.tickets SET status = 'done', summary = '{summary}' WHERE number = $TICKET_NUMBER AND workspace_id = '{pipeline.workspace_id}' RETURNING number, title, status;
 ```
 
+SOFORT WEITER ZU SCHRITT 6a.
+
+### 6a. Epic-Completion-Check (nur wenn Pipeline konfiguriert)
+
+Nach dem Status-Update des Childs: prüfe ob das Ticket Teil eines Epics ist. Wenn ja, und alle Children des Epics (projektübergreifend) auf `done` stehen, transitioniert das Epic zu `epic_state = "completed"`.
+
+```bash
+bash .claude/scripts/epic-completion-check.sh $TICKET_NUMBER
+```
+
+Das Script:
+- Liest `parent_ticket_id` des Childs → ohne Parent läuft er no-op durch
+- Listet alle Workspace-Tickets und zählt Child-Status projektübergreifend
+- Idempotent: skippt Epics die bereits `completed` oder `canceled` sind
+- PATCH auf das Epic verwendet `epic_state` (nicht `status`) — die Board-API lehnt direkte Status-Writes auf Epics mit `epic_status_immutable` ab
+
+Ausgabe nur bei Transition:
+- `✓ epic T-{N} completed ({done}/{total} children done)`
+- `⚠ epic T-{N} completion PATCH failed (children: {done}/{total}) — check manually`
+
+Exit-Code ist immer 0 — ein fehlgeschlagener Epic-Check blockiert den Ship nie.
+
 SOFORT WEITER ZU SCHRITT 7.
 
 ### 7. Bestätigung (EINZIGE Ausgabe an den User)
