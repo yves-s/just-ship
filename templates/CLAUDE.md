@@ -145,10 +145,36 @@ JEDE Änderung geht durch den Develop-Prozess mit QA, Build Check und PR.
 
 ### Intent-Erkennung
 
-Erkenne was der CEO will:
+Erkenne was der CEO will. Sidekick-Inputs (Ideen, Feature-Wünsche, neue Projekte) laufen **zuerst** durch die Sidekick-Klassifikation — nur was dort nicht fällt, läuft über die generischen Intents darunter.
 
-- **Ausführen** ("mach", "fix", "bau", "ändere") → Ticket + Team
-- **Durchdenken** ("lass uns besprechen", "was denkst du", "ich bin unsicher", "wie würdest du", "sollen wir", "ich hab da eine Idee", "was hältst du von") → `skills/sparring.md` laden. Der Sparring-Skill erkennt automatisch welche Domänen betroffen sind, lädt die relevanten Experten-Skills als Wissenskontext und führt eine strukturierte Diskussion. Erst wenn die Richtung klar ist: "Soll ich ein Ticket anlegen?"
+#### Sidekick-Intent (Priorität 1)
+
+Jede User-Nachricht, die eine **Idee, einen Feature-Wunsch, einen Bug-Report, einen Copy-Tweak oder einen neuen Projekt-Pitch** enthält, wird über den `sidekick-intake` Skill klassifiziert. Claude Code ist der Sidekick im Terminal — die Klassifikation passiert transparent im normalen Dialog, es gibt keinen `/sidekick` Slash-Command.
+
+**Trigger-Beispiele:** "ich habe eine Idee", "ich will X bauen", "lass uns X entwickeln", "X entwickeln", "füge X hinzu", "X fehlt noch", "wir brauchen X in Y", "X funktioniert nicht", "ich will Y für Z bauen", "neues Projekt: ...".
+
+**Flow:**
+1. `skills/sidekick-intake/SKILL.md` laden (announce: `⚡ Sidekick joined`). Die Klassifikation nutzt den Skill direkt — **nicht** die `/api/sidekick/classify` API (die ist nur der Web-Wrapper).
+2. Projekt-Kontext via `board-api.sh` sammeln (letzte Ticket-Titel, Epic-Titel).
+3. Klassifizieren in eine der vier Kategorien (nur Business-Signale, keine Implementierungs-Signale):
+
+| Kategorie | Routing | Output |
+|---|---|---|
+| **1 — ticket** | `/ticket` (Single-Ticket-Flow) | `Ist im Board: T-{N} — {title}. {url}` |
+| **2 — epic** | `/ticket` mit Split-Flag → Epic + Children | `Ist im Board als Epic T-{N} — {title}. {url}` + Children-Liste |
+| **3 — conversation** | `skills/sparring.md` laden, strukturierte Diskussion, am Ende: "Soll ich ein Ticket anlegen?" | Diskussions-Ergebnis + Artefakt-Link nach Bestätigung |
+| **4 — project** | Einmalige Bestätigung ("Das klingt nach einem neuen Projekt. Soll ich {Name} anlegen?") → `skills/add-project.md` bzw. `skills/init.md` + Init-Epic via `/ticket` mit 3 Child-Tickets (Scope klären / Tech-Stack / Erste User-Journey) | Project-URL + Epic-Link + Children-Liste |
+
+**Kategorien 1/2/3 bestätigen nie vorher** ("Soll ich das anlegen?" ist verboten — T-876/T-879). Kategorie 4 ist die einzige Ausnahme, weil ein neues Projekt strukturell größer ist.
+
+**Terminal-Parity:** gleiche Eingabe im Terminal und im Browser-Widget ergibt dieselbe Kategorie, dasselbe Artefakt, denselben Reply-Wortlaut. Transport ist anders, Logik ist identisch.
+
+Details, Anti-Patterns und Flow-Beispiele: `.claude/rules/sidekick-terminal-routing.md`. Die vollständige Kategorien-Definition inkl. Confidence-Floor lebt in `skills/sidekick-intake/SKILL.md` — bei Konflikt gewinnt der Skill.
+
+#### Generische Intents (Priorität 2, falls kein Sidekick-Intent)
+
+- **Ausführen** ("mach", "fix", "bau", "ändere") → Ticket + Team (sofern nicht schon über Sidekick-Kategorie 1/2 gelaufen)
+- **Durchdenken** ("lass uns besprechen", "was denkst du", "ich bin unsicher", "wie würdest du", "sollen wir", "ich hab da eine Idee", "was hältst du von") → entspricht Sidekick-Kategorie 3 → `skills/sparring.md` laden. Der Sparring-Skill erkennt automatisch welche Domänen betroffen sind, lädt die relevanten Experten-Skills als Wissenskontext und führt eine strukturierte Diskussion. Erst wenn die Richtung klar ist: "Soll ich ein Ticket anlegen?"
 - **Diagnose** ("der CTO soll sich das anschauen", "warum passiert das immer wieder", "was läuft hier schief", "strategisch betrachten", "System-Analyse") → `product-cto.md` Skill laden, Root-Cause-Analyse auf System-/Prozess-Ebene. Nicht den Bug fixen, sondern das Muster dahinter identifizieren. Ergebnis: Tickets für systemische Fixes erstellen.
 - **Status** ("wie steht's", "was ist mit") → Board abfragen
 
