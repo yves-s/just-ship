@@ -8,6 +8,9 @@ Neues Script `scripts/pipeline-vps-test.sh` das ein echtes Ticket auf dem VPS du
 
 ## [Unreleased]
 
+### Fixed
+- **`/ship` no longer triggers blindly on short confirmations** (T-883): `CLAUDE.md`, `templates/CLAUDE.md`, and `.claude/rules/no-premature-merge.md` now treat "passt", "done", "fertig", "klappt", "sieht gut aus", "ok", "gut" as context-sensitive triggers. `/ship` only fires when all three conditions are met: current branch ≠ `main`, an open PR or unpushed commit exists, and the last assistant message explicitly asked for review/merge approval. New rule file `.claude/rules/ship-trigger-context.md` documents the trigger logic with 3 positive and 4 negative examples plus a decision tree. Explicit commands (`/ship`, "ship it", "merge", "mach den PR rein") remain unaffected. Fixes the incident where a mid-stream "passt" acknowledgement caused an unintended merge to `main`.
+
 ### Added
 - **Design Lead skill** (T-872): New `skills/design-lead/SKILL.md` establishes a strategic Design/Product-UX authority as a peer to `product-cto`. Owns product-structure, interaction-philosophy, design-system-direction, and cross-feature-consistency decisions — one level above the existing executor skills (`creative-design`, `frontend-design`, `ux-planning`). Output format mirrors `product-cto` (TL;DR / Principle / Decision / Implications / Follow-up for Executors / Watch Out). `CLAUDE.md` and `templates/CLAUDE.md` updated: role mapping adds `design-lead | Design Lead` (removes stale `design` entry), Priority order and Routing-Regeln route strategic design/product-structure work to `design-lead`, and a peer-rule clarifies when `design-lead` and `product-cto` run alone vs. together.
 
