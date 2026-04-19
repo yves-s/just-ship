@@ -184,6 +184,29 @@ describe("validateCreateRequest", () => {
       }),
     ).toThrow(/board_url/);
   });
+
+  it("trims whitespace from board_url", () => {
+    const req = validateCreateRequest({
+      category: "ticket",
+      project_id: "p-1",
+      board_url: "  https://board.just-ship.io  ",
+      ticket: { title: "x", body: "y" },
+    });
+    if (req.category === "ticket") {
+      expect(req.board_url).toBe("https://board.just-ship.io");
+    }
+  });
+
+  it("rejects non-string board_url (number)", () => {
+    expect(() =>
+      validateCreateRequest({
+        category: "ticket",
+        project_id: "p-1",
+        board_url: 42,
+        ticket: { title: "x", body: "y" },
+      }),
+    ).toThrow(/board_url/);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -224,6 +247,27 @@ describe("validateUpdateRequest", () => {
   it("trims title", () => {
     const req = validateUpdateRequest({ ticket_number: 1, patch: { title: "  spaced  " } });
     expect(req.patch.title).toBe("spaced");
+  });
+
+  it("accepts and trims a valid board_url", () => {
+    const req = validateUpdateRequest({
+      ticket_number: 1,
+      board_url: "  https://board.just-ship.io  ",
+      patch: { title: "x" },
+    });
+    expect(req.board_url).toBe("https://board.just-ship.io");
+  });
+
+  it("rejects non-string board_url", () => {
+    expect(() =>
+      validateUpdateRequest({ ticket_number: 1, board_url: 42, patch: { title: "x" } }),
+    ).toThrow(/board_url/);
+  });
+
+  it("rejects whitespace-only board_url", () => {
+    expect(() =>
+      validateUpdateRequest({ ticket_number: 1, board_url: "   ", patch: { title: "x" } }),
+    ).toThrow(/board_url/);
   });
 });
 

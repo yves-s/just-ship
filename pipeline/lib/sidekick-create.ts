@@ -62,6 +62,8 @@ export type CreateRequest = CreateTicketRequest | CreateEpicRequest;
 
 export interface UpdateRequest {
   ticket_number: number;
+  /** Optional — used to build the ticket URL returned to the caller. */
+  board_url?: string;
   patch: Partial<Pick<TicketInput, "title" | "body" | "priority" | "tags">> & {
     /** Allow changing status too — useful when the user clarifies "make this a backlog item". */
     status?: string;
@@ -167,16 +169,13 @@ export function validateCreateRequest(req: unknown): CreateRequest {
     throw new ValidationError("project_id: must be a non-empty string");
   }
 
-  const boardUrl = obj.board_url;
-  if (boardUrl !== undefined && (typeof boardUrl !== "string" || !boardUrl.trim())) {
-    throw new ValidationError("board_url: must be a non-empty string when provided");
-  }
+  const boardUrl = validateOptionalBoardUrl(obj.board_url);
 
   if (category === "ticket") {
     const ticket = validateTicketInput(obj.ticket, "ticket");
     return {
       category: "ticket",
-      project_id: projectId,
+      project_id: projectId.trim(),
       ...(boardUrl ? { board_url: boardUrl } : {}),
       ticket,
     };
@@ -195,11 +194,23 @@ export function validateCreateRequest(req: unknown): CreateRequest {
 
   return {
     category: "epic",
-    project_id: projectId,
+    project_id: projectId.trim(),
     ...(boardUrl ? { board_url: boardUrl } : {}),
     epic,
     children: validatedChildren,
   };
+}
+
+/**
+ * Validates an optional `board_url` field. Returns the trimmed string, or
+ * `undefined` when the field is absent. Throws on wrong type or empty-string.
+ */
+function validateOptionalBoardUrl(raw: unknown): string | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "string" || !raw.trim()) {
+    throw new ValidationError("board_url: must be a non-empty string when provided");
+  }
+  return raw.trim();
 }
 
 export function validateUpdateRequest(req: unknown): UpdateRequest {
@@ -212,6 +223,8 @@ export function validateUpdateRequest(req: unknown): UpdateRequest {
   if (typeof ticketNumber !== "number" || !Number.isInteger(ticketNumber) || ticketNumber <= 0) {
     throw new ValidationError("ticket_number: must be a positive integer");
   }
+
+  const boardUrl = validateOptionalBoardUrl(obj.board_url);
 
   const patch = obj.patch;
   if (typeof patch !== "object" || patch === null) {
@@ -262,7 +275,11 @@ export function validateUpdateRequest(req: unknown): UpdateRequest {
     throw new ValidationError("patch: must contain at least one field to update");
   }
 
-  return { ticket_number: ticketNumber, patch: out };
+  return {
+    ticket_number: ticketNumber,
+    ...(boardUrl ? { board_url: boardUrl } : {}),
+    patch: out,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -519,7 +536,9 @@ export async function updateFromCorrection(
     number: row.number,
     id: row.id,
     title: row.title,
-    url: buildTicketUrl(boardUrl, row.number),
+    // Prefer the per-request board_url (validated) over the function-level
+    // fallback, so both creation and update resolve URLs the same way.
+    url: buildTicketUrl(req.board_url ?? boardUrl, row.number),
   };
   logger.info(
     {

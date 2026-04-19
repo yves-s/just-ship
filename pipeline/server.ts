@@ -1396,10 +1396,9 @@ async function handleSidekickUpdateRoute(req: IncomingMessage, res: ServerRespon
     throw err;
   }
 
-  const boardUrl = typeof body.board_url === "string" && body.board_url.trim() ? body.board_url : undefined;
   const { apiUrl, apiKey } = getApiCredentials();
   try {
-    const result = await updateFromCorrection(validated, { apiUrl, apiKey }, boardUrl);
+    const result = await updateFromCorrection(validated, { apiUrl, apiKey });
     sendJson(res, 200, { status: "updated", ...result });
   } catch (err) {
     if (err instanceof SidekickBoardApiError) {
