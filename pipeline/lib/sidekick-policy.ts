@@ -144,21 +144,20 @@ export interface ImplementationLeakResult {
  */
 
 /**
- * Build a regex that matches `topic` only at word boundaries on both sides.
+ * Suffixes that may appear at the end of the captured topic without turning it
+ * into a different word. Covers plural/inflection variants of English and
+ * German forbidden topics:
+ *   - "frameworks"  → topic "framework"  + trailing "s"
+ *   - "farben"      → topic "farbe"      + trailing "n"
+ *   - "databases"   → topic "database"   + trailing "s"
+ *   - "endpoints"   → topic "endpoint"   + trailing "s"
+ * Anything longer is assumed to be a distinct word ("schriftsteller",
+ * "farbenpsychologie") and rejected as a false positive.
  *
- * - We escape regex metacharacters in the topic (e.g. "bottom-sheet") so the
- *   hyphen stays literal instead of becoming a char class.
- * - We use negative lookbehind/lookahead for "word character" so a topic that
- *   ends in a letter still matches a plural suffix ("frameworks", "farben")
- *   but NOT a longer unrelated word ("schriftsteller", "farbenpsychologie").
- *   The difference: plurals add s/en to the same root, while "schriftsteller"
- *   embeds "schrift" at a sub-word boundary — allowed up to ~2 trailing chars
- *   via (?:s|e|en|er|s)? is brittle; instead we allow any trailing chars but
- *   require that the MATCH END is at a non-word or a suffix that keeps the
- *   root's intent (s, e, en, n). For simplicity we accept "plurals plus the
- *   canonical forbidden forms" via an explicit suffix group.
+ * The suffix is case-insensitive; an empty suffix (exact boundary match) is
+ * also accepted.
  */
-const MAX_PLURAL_SUFFIX = /^(?:s|e|en|er|n|s|ern)?$/i;
+const ACCEPTED_INFLECTION_SUFFIX = /^(?:|s|e|en|n|er|ern|es|em)$/i;
 
 function buildTopicRegex(topic: string): RegExp {
   // Escape regex metacharacters in the literal phrase.
@@ -187,7 +186,7 @@ export function detectImplementationLeak(text: string): ImplementationLeakResult
     // short inflection suffix (plural / German case) but reject longer
     // extensions that turn the root into a different word.
     const trailing = m[2] ?? "";
-    if (MAX_PLURAL_SUFFIX.test(trailing)) {
+    if (ACCEPTED_INFLECTION_SUFFIX.test(trailing)) {
       matched.push(topic);
     }
   }
