@@ -11,6 +11,10 @@ import {
   type CreatedTicket,
   type TicketInput,
 } from "./sidekick-create.ts";
+import {
+  FORBIDDEN_QUESTION_TOPICS as POLICY_FORBIDDEN_TOPICS,
+  detectImplementationLeak,
+} from "./sidekick-policy.ts";
 
 /**
  * Sidekick Conversation Mode — T-878.
@@ -252,29 +256,11 @@ export function validateConverseRequest(req: unknown): ConverseRequest {
  * banned from asking any of these. They describe HOW something is built, not
  * WHAT it does for the user, and the engineering team decides them later.
  *
- * Exported for tests — the test suite iterates this list to verify the
- * system prompt contains each phrase in its "never ask" section.
+ * Re-exported from `sidekick-policy` so the existing public surface stays
+ * stable (tests and external callers still import it from here). The single
+ * source of truth is the policy module — see T-879.
  */
-export const FORBIDDEN_QUESTION_TOPICS: ReadonlyArray<string> = Object.freeze([
-  "which framework",
-  "which stack",
-  "which database",
-  "which component library",
-  "which hosting",
-  "which deployment target",
-  "what colors",
-  "which font",
-  "modal or sheet",
-  "kanban or list",
-  "which layout",
-  "which interaction pattern",
-  "sidebar or topbar",
-  "how should the navigation look",
-  "which visual hierarchy",
-  "which api shape",
-  "which auth flow",
-  "which caching",
-]);
+export const FORBIDDEN_QUESTION_TOPICS = POLICY_FORBIDDEN_TOPICS;
 
 const SYSTEM_PROMPT = `You are the Sidekick Conversation Mode for the just-ship platform.
 
@@ -538,6 +524,67 @@ async function callModel(prompt: string): Promise<string> {
 export const _internal = { callModel };
 
 // ---------------------------------------------------------------------------
+// Implementation-leak telemetry (T-879)
+// ---------------------------------------------------------------------------
+
+interface LeakReportContext {
+  /** The user-visible assistant text to check. */
+  assistantText: string;
+  sessionId: string;
+  turn: number;
+  projectId: string;
+  /** Which user-visible surface produced the text — kept as a log tag so
+   *  dashboards can distinguish leaked questions from leaked finalise wraps. */
+  surface: "question" | "finalize";
+}
+
+/**
+ * Run the post-generation leak check on a user-visible assistant turn and, if
+ * a forbidden topic was matched, emit a structured warning + Sentry breadcrumb.
+ *
+ * Extracted from the question/finalize branches so both paths enforce the
+ * T-879 policy identically. Any new user-visible surface the Sidekick gains
+ * should funnel through this helper.
+ */
+function reportImplementationLeak(ctx: LeakReportContext): ReturnType<typeof detectImplementationLeak> {
+  const leak = detectImplementationLeak(ctx.assistantText);
+  if (!leak.leak) return leak;
+
+  logger.warn(
+    {
+      sessionId: ctx.sessionId,
+      turn: ctx.turn,
+      projectId: ctx.projectId,
+      implementationLeak: true,
+      leakMatched: leak.matched,
+      leakSurface: ctx.surface,
+      assistantTextPreview: ctx.assistantText.slice(0, 200),
+    },
+    "Sidekick converse leaked implementation topic",
+  );
+  try {
+    Sentry.captureMessage("sidekick.implementation_leak", {
+      level: "warning",
+      extra: {
+        sessionId: ctx.sessionId,
+        turn: ctx.turn,
+        surface: ctx.surface,
+        matched: leak.matched,
+        assistantTextPreview: ctx.assistantText.slice(0, 500),
+      },
+    });
+  } catch (err) {
+    // Sentry is a best-effort telemetry sink — a failure here must never
+    // take down the user turn. Log and continue.
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err), sessionId: ctx.sessionId },
+      "Sentry.captureMessage failed while reporting implementation leak",
+    );
+  }
+  return leak;
+}
+
+// ---------------------------------------------------------------------------
 // Artifact creation
 // ---------------------------------------------------------------------------
 
@@ -689,11 +736,25 @@ async function processTurnInner(
     session.turn = nextTurn;
     session.history.push(pendingUserTurn);
     session.history.push({ role: "assistant", text: parsed.text });
+
+    // T-879 — classify every assistant question post-generation. The system
+    // prompt forbids implementation questions, but we also measure leakage at
+    // runtime: if a model slip ever ships one, the metric fires and Sentry
+    // captures it so we can tighten the prompt or block the turn.
+    const leak = reportImplementationLeak({
+      assistantText: parsed.text,
+      sessionId: session.id,
+      turn: nextTurn,
+      projectId: session.projectId,
+      surface: "question",
+    });
+
     logger.info(
       {
         sessionId: session.id,
         turn: nextTurn,
         projectId: session.projectId,
+        implementationLeak: leak.leak,
         durationMs: Date.now() - startedAt,
       },
       "Sidekick converse continue",
@@ -737,6 +798,20 @@ async function processTurnInner(
 
   const wrap = `${parsed.text.trim()} ${url}`.trim();
 
+  // T-879 — the finalize wrap is also user-visible. The policy says every
+  // user-visible turn must be checked; questions already funnel through
+  // reportImplementationLeak above, and the finalize branch gets the same
+  // treatment here. In practice the wrap is a short summary + URL, but a
+  // model slip can still smuggle forbidden phrasing ("Ich lege den Modal-
+  // oder-Bottom-Sheet-Flow an") into the user-visible text.
+  const finalizeLeak = reportImplementationLeak({
+    assistantText: parsed.text,
+    sessionId: session.id,
+    turn: nextTurn,
+    projectId: session.projectId,
+    surface: "finalize",
+  });
+
   logger.info(
     {
       sessionId: session.id,
@@ -746,6 +821,7 @@ async function processTurnInner(
       category: createResult.category,
       number: createResult.category === "ticket" ? createResult.ticket.number : createResult.epic.number,
       childrenCount: createResult.category === "epic" ? createResult.children.length : 0,
+      implementationLeak: finalizeLeak.leak,
       durationMs: Date.now() - startedAt,
     },
     "Sidekick converse finalised",

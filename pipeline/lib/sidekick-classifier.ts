@@ -1,6 +1,7 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { logger } from "./logger.ts";
 import { Sentry } from "./sentry.ts";
+import { detectImplementationLeak } from "./sidekick-policy.ts";
 
 export type Category = "ticket" | "epic" | "conversation" | "project";
 
@@ -253,6 +254,13 @@ export async function classify(input: ClassificationInput): Promise<Classificati
 
   const result = applyConfidenceFallback(parsed);
 
+  // T-879 — tag every classification with whether the raw user input contained
+  // implementation signals. The classifier is instructed to ignore them, so
+  // the metric measures how often users bring implementation framing into
+  // their intake (useful for product telemetry and for catching cases where
+  // the classifier starts over-indexing on them).
+  const inputLeak = detectImplementationLeak(text);
+
   logger.info(
     {
       textPreview: text.slice(0, 200),
@@ -262,6 +270,8 @@ export async function classify(input: ClassificationInput): Promise<Classificati
       reasoning: result.reasoning,
       fallback_applied: result.fallback_applied,
       projectSlug: input.projectContext?.projectSlug,
+      inputHasImplementationSignals: inputLeak.leak,
+      ...(inputLeak.leak ? { inputLeakMatched: inputLeak.matched } : {}),
       durationMs: Date.now() - startedAt,
     },
     "Sidekick classification complete",

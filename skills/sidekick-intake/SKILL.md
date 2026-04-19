@@ -313,9 +313,77 @@ If `failed_children` is non-empty, append `Ein paar Init-Tickets haben gehangen,
 
 Optional follow-up (out of scope for this endpoint): the Sidekick may offer to start a product-cto + design-lead conversation about the new project — but only after the user has seen the confirmation, never as part of the create call.
 
+## User Question Policy — T-879
+
+The Sidekick is the only user-facing agent in the just-ship platform. It is the first touchpoint for every idea. If it asks the user implementation questions, the Decision Authority rule (T-871) is broken at the one place it matters most — everything downstream runs through experts, but the intake leaks PM/tech questions at the user.
+
+This policy applies to **every user-visible turn the Sidekick produces** — classification prompts, clarifying questions in the conversation flow, project-creation confirmation, correction handling. No exceptions.
+
+### Allowed — business/vision topics the Sidekick may ask
+
+| Topic | Why it's allowed | Example |
+|---|---|---|
+| Target audience (Zielgruppe) | Only the user knows who this is for | "Für wen genau — User, Admins, oder beide?" |
+| Timing / urgency (Timing, Dringlichkeit) | Business priority decision | "Muss das noch vor Launch stehen oder danach?" |
+| Scope boundary | Defines *what* product exists, not *how* | "Ist das eine Änderung oder mehrere zusammen?" |
+| Replaces vs augments (Ersetzt-oder-Ergänzt) | Product-direction decision | "Soll das die bestehende Suche ersetzen oder daneben leben?" |
+| Priority (Priorität) | Belongs to the user as CEO | "High, medium, oder low?" (only if ambiguous) |
+| Success criteria (Erfolgskriterien) | Describes *what* done looks like | "Was merkt der User konkret, wenn das da ist?" |
+
+### Forbidden — implementation topics the Sidekick never asks
+
+These are delegated internally to experts (`product-cto`, `design-lead`, `backend`, `frontend-design`, `data-engineer`, `ux-planning`). The Sidekick consults them silently during finalisation and folds their decision into the artifact body. The user never sees the consultation — only the final artifact.
+
+| Category | Forbidden examples |
+|---|---|
+| Tech-Stack / Framework | "React oder Vue?", "Welches Framework?", "Next or Remix?" |
+| Datenbank / Storage | "Postgres oder SQLite?", "Which database?" |
+| API-Design | "REST oder GraphQL?", "Which endpoint shape?" |
+| Hosting / Deployment | "Coolify oder Vercel?", "Which hosting?" |
+| Visual Design | "Welche Farbe?", "Which font?", "Which colors?" |
+| Layout / IA | "Sidebar oder Topbar?", "Which layout?", "Which navigation?" |
+| Component-Wahl | "Modal oder Bottom-Sheet?", "Kanban oder Liste?", "Which component library?" |
+| Flow-Patterns / Screens | "Welche Interaction?", "Which interaction pattern?" |
+| Architektur / Performance / Caching | "Which caching?", "Sync or async?" |
+| Auth | "Which auth flow?" |
+
+### Internal expert consultation (never visible to the user)
+
+When the Sidekick hits technical uncertainty during finalisation — inferring Acceptance Criteria, choosing the artifact shape, writing the body — it **internally** routes to the relevant expert skill:
+
+- **`product-cto`** — architecture, performance, ops, security strategy, non-obvious data shape decisions.
+- **`design-lead`** — product structure, interaction philosophy, cross-feature UX consistency.
+- **`backend` / `frontend-design` / `data-engineer` / `ux-planning`** — domain-level concerns at finalise time.
+
+The expert output flows into the artifact body. The user never sees which expert was consulted, never sees a "checking with the team" message, and is never asked a technical question as a result.
+
+### Enforcement
+
+The policy is enforced at three layers:
+
+1. **System prompt.** The converse system prompt (`SYSTEM_PROMPT` in `pipeline/lib/sidekick-converse.ts`) contains both the allowed and forbidden topic lists with examples. This is the primary gate — the model is told the rule before it generates a turn.
+2. **Shared policy module.** `pipeline/lib/sidekick-policy.ts` exports `FORBIDDEN_QUESTION_TOPICS` and `detectImplementationLeak(text)`. Both the classifier and the converse flow import from it. New forbidden patterns added here are automatically picked up by the runtime metric layer (#3). The system prompt (#1) is a separate literal — when a pattern is added to `FORBIDDEN_QUESTION_TOPICS`, the matching category's anti-example in `SYSTEM_PROMPT` must be updated in the same commit so the model sees the new rule up-front instead of relying on detect-after-the-fact.
+3. **Runtime metric.** Every user-visible assistant turn from the converse flow (both questions on turns 1-2 and the finalize wrap on turn 3) is run through `detectImplementationLeak` after generation. If it matches a forbidden pattern, the turn is logged with `implementationLeak: true`, a `leakSurface` tag ("question" or "finalize"), and Sentry captures it. This is a telemetry layer, not a hard block — the team sees leaks and tightens the prompt (or upgrades the list) rather than surprising the user with a rejection.
+
+### Test corpus
+
+`pipeline/lib/sidekick-policy.test.ts` enforces the policy through a curated corpus of 20+ scenarios. Each scenario is shaped as:
+
+- A user input where the Sidekick might be tempted to ask a technical question.
+- An example of the forbidden question text that would leak implementation scope.
+
+The tests assert that:
+
+- `detectImplementationLeak` flags every canonical forbidden phrasing.
+- The system prompt contains an explicit "never ask implementation questions" clause.
+- `FORBIDDEN_QUESTION_TOPICS` covers the representative categories from this policy (stack, DB, hosting, visual, layout, navigation, auth, caching, API shape).
+
+When a new forbidden pattern is added to the policy, the corpus gains the canonical phrasing in the same commit.
+
 ## Out of scope (other tickets)
 
 - Conversation flow — T-878
-- Decision Authority application beyond classification — T-879
 - Terminal command `/sidekick` — T-880
 - UI rewire — T-881
+- Hook-based output enforcement (hard-block a leaking turn before it reaches the user) — separate ticket
+- User-side escalation ("möchte selbst entscheiden") — separate ticket
