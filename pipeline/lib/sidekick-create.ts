@@ -34,6 +34,13 @@ export interface TicketInput {
   priority?: "high" | "medium" | "low";
   /** Optional labels/tags. */
   tags?: string[];
+  /**
+   * T-903: Optional per-child project override. When set on a child inside an
+   * epic, the child is stamped with this project_id instead of the epic's
+   * project_id. Inferred from body signals by the caller (never asked of the
+   * user). Ignored on single-ticket creates and on the epic itself.
+   */
+  project_id?: string;
 }
 
 export interface CreatedTicket {
@@ -52,7 +59,12 @@ export interface CreateTicketRequest {
 
 export interface CreateEpicRequest {
   category: "epic";
-  project_id: string;
+  /**
+   * Epic's project_id. May be `null` for workspace-scoped cross-project epics
+   * (T-903) — in that case children MUST each carry their own `project_id`.
+   * For single-project epics, this is the project the children default to.
+   */
+  project_id: string | null;
   board_url?: string;
   epic: TicketInput;
   children: TicketInput[];
@@ -178,11 +190,21 @@ function validateTicketInput(t: unknown, path: string): TicketInput {
     }
   }
 
+  // T-903: optional per-child project_id override. Empty strings are rejected
+  // explicitly so the caller can't accidentally stamp a child with "".
+  const projectId = obj.project_id;
+  if (projectId !== undefined) {
+    if (typeof projectId !== "string" || !projectId.trim()) {
+      throw new ValidationError(`${path}.project_id: must be a non-empty string when provided`);
+    }
+  }
+
   return {
     title: title.trim(),
     body: body.trim(),
     ...(priority ? { priority: priority as TicketInput["priority"] } : {}),
     ...(tags ? { tags: tags as string[] } : {}),
+    ...(projectId ? { project_id: (projectId as string).trim() } : {}),
   };
 }
 
@@ -197,14 +219,16 @@ export function validateCreateRequest(req: unknown): CreateRequest {
     throw new ValidationError(`category: must be 'ticket' or 'epic' (got ${JSON.stringify(category)})`);
   }
 
-  const projectId = obj.project_id;
-  if (typeof projectId !== "string" || !projectId.trim()) {
-    throw new ValidationError("project_id: must be a non-empty string");
-  }
-
   const boardUrl = validateOptionalBoardUrl(obj.board_url);
 
   if (category === "ticket") {
+    // Tickets must always carry a concrete project_id — tasks cannot be
+    // workspace-scoped (enforced by the board CHECK constraint, but we reject
+    // early for a better error message).
+    const projectId = obj.project_id;
+    if (typeof projectId !== "string" || !projectId.trim()) {
+      throw new ValidationError("project_id: must be a non-empty string");
+    }
     const ticket = validateTicketInput(obj.ticket, "ticket");
     return {
       category: "ticket",
@@ -214,8 +238,28 @@ export function validateCreateRequest(req: unknown): CreateRequest {
     };
   }
 
-  // epic
+  // epic: T-903 allows project_id = null for workspace-scoped cross-project
+  // epics. When null, every child MUST carry its own project_id — otherwise
+  // the board CHECK constraint rejects the child as a task-without-project.
+  const rawProjectId = obj.project_id;
+  let projectId: string | null;
+  if (rawProjectId === null) {
+    projectId = null;
+  } else if (typeof rawProjectId === "string" && rawProjectId.trim()) {
+    projectId = rawProjectId.trim();
+  } else {
+    throw new ValidationError(
+      "project_id: must be a non-empty string or null (null = workspace-scoped epic)",
+    );
+  }
+
   const epic = validateTicketInput(obj.epic, "epic");
+  // The epic itself never carries a per-ticket project_id override — it lives
+  // in the request's top-level project_id. Reject to prevent caller confusion.
+  if (epic.project_id !== undefined) {
+    throw new ValidationError("epic.project_id: not allowed — use top-level project_id");
+  }
+
   const children = obj.children;
   if (!Array.isArray(children) || children.length === 0) {
     throw new ValidationError("children: must be a non-empty array");
@@ -225,9 +269,25 @@ export function validateCreateRequest(req: unknown): CreateRequest {
   }
   const validatedChildren = children.map((c, i) => validateTicketInput(c, `children[${i}]`));
 
+  // Workspace-scoped epic invariant: every child must carry its own
+  // project_id. If any child omits it, the board would reject the insert
+  // (task without project_id violates the CHECK). Fail fast with a clear
+  // error so callers don't debug a confusing 400 from the board.
+  if (projectId === null) {
+    const missing = validatedChildren
+      .map((c, i) => ({ c, i }))
+      .filter(({ c }) => !c.project_id);
+    if (missing.length > 0) {
+      const indexes = missing.map(({ i }) => i).join(", ");
+      throw new ValidationError(
+        `children[${indexes}]: missing project_id — workspace-scoped epic (project_id=null) requires every child to specify its own project_id`,
+      );
+    }
+  }
+
   return {
     category: "epic",
-    project_id: projectId.trim(),
+    project_id: projectId,
     ...(boardUrl ? { board_url: boardUrl } : {}),
     epic,
     children: validatedChildren,
@@ -559,12 +619,29 @@ async function postProject(
 // Public API
 // ---------------------------------------------------------------------------
 
-function toTicketPayload(input: TicketInput, projectId: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
+/**
+ * Build the board-API ticket payload.
+ *
+ * `projectId` is the fallback — the project the ticket is stamped with when
+ * the per-input override is absent. For a workspace-scoped epic the caller
+ * passes `null` as the fallback, and the input must carry its own
+ * `project_id`. Pass `ticket_type: "epic"` via `extra` when creating an epic
+ * row so the board respects the epic branch of the CHECK constraint.
+ */
+function toTicketPayload(
+  input: TicketInput,
+  projectId: string | null,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const effectiveProjectId = input.project_id ?? projectId;
   return {
     title: input.title,
     body: input.body,
     status: "backlog",
-    project_id: projectId,
+    // Only emit the field when we have a value. The board treats a missing
+    // project_id as null; sending null explicitly is also fine but we keep
+    // the payload clean to reduce churn in existing tests/snapshots.
+    ...(effectiveProjectId ? { project_id: effectiveProjectId } : { project_id: null }),
     ...(input.priority ? { priority: input.priority } : {}),
     ...(input.tags ? { tags: input.tags } : {}),
     ...extra,
@@ -604,8 +681,14 @@ export async function createFromClassification(
     return { category: "ticket", ticket };
   }
 
-  // Epic + children
-  const epicRow = await postTicket(cfg, toTicketPayload(req.epic, req.project_id));
+  // Epic + children (category === "epic").
+  // Stamp ticket_type="epic" so the board applies the epic branch of the
+  // CHECK constraint and lets project_id be null for a workspace-scoped
+  // cross-project epic (T-903).
+  const epicRow = await postTicket(
+    cfg,
+    toTicketPayload(req.epic, req.project_id, { ticket_type: "epic" }),
+  );
   const epic: CreatedTicket = {
     number: epicRow.number,
     id: epicRow.id,
@@ -613,7 +696,18 @@ export async function createFromClassification(
     url: buildTicketUrl(req.board_url, epicRow.number),
   };
 
-  // Create children in parallel — each depends only on the Epic ID.
+  // Detect cross-project children (T-903) — a child is "cross-project" when
+  // its own `project_id` overrides the epic's project_id. Log it so the
+  // board-side rollup monitoring can audit how often this path fires.
+  const childProjects = new Set<string>();
+  for (const child of req.children) {
+    if (child.project_id) childProjects.add(child.project_id);
+    else if (req.project_id) childProjects.add(req.project_id);
+  }
+  const crossProject = childProjects.size > 1 || req.project_id === null;
+
+  // Create children in parallel — each depends only on the Epic ID. Per-child
+  // project_id wins over the epic's project_id (set by toTicketPayload).
   const results = await Promise.allSettled(
     req.children.map((child) =>
       postTicket(cfg, toTicketPayload(child, req.project_id, { parent_ticket_id: epicRow.id })),
@@ -652,6 +746,8 @@ export async function createFromClassification(
       childrenRequested: req.children.length,
       childrenCreated: children.length,
       childrenFailed: failed.length,
+      crossProject,
+      distinctChildProjects: childProjects.size,
       durationMs: Date.now() - startedAt,
     },
     "Sidekick created epic",
