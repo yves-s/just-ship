@@ -767,3 +767,193 @@ describe("createProjectFromIdea", () => {
     ).rejects.toThrow(/econnrefused/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// T-903 — cross-project epics
+// ---------------------------------------------------------------------------
+
+describe("T-903 cross-project epics — validateCreateRequest", () => {
+  it("accepts an epic with project_id = null when every child carries its own project_id", () => {
+    const req = validateCreateRequest({
+      category: "epic",
+      project_id: null,
+      epic: { title: "[Epic] cross-repo feature", body: "spans engine + board" },
+      children: [
+        { title: "engine bit", body: "…", project_id: "p-engine" },
+        { title: "board bit", body: "…", project_id: "p-board" },
+      ],
+    });
+    expect(req.category).toBe("epic");
+    if (req.category === "epic") {
+      expect(req.project_id).toBe(null);
+      expect(req.children[0].project_id).toBe("p-engine");
+      expect(req.children[1].project_id).toBe("p-board");
+    }
+  });
+
+  it("rejects workspace-scoped epic when a child is missing project_id", () => {
+    expect(() =>
+      validateCreateRequest({
+        category: "epic",
+        project_id: null,
+        epic: { title: "e", body: "b" },
+        children: [
+          { title: "c1", body: "b1", project_id: "p-engine" },
+          { title: "c2 (forgot)", body: "b2" },
+        ],
+      }),
+    ).toThrow(/missing project_id/);
+  });
+
+  it("rejects explicit project_id on the epic sub-object (prevents confusion with top-level)", () => {
+    expect(() =>
+      validateCreateRequest({
+        category: "epic",
+        project_id: "p-1",
+        epic: { title: "e", body: "b", project_id: "p-other" },
+        children: [{ title: "c", body: "b" }],
+      }),
+    ).toThrow(/epic\.project_id/);
+  });
+
+  it("rejects empty-string project_id on a child", () => {
+    expect(() =>
+      validateCreateRequest({
+        category: "epic",
+        project_id: "p-1",
+        epic: { title: "e", body: "b" },
+        children: [{ title: "c", body: "b", project_id: "" }],
+      }),
+    ).toThrow(/project_id/);
+  });
+
+  it("single-project epic (per-child project_id absent) still works — backward compat", () => {
+    const req = validateCreateRequest({
+      category: "epic",
+      project_id: "p-1",
+      epic: { title: "e", body: "b" },
+      children: [
+        { title: "c1", body: "b1" },
+        { title: "c2", body: "b2" },
+      ],
+    });
+    if (req.category === "epic") {
+      expect(req.project_id).toBe("p-1");
+      expect(req.children[0].project_id).toBeUndefined();
+      expect(req.children[1].project_id).toBeUndefined();
+    }
+  });
+
+  it("still rejects missing project_id on a single ticket (only epics may be workspace-scoped)", () => {
+    expect(() =>
+      validateCreateRequest({
+        category: "ticket",
+        project_id: null,
+        ticket: { title: "t", body: "b" },
+      }),
+    ).toThrow(/project_id/);
+  });
+});
+
+describe("T-903 cross-project epics — createFromClassification", () => {
+  it("creates a workspace-scoped epic (project_id=null, ticket_type=epic) and stamps children with their own project_ids", async () => {
+    const { fetch: mf, calls } = makeMockFetch([
+      { body: { data: { id: "e-id", number: 900, title: "cross-repo" } } },
+      { body: { data: { id: "c1-id", number: 901, title: "engine bit" } } },
+      { body: { data: { id: "c2-id", number: 902, title: "board bit" } } },
+    ]);
+
+    const result = await createFromClassification(
+      {
+        category: "epic",
+        project_id: null,
+        board_url: "https://board.just-ship.io",
+        epic: { title: "[Epic] cross-repo", body: "engine + board" },
+        children: [
+          { title: "engine bit", body: "…", project_id: "p-engine" },
+          { title: "board bit", body: "…", project_id: "p-board" },
+        ],
+      },
+      cfgWith(mf),
+    );
+
+    expect(result.category).toBe("epic");
+    if (result.category === "epic") {
+      expect(result.epic.number).toBe(900);
+      expect(result.children).toHaveLength(2);
+    }
+
+    // Epic POST: project_id = null AND ticket_type = "epic" (so the board
+    // CHECK constraint permits the null project).
+    const epicBody = calls[0].body as Record<string, unknown>;
+    expect(epicBody.project_id).toBe(null);
+    expect(epicBody.ticket_type).toBe("epic");
+
+    // Child POSTs: each stamped with its own project_id (not the epic's null).
+    const c1 = calls[1].body as Record<string, unknown>;
+    const c2 = calls[2].body as Record<string, unknown>;
+    expect(c1.project_id).toBe("p-engine");
+    expect(c2.project_id).toBe("p-board");
+    // Children do not get ticket_type=epic (they are tasks).
+    expect(c1.ticket_type).toBeUndefined();
+    expect(c2.ticket_type).toBeUndefined();
+    // Every child references the epic as its parent.
+    expect(c1.parent_ticket_id).toBe("e-id");
+    expect(c2.parent_ticket_id).toBe("e-id");
+  });
+
+  it("single-project epic: epic carries its project_id and children inherit it (backward compat)", async () => {
+    const { fetch: mf, calls } = makeMockFetch([
+      { body: { data: { id: "e-id", number: 910, title: "e" } } },
+      { body: { data: { id: "c1-id", number: 911, title: "c1" } } },
+      { body: { data: { id: "c2-id", number: 912, title: "c2" } } },
+    ]);
+
+    await createFromClassification(
+      {
+        category: "epic",
+        project_id: "p-1",
+        epic: { title: "e", body: "b" },
+        children: [
+          { title: "c1", body: "b1" },
+          { title: "c2", body: "b2" },
+        ],
+      },
+      cfgWith(mf),
+    );
+
+    const epicBody = calls[0].body as Record<string, unknown>;
+    const c1 = calls[1].body as Record<string, unknown>;
+    const c2 = calls[2].body as Record<string, unknown>;
+    expect(epicBody.project_id).toBe("p-1");
+    expect(epicBody.ticket_type).toBe("epic");
+    expect(c1.project_id).toBe("p-1");
+    expect(c2.project_id).toBe("p-1");
+  });
+
+  it("per-child project_id wins over the epic's project_id when both are set (mixed-mode epic)", async () => {
+    const { fetch: mf, calls } = makeMockFetch([
+      { body: { data: { id: "e-id", number: 920, title: "e" } } },
+      { body: { data: { id: "c1-id", number: 921, title: "c1" } } },
+      { body: { data: { id: "c2-id", number: 922, title: "c2" } } },
+    ]);
+
+    await createFromClassification(
+      {
+        category: "epic",
+        project_id: "p-engine", // epic stays project-bound
+        epic: { title: "e", body: "b" },
+        children: [
+          { title: "c1 engine", body: "b1" }, // inherits engine
+          { title: "c2 board override", body: "b2", project_id: "p-board" }, // overrides
+        ],
+      },
+      cfgWith(mf),
+    );
+
+    const c1 = calls[1].body as Record<string, unknown>;
+    const c2 = calls[2].body as Record<string, unknown>;
+    expect(c1.project_id).toBe("p-engine");
+    expect(c2.project_id).toBe("p-board");
+  });
+});

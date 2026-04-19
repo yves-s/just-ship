@@ -14,7 +14,7 @@ This skill gives the Sidekick the judgment to pick the right bucket itself, in 1
 | # | Category | When to pick it |
 |---|---|---|
 | 1 | **ticket** | One concrete change to something that already exists, with a clear outcome. Bug fixes, copy tweaks, single feature additions to an existing surface, single-screen edits. |
-| 2 | **epic** | Several related changes that share a feature name. "We need X in Y" where X spans multiple screens or flows. Anything that would naturally split into 3+ child tickets. |
+| 2 | **epic** | Several related changes that share a feature name. "We need X in Y" where X spans multiple screens or flows. Anything that would naturally split into 3+ child tickets. Cross-repo pitches (e.g. "touches both Engine and Board") stay `epic` — the split flow decides per-child project (T-903). |
 | 3 | **conversation** | Direction is unclear. The user is exploring ("should we", "what do you think", "I'm not sure"), business context is missing, or the request needs more shape before any concrete artifact can exist. |
 | 4 | **project** | A new product name, a new user audience, or "I want to build X" where X is genuinely new (not an addition to an existing project). |
 
@@ -155,14 +155,26 @@ The creation endpoint is stateless: the caller passes the classification plus th
 ```json
 {
   "category": "epic",
-  "project_id": "uuid",
+  "project_id": "uuid | null",
   "board_url": "https://board.just-ship.io",
   "epic":     { "title": "[Epic] X", "body": "…" },
-  "children": [ { "title": "Y", "body": "…" }, … ]
+  "children": [ { "title": "Y", "body": "…", "project_id": "uuid?" }, … ]
 }
 ```
 
 Children get `parent_ticket_id` pointing to the Epic automatically. The Epic is created first (sequentially); children are created in parallel. A child-level failure does not fail the whole request — the Epic is still usable, and failed children are listed so the Sidekick can tell the user ("2 von 3 Child-Tickets angelegt, c2 hat gehangen — willst du's nochmal?") and/or retry.
+
+### Cross-project epics (T-903)
+
+When the pitch spans more than one project in the workspace (a feature that touches both the Engine and the Board UI, for example), the epic becomes **workspace-scoped** and each child is stamped with the project it actually belongs to:
+
+- Set top-level `project_id: null` — the epic itself has no single project.
+- Set each child's `project_id` to the project the child targets. The caller infers the project from body signals — never asked of the user (Decision Authority / CLAUDE.md). The reference inference lives in `pipeline/lib/project-inference.ts`.
+- When any child carries its own `project_id`, it wins over the epic's top-level `project_id`. This lets a mostly-engine epic put one child in the board repo without collapsing to a workspace-scoped epic.
+
+**Invariant:** if top-level `project_id` is `null`, every child MUST carry its own `project_id`. The endpoint rejects the request with `400` otherwise — a workspace-scoped epic with a child missing a project would violate the board's CHECK constraint (`ticket_type = 'epic' OR project_id IS NOT NULL`) and create an invalid task row.
+
+**Single-project epic (unchanged):** when the pitch is clearly scoped to one project, pass a concrete `project_id` at the top level and omit per-child `project_id`. Children inherit the epic's project. This is the default path and matches the pre-T-903 behaviour exactly.
 
 **Response — category 1:**
 ```json
