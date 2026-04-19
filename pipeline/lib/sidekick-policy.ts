@@ -134,21 +134,62 @@ export interface ImplementationLeakResult {
  * time. It is not used as a hard gate (the model prompt is the primary gate);
  * this is the "measure it to fix it" layer.
  *
- * Matching is case-insensitive substring on the canonical topic phrases.
- * This is deliberately simple: the policy text itself enumerates the exact
- * patterns we consider forbidden, and loose fuzzy matching would create
- * false positives on unrelated language. The test corpus asserts the
- * canonical phrasings are caught; if a production leak sneaks by, it is
- * added to `FORBIDDEN_QUESTION_TOPICS` and automatically covered.
+ * Matching is case-insensitive and word-boundary-aware on the canonical topic
+ * phrases. The boundary discipline prevents false positives like "welche
+ * schrift" matching inside "welche Schriftsteller" (a brand/creative question,
+ * not an implementation one) — without which the metric would misclassify
+ * legitimate business questions as leaks. The trailing boundary allows plurals
+ * and inflections (`which frameworks`, `welche farben`) because those are the
+ * same forbidden topic.
  */
+
+/**
+ * Build a regex that matches `topic` only at word boundaries on both sides.
+ *
+ * - We escape regex metacharacters in the topic (e.g. "bottom-sheet") so the
+ *   hyphen stays literal instead of becoming a char class.
+ * - We use negative lookbehind/lookahead for "word character" so a topic that
+ *   ends in a letter still matches a plural suffix ("frameworks", "farben")
+ *   but NOT a longer unrelated word ("schriftsteller", "farbenpsychologie").
+ *   The difference: plurals add s/en to the same root, while "schriftsteller"
+ *   embeds "schrift" at a sub-word boundary — allowed up to ~2 trailing chars
+ *   via (?:s|e|en|er|s)? is brittle; instead we allow any trailing chars but
+ *   require that the MATCH END is at a non-word or a suffix that keeps the
+ *   root's intent (s, e, en, n). For simplicity we accept "plurals plus the
+ *   canonical forbidden forms" via an explicit suffix group.
+ */
+const MAX_PLURAL_SUFFIX = /^(?:s|e|en|er|n|s|ern)?$/i;
+
+function buildTopicRegex(topic: string): RegExp {
+  // Escape regex metacharacters in the literal phrase.
+  const escaped = topic.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Leading boundary: start-of-string or non-word char. Trailing boundary is
+  // handled manually in the matcher so we can accept a bounded plural suffix
+  // (see below) rather than requiring \b, which would kill "frameworks".
+  return new RegExp(`(?:^|[^\\p{L}\\p{N}_])(${escaped})(\\p{L}*)`, "iu");
+}
+
+// Compile once at module load. The list is frozen and the size is ~60 so this
+// is cheap; avoids recompiling on every call.
+const TOPIC_REGEXES: ReadonlyArray<{ topic: string; re: RegExp }> = FORBIDDEN_QUESTION_TOPICS.map(
+  (topic) => ({ topic, re: buildTopicRegex(topic) }),
+);
+
 export function detectImplementationLeak(text: string): ImplementationLeakResult {
   if (typeof text !== "string" || !text.trim()) {
     return { leak: false, matched: [] };
   }
-  const lowered = text.toLowerCase();
   const matched: string[] = [];
-  for (const topic of FORBIDDEN_QUESTION_TOPICS) {
-    if (lowered.includes(topic)) matched.push(topic);
+  for (const { topic, re } of TOPIC_REGEXES) {
+    const m = text.match(re);
+    if (!m) continue;
+    // m[2] is any trailing letter run after the canonical topic. We allow a
+    // short inflection suffix (plural / German case) but reject longer
+    // extensions that turn the root into a different word.
+    const trailing = m[2] ?? "";
+    if (MAX_PLURAL_SUFFIX.test(trailing)) {
+      matched.push(topic);
+    }
   }
   return { leak: matched.length > 0, matched };
 }

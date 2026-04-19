@@ -96,6 +96,48 @@ describe("detectImplementationLeak", () => {
       expect(r.leak, `should not flag: ${msg}`).toBe(false);
     }
   });
+
+  it("does not flag word-boundary false positives on legitimate creative questions", () => {
+    // Sub-word false positives caught during T-879 review:
+    //   "welche schrift" substring-matches inside "welche Schriftsteller"
+    //   "welche farbe"   substring-matches inside "welche farbenfrohe"
+    //   "welche farben"  substring-matches inside "welche Farbenpsychologie"
+    // Those are legitimate creative / brand questions that belong to the CEO
+    // (brand direction), NOT implementation. A naive includes() matcher
+    // misclassifies them as leaks and pollutes the telemetry signal.
+    const creativeButNotLeaky = [
+      "Welche Schriftsteller haben dich inspiriert?",
+      "Welche farbenfrohe Idee hast du dafür?",
+      "Welche Farbenpsychologie findest du interessant?",
+    ];
+    for (const msg of creativeButNotLeaky) {
+      const r = detectImplementationLeak(msg);
+      expect(r.leak, `should not flag sub-word match: ${msg}`).toBe(false);
+    }
+  });
+
+  it("requires a word boundary at the start of the match", () => {
+    // If a topic is glued to a preceding word (no whitespace/punctuation),
+    // it must not be treated as a match — that is a different token entirely.
+    const r = detectImplementationLeak("Whichframework should we use?");
+    expect(r.leak).toBe(false);
+  });
+
+  it("allows canonical plural / inflection suffixes (e.g. -s, -en)", () => {
+    // Plurals of a forbidden root are still the same forbidden topic — we
+    // accept a short inflection suffix so "which frameworks" still leaks.
+    const pluralEn = detectImplementationLeak("Which frameworks should we use?");
+    expect(pluralEn.leak).toBe(true);
+    expect(pluralEn.matched).toContain("which framework");
+
+    const pluralDe = detectImplementationLeak("Welche Farben sollen wir verwenden?");
+    expect(pluralDe.leak).toBe(true);
+    expect(pluralDe.matched).toContain("welche farbe");
+
+    const colorsEn = detectImplementationLeak("Which colors for the badge?");
+    expect(colorsEn.leak).toBe(true);
+    expect(colorsEn.matched).toContain("which color");
+  });
 });
 
 // ---------------------------------------------------------------------------
