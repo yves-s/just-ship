@@ -70,6 +70,37 @@ export interface UpdateRequest {
   };
 }
 
+/**
+ * T-877: Project creation request (category 4 — new product idea).
+ *
+ * Unlike ticket/epic, this requires explicit `confirmed: true` because a new
+ * project is structurally larger than a ticket. The Sidekick asks once ("Soll
+ * ich {Name} als Projekt anlegen?"); the caller forwards the confirmation.
+ * The endpoint itself enforces the gate so a buggy caller cannot sidestep it.
+ */
+export interface CreateProjectRequest {
+  workspace_id: string;
+  project_name: string;
+  description: string;
+  confirmed: true;
+  board_url?: string;
+}
+
+export interface CreatedProject {
+  id: string;
+  name: string;
+  slug: string;
+  url: string;
+}
+
+export interface CreateProjectResult {
+  project: CreatedProject;
+  epic: CreatedTicket;
+  children: CreatedTicket[];
+  /** Children that failed to create, if any. Project + epic are still a success. */
+  failed_children?: Array<{ index: number; title: string; reason: string }>;
+}
+
 export interface CreateTicketResult {
   category: "ticket";
   ticket: CreatedTicket;
@@ -96,6 +127,8 @@ export interface UpdateResult {
 const MAX_TITLE_LEN = 200;
 const MAX_BODY_LEN = 20_000;
 const MAX_CHILDREN = 20;
+const MAX_PROJECT_NAME_LEN = 100;
+const MAX_PROJECT_DESCRIPTION_LEN = 2_000;
 
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -211,6 +244,52 @@ function validateOptionalBoardUrl(raw: unknown): string | undefined {
     throw new ValidationError("board_url: must be a non-empty string when provided");
   }
   return raw.trim();
+}
+
+export function validateCreateProjectRequest(req: unknown): CreateProjectRequest {
+  if (typeof req !== "object" || req === null) {
+    throw new ValidationError("body: must be a JSON object");
+  }
+  const obj = req as Record<string, unknown>;
+
+  const workspaceId = obj.workspace_id;
+  if (typeof workspaceId !== "string" || !workspaceId.trim()) {
+    throw new ValidationError("workspace_id: must be a non-empty string");
+  }
+
+  const projectName = obj.project_name;
+  if (typeof projectName !== "string" || !projectName.trim()) {
+    throw new ValidationError("project_name: must be a non-empty string");
+  }
+  if (projectName.length > MAX_PROJECT_NAME_LEN) {
+    throw new ValidationError(`project_name: must be <= ${MAX_PROJECT_NAME_LEN} chars`);
+  }
+
+  const description = obj.description;
+  if (typeof description !== "string" || !description.trim()) {
+    throw new ValidationError("description: must be a non-empty string");
+  }
+  if (description.length > MAX_PROJECT_DESCRIPTION_LEN) {
+    throw new ValidationError(`description: must be <= ${MAX_PROJECT_DESCRIPTION_LEN} chars`);
+  }
+
+  // Strict confirmation gate: the Sidekick asks once before creating a project
+  // (the only exception to the "no confirmation" rule from T-876). The endpoint
+  // refuses to act without an explicit boolean true so a buggy caller cannot
+  // accidentally create a project.
+  if (obj.confirmed !== true) {
+    throw new ValidationError("confirmed: must be literal true — project creation requires explicit confirmation");
+  }
+
+  const boardUrl = validateOptionalBoardUrl(obj.board_url);
+
+  return {
+    workspace_id: workspaceId.trim(),
+    project_name: projectName.trim(),
+    description: description.trim(),
+    confirmed: true,
+    ...(boardUrl ? { board_url: boardUrl } : {}),
+  };
 }
 
 export function validateUpdateRequest(req: unknown): UpdateRequest {
@@ -409,6 +488,73 @@ async function patchTicket(
   return { number, id, title };
 }
 
+interface BoardProjectRow {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+function buildProjectUrl(boardUrl: string | undefined, slug: string): string {
+  if (!boardUrl) return slug;
+  const trimmed = boardUrl.replace(/\/+$/, "");
+  return `${trimmed}/p/${slug}`;
+}
+
+async function postProject(
+  cfg: BoardClientConfig,
+  payload: Record<string, unknown>,
+): Promise<BoardProjectRow> {
+  const fetchFn = cfg.fetchFn ?? fetch;
+  const timeoutMs = cfg.timeoutMs ?? 10_000;
+
+  let res: Response;
+  try {
+    res = await fetchFn(`${cfg.apiUrl}/api/projects`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Pipeline-Key": cfg.apiKey,
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new BoardApiError(`Board API POST /api/projects failed: ${reason}`);
+  }
+
+  if (!res.ok) {
+    let detail = "";
+    try {
+      detail = await res.text();
+    } catch { /* non-critical */ }
+    throw new BoardApiError(
+      `Board API POST /api/projects returned HTTP ${res.status} ${res.statusText}${detail ? `: ${detail.slice(0, 200)}` : ""}`,
+      res.status,
+    );
+  }
+
+  let json: unknown;
+  try {
+    json = await res.json();
+  } catch (err) {
+    throw new BoardApiError(`Board API POST /api/projects returned invalid JSON: ${(err as Error).message}`);
+  }
+
+  const data = (json as { data?: unknown }).data;
+  if (typeof data !== "object" || data === null) {
+    throw new BoardApiError("Board API POST /api/projects did not return a project object");
+  }
+  const row = data as Record<string, unknown>;
+  const id = row.id;
+  const name = row.name;
+  const slug = row.slug;
+  if (typeof id !== "string" || typeof name !== "string" || typeof slug !== "string") {
+    throw new BoardApiError("Board API POST /api/projects returned a project missing required fields");
+  }
+  return { id, name, slug };
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -549,4 +695,163 @@ export async function updateFromCorrection(
     "Sidekick updated ticket",
   );
   return { ticket };
+}
+
+/**
+ * T-877: Create a new project from a category-4 product idea.
+ *
+ * Unlike ticket/epic, this is a three-step flow:
+ *   1. POST /api/projects → new project in the workspace
+ *   2. POST /api/tickets → Init-Epic "Projekt-Grundgeruest {Name}" scoped to the new project
+ *   3. POST /api/tickets × 3 → default child tickets (Scope, Stack, User-Journey) with parent_ticket_id set
+ *
+ * The project is created first because Epic + children need a valid project_id.
+ * If project creation fails, the error bubbles up and nothing is created.
+ * If the epic fails after the project is created, the project still exists —
+ * this is an acceptable degenerate state (the user can see a new empty project
+ * and the Sidekick tells them the epic failed).
+ *
+ * Child-level failures are collected into `failed_children` — the project +
+ * epic are still a success because the user has the container they need.
+ */
+export async function createProjectFromIdea(
+  req: CreateProjectRequest,
+  cfg: BoardClientConfig,
+): Promise<CreateProjectResult> {
+  const startedAt = Date.now();
+
+  // Step 1: create the project
+  const projectRow = await postProject(cfg, {
+    workspace_id: req.workspace_id,
+    name: req.project_name,
+    description: req.description,
+  });
+  const project: CreatedProject = {
+    id: projectRow.id,
+    name: projectRow.name,
+    slug: projectRow.slug,
+    url: buildProjectUrl(req.board_url, projectRow.slug),
+  };
+
+  // Step 2: create the Init-Epic inside the new project
+  const epicTitle = `[Epic] Projekt-Grundgeruest ${req.project_name}`;
+  const epicBody =
+    `Container für die initialen Schritte des Projekts **${req.project_name}**.\n\n` +
+    `## Projekt-Beschreibung\n\n${req.description}\n\n` +
+    `## Nächste Schritte\n\n` +
+    `Die Child-Tickets decken den Einstieg ab: Scope, Tech-Stack, erste User-Journey. ` +
+    `Reihenfolge ist bewusst offen — die Konversation zwischen CEO und product-cto / design-lead shaped die Details.`;
+
+  const epicRow = await postTicket(cfg, toTicketPayload(
+    { title: epicTitle, body: epicBody, priority: "high" },
+    projectRow.id,
+  ));
+  const epic: CreatedTicket = {
+    number: epicRow.number,
+    id: epicRow.id,
+    title: epicRow.title,
+    url: buildTicketUrl(req.board_url, epicRow.number),
+  };
+
+  // Step 3: create the 3 default child tickets in parallel
+  const childInputs: TicketInput[] = [
+    {
+      title: `Projekt-Scope klären: ${req.project_name}`,
+      body:
+        `## Ziel\n\nDen Scope von **${req.project_name}** festzurren — was ist im MVP drin, was ist explizit draussen.\n\n` +
+        `## Ausgangslage\n\n${req.description}\n\n` +
+        `## Desired Behavior\n\n` +
+        `- Zielgruppe benannt (wer nutzt das Produkt, wofür)\n` +
+        `- Core User Journey in 3-5 Sätzen beschrieben\n` +
+        `- MVP-Scope: min. 3 Must-Have-Features\n` +
+        `- Out-of-Scope-Liste: min. 3 Punkte, die bewusst nicht im MVP sind\n\n` +
+        `## Acceptance Criteria\n\n` +
+        `- [ ] Scope-Dokument im Epic-Body ergänzt oder als separates Ticket\n` +
+        `- [ ] Zielgruppe + Core Journey sind ohne Rückfragen verständlich\n` +
+        `- [ ] Out-of-Scope ist explizit\n\n` +
+        `## Size: S`,
+    },
+    {
+      title: `Tech-Stack-Entscheidung: ${req.project_name}`,
+      body:
+        `## Ziel\n\nTech-Stack für **${req.project_name}** festlegen — Framework, Backend, Hosting, Auth.\n\n` +
+        `## Desired Behavior\n\n` +
+        `- Stack-Entscheidung mit kurzer Begründung (1-2 Sätze pro Komponente)\n` +
+        `- Deployment-Target benannt (Coolify/Vercel/Shopify/self-hosted)\n` +
+        `- Auth-Ansatz benannt (Clerk/Supabase/Auth.js/keine)\n\n` +
+        `## Acceptance Criteria\n\n` +
+        `- [ ] Stack in \`project.json\` oder im Epic-Body dokumentiert\n` +
+        `- [ ] \`setup.sh\` wurde im neuen Repo ausgeführt (falls Repo existiert)\n` +
+        `- [ ] Build läuft lokal grün\n\n` +
+        `## Out of Scope\n\n- Full Infra-Provisioning (separates Ticket)\n- Repo-Setup (separates Ticket)\n\n` +
+        `## Size: M`,
+    },
+    {
+      title: `Erste User-Journey bauen: ${req.project_name}`,
+      body:
+        `## Ziel\n\nDie Core User Journey von **${req.project_name}** als erstes funktionierendes End-to-End durchspielen.\n\n` +
+        `## Depends On\n\nTech-Stack-Entscheidung (oben).\n\n` +
+        `## Desired Behavior\n\n` +
+        `- Eine einzige User Journey läuft von Start bis Ziel (kein Happy-Path-Fake)\n` +
+        `- UI folgt \`frontend-design\`-Standards (Tokens, Komponenten, States)\n` +
+        `- Feedback-Loop vorhanden (Loading, Error, Empty, Success State)\n\n` +
+        `## Acceptance Criteria\n\n` +
+        `- [ ] User kann den Flow Ende-zu-Ende klicken\n` +
+        `- [ ] Alle vier States (Loading/Error/Empty/Success) sind implementiert\n` +
+        `- [ ] Mobile + Desktop geprüft\n\n` +
+        `## Size: M`,
+    },
+  ];
+
+  const results = await Promise.allSettled(
+    childInputs.map((child) =>
+      postTicket(cfg, toTicketPayload(child, projectRow.id, { parent_ticket_id: epicRow.id })),
+    ),
+  );
+
+  const children: CreatedTicket[] = [];
+  const failed: Array<{ index: number; title: string; reason: string }> = [];
+
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled") {
+      children.push({
+        number: r.value.number,
+        id: r.value.id,
+        title: r.value.title,
+        url: buildTicketUrl(req.board_url, r.value.number),
+      });
+    } else {
+      const reason = r.reason instanceof Error ? r.reason.message : String(r.reason);
+      failed.push({ index: i, title: childInputs[i].title, reason });
+      logger.warn(
+        { projectId: projectRow.id, epicNumber: epicRow.number, childIndex: i, childTitle: childInputs[i].title, reason },
+        "Sidekick project-init child creation failed",
+      );
+      Sentry.captureMessage("Sidekick project-init child creation failed", {
+        level: "warning",
+        extra: { projectId: projectRow.id, epicNumber: epicRow.number, childIndex: i, reason },
+      });
+    }
+  });
+
+  logger.info(
+    {
+      workspaceId: req.workspace_id,
+      projectId: projectRow.id,
+      projectSlug: projectRow.slug,
+      epicNumber: epicRow.number,
+      childrenRequested: childInputs.length,
+      childrenCreated: children.length,
+      childrenFailed: failed.length,
+      durationMs: Date.now() - startedAt,
+    },
+    "Sidekick created project",
+  );
+
+  return {
+    project,
+    epic,
+    children,
+    ...(failed.length > 0 ? { failed_children: failed } : {}),
+  };
 }

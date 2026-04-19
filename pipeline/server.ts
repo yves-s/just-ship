@@ -28,8 +28,10 @@ import { classify, type ProjectContext } from "./lib/sidekick-classifier.ts";
 import {
   validateCreateRequest,
   validateUpdateRequest,
+  validateCreateProjectRequest,
   createFromClassification,
   updateFromCorrection,
+  createProjectFromIdea,
   ValidationError as SidekickValidationError,
   BoardApiError as SidekickBoardApiError,
 } from "./lib/sidekick-create.ts";
@@ -149,6 +151,9 @@ const rateLimiters = {
   classify: new RateLimiter({ windowMs: 60_000, maxRequests: 30 }),
   sidekickCreate: new RateLimiter({ windowMs: 60_000, maxRequests: 30 }),
   sidekickUpdate: new RateLimiter({ windowMs: 60_000, maxRequests: 30 }),
+  // Lower cap for project creation — larger structural impact than a ticket,
+  // and the Sidekick only legitimately calls this once per idea.
+  sidekickCreateProject: new RateLimiter({ windowMs: 60_000, maxRequests: 5 }),
 };
 
 function recordRun(record: RunRecord) {
@@ -1413,6 +1418,44 @@ async function handleSidekickUpdateRoute(req: IncomingMessage, res: ServerRespon
   }
 }
 
+async function handleSidekickCreateProjectRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+
+  // Rate limit per workspace — one Sidekick instance per workspace.
+  const workspaceIdForRL = (body.workspace_id as string | undefined) ?? "unknown";
+  if (!applyRateLimit(rateLimiters.sidekickCreateProject, workspaceIdForRL, "/api/sidekick/create-project", res)) return;
+
+  let validated;
+  try {
+    validated = validateCreateProjectRequest(body);
+  } catch (err) {
+    if (err instanceof SidekickValidationError) {
+      sendJson(res, 400, { status: "bad_request", message: err.message });
+      return;
+    }
+    throw err;
+  }
+
+  const { apiUrl, apiKey } = getApiCredentials();
+  try {
+    const result = await createProjectFromIdea(validated, { apiUrl, apiKey });
+    sendJson(res, 201, { status: "created", ...result });
+  } catch (err) {
+    if (err instanceof SidekickBoardApiError) {
+      const status = err.status && err.status >= 400 && err.status < 500 ? err.status : 502;
+      log(`Sidekick create-project failed: ${err.message}`);
+      sendJson(res, status, { status: "upstream_error", message: err.message });
+      return;
+    }
+    log(`Sidekick create-project crashed: ${err instanceof Error ? err.message : String(err)}`);
+    Sentry.captureException(err);
+    sendJson(res, 500, { status: "error", message: "Internal server error" });
+  }
+}
+
 async function handleShipRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (!requirePipelineKey(req, res)) return;
 
@@ -1554,6 +1597,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       case "/api/sidekick/classify": return handleClassifyRoute(req, res);
       case "/api/sidekick/create":   return handleSidekickCreateRoute(req, res);
       case "/api/sidekick/update":   return handleSidekickUpdateRoute(req, res);
+      case "/api/sidekick/create-project": return handleSidekickCreateProjectRoute(req, res);
       case "/api/ship":              return handleShipRoute(req, res);
       case "/api/update":      return handleUpdateRoute(req, res);
       case "/api/drain":       return handleDrainRoute(req, res);

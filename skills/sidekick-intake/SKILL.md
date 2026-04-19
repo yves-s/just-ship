@@ -241,9 +241,80 @@ The caller formats the final chat message. Recommended templates — no PM jargo
 
 When the user later corrects ("ne, andere Formulierung"), the Sidekick calls `/api/sidekick/update` with the ticket number from its session state and replies `Hab's angepasst: T-{N} — {neuer Titel}. {url}` — never a second Ist-im-Board sentence.
 
+## Project creation — T-877
+
+Category 4 (`project`) is the one exception to "never confirm before creating". A new project is structurally larger than a ticket — new workspace scope, new repo implications, new audience — so the Sidekick asks exactly once:
+
+> "Das klingt nach einem neuen Projekt. Soll ich {Name} als Projekt anlegen?"
+
+On confirmation the Sidekick calls the create-project endpoint, which writes **three things in sequence**:
+
+1. New **project** in the workspace (via `POST /api/projects`).
+2. Init-**Epic** `[Epic] Projekt-Grundgeruest {Name}` scoped to the new project (priority `high`).
+3. Three default **child tickets** under the Epic, each with `parent_ticket_id` pointing at the Epic:
+   - `Projekt-Scope klären: {Name}` — MVP scope, target audience, core user journey, out-of-scope list.
+   - `Tech-Stack-Entscheidung: {Name}` — framework, backend, hosting, auth.
+   - `Erste User-Journey bauen: {Name}` — end-to-end flow with all four states (loading/error/empty/success).
+
+Children are created in parallel. Partial child-failures go into `failed_children` — the project + epic still count as success. If the project itself or the epic fails, the request throws `BoardApiError` and nothing further is attempted (a project without an epic is an acceptable degenerate state for the user to clean up; an epic without a project cannot exist).
+
+The endpoint does **not** trigger an automatic develop pipeline — project creation is an authoring act, not a build signal.
+
+### Create-project endpoint
+
+`POST /api/sidekick/create-project`
+
+**Request:**
+```json
+{
+  "workspace_id": "uuid",
+  "project_name": "string (<=100 chars)",
+  "description": "string (<=2000 chars) — the user's initial pitch",
+  "confirmed": true,
+  "board_url": "https://board.just-ship.io"
+}
+```
+
+`confirmed` **must be the literal boolean `true`**. Any other value — missing, `false`, `"true"`, `1` — is rejected with `400`. This is the endpoint's own guard against a buggy caller sidestepping the confirmation step; the Sidekick must forward the user's "ja" as `true`.
+
+**Response:**
+```json
+{
+  "status": "created",
+  "project":  { "id": "…", "name": "…", "slug": "…", "url": "https://board.…/p/…" },
+  "epic":     { "number": 800, "id": "…", "title": "[Epic] Projekt-Grundgeruest …", "url": "…" },
+  "children": [
+    { "number": 801, "title": "Projekt-Scope klären: …", "url": "…" },
+    { "number": 802, "title": "Tech-Stack-Entscheidung: …", "url": "…" },
+    { "number": 803, "title": "Erste User-Journey bauen: …", "url": "…" }
+  ],
+  "failed_children": [ … ]
+}
+```
+
+**Errors:**
+- `400` — validation (missing fields, length overflow, `confirmed !== true`).
+- `401` — missing/invalid `X-Pipeline-Key`.
+- `429` — rate limit exceeded (5 requests per minute per workspace — deliberately lower than ticket/epic because one idea = one call).
+- `403` — Board API rejects project creation for this API key (project-scoped keys cannot create new projects; workspace-scoped key required).
+- `502` — other Board API upstream failure while creating the project or the epic.
+
+### Sidekick reply format — category 4
+
+```
+Projekt {Name} ist angelegt: {project.url}
+Erste Schritte sind im Epic T-{epic.number}:
+  • T-{children[0].number} — Projekt-Scope klären
+  • T-{children[1].number} — Tech-Stack-Entscheidung
+  • T-{children[2].number} — Erste User-Journey bauen
+```
+
+If `failed_children` is non-empty, append `Ein paar Init-Tickets haben gehangen, ich probier die gleich nochmal.` and retry the failed ones in the background.
+
+Optional follow-up (out of scope for this endpoint): the Sidekick may offer to start a product-cto + design-lead conversation about the new project — but only after the user has seen the confirmation, never as part of the create call.
+
 ## Out of scope (other tickets)
 
-- Project creation flow — T-877
 - Conversation flow — T-878
 - Decision Authority application beyond classification — T-879
 - Terminal command `/sidekick` — T-880

@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   validateCreateRequest,
   validateUpdateRequest,
+  validateCreateProjectRequest,
   createFromClassification,
   updateFromCorrection,
+  createProjectFromIdea,
   ValidationError,
   BoardApiError,
   type BoardClientConfig,
@@ -500,5 +502,268 @@ describe("updateFromCorrection", () => {
     await expect(
       updateFromCorrection({ ticket_number: 999, patch: { title: "x" } }, cfgWith(mf)),
     ).rejects.toThrow(BoardApiError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateCreateProjectRequest — T-877
+// ---------------------------------------------------------------------------
+
+describe("validateCreateProjectRequest", () => {
+  it("accepts a minimal project request with explicit confirmation", () => {
+    const req = validateCreateProjectRequest({
+      workspace_id: "ws-1",
+      project_name: "Aime Coach",
+      description: "An AI accountability buddy app for therapists",
+      confirmed: true,
+    });
+    expect(req.project_name).toBe("Aime Coach");
+    expect(req.confirmed).toBe(true);
+  });
+
+  it("trims name, description, and optional board_url", () => {
+    const req = validateCreateProjectRequest({
+      workspace_id: "  ws-1  ",
+      project_name: "  Aime Coach  ",
+      description: "  a desc  ",
+      confirmed: true,
+      board_url: "  https://board.just-ship.io  ",
+    });
+    expect(req.workspace_id).toBe("ws-1");
+    expect(req.project_name).toBe("Aime Coach");
+    expect(req.description).toBe("a desc");
+    expect(req.board_url).toBe("https://board.just-ship.io");
+  });
+
+  it("rejects missing workspace_id", () => {
+    expect(() =>
+      validateCreateProjectRequest({ project_name: "x", description: "y", confirmed: true }),
+    ).toThrow(/workspace_id/);
+  });
+
+  it("rejects missing project_name", () => {
+    expect(() =>
+      validateCreateProjectRequest({ workspace_id: "ws-1", description: "y", confirmed: true }),
+    ).toThrow(/project_name/);
+  });
+
+  it("rejects empty description", () => {
+    expect(() =>
+      validateCreateProjectRequest({ workspace_id: "ws-1", project_name: "x", description: "", confirmed: true }),
+    ).toThrow(/description/);
+  });
+
+  it("rejects project_name longer than max", () => {
+    expect(() =>
+      validateCreateProjectRequest({
+        workspace_id: "ws-1",
+        project_name: "x".repeat(101),
+        description: "y",
+        confirmed: true,
+      }),
+    ).toThrow(/project_name/);
+  });
+
+  it("rejects description longer than max", () => {
+    expect(() =>
+      validateCreateProjectRequest({
+        workspace_id: "ws-1",
+        project_name: "x",
+        description: "y".repeat(2001),
+        confirmed: true,
+      }),
+    ).toThrow(/description/);
+  });
+
+  it("rejects missing confirmation", () => {
+    expect(() =>
+      validateCreateProjectRequest({ workspace_id: "ws-1", project_name: "x", description: "y" }),
+    ).toThrow(/confirmed/);
+  });
+
+  it("rejects confirmed: false", () => {
+    expect(() =>
+      validateCreateProjectRequest({
+        workspace_id: "ws-1",
+        project_name: "x",
+        description: "y",
+        confirmed: false,
+      }),
+    ).toThrow(/confirmed/);
+  });
+
+  it("rejects confirmed as truthy non-boolean (guards against string 'true')", () => {
+    expect(() =>
+      validateCreateProjectRequest({
+        workspace_id: "ws-1",
+        project_name: "x",
+        description: "y",
+        confirmed: "true",
+      }),
+    ).toThrow(/confirmed/);
+  });
+
+  it("rejects non-string board_url", () => {
+    expect(() =>
+      validateCreateProjectRequest({
+        workspace_id: "ws-1",
+        project_name: "x",
+        description: "y",
+        confirmed: true,
+        board_url: 42,
+      }),
+    ).toThrow(/board_url/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createProjectFromIdea — T-877
+// ---------------------------------------------------------------------------
+
+describe("createProjectFromIdea", () => {
+  it("creates project then epic then all three default children", async () => {
+    const { fetch: mf, calls } = makeMockFetch([
+      // 1. project
+      { body: { data: { id: "proj-id", name: "Aime Coach", slug: "aime-coach" } } },
+      // 2. epic
+      { body: { data: { id: "epic-id", number: 800, title: "[Epic] Projekt-Grundgeruest Aime Coach" } } },
+      // 3-5. children
+      { body: { data: { id: "c1", number: 801, title: "Projekt-Scope klären: Aime Coach" } } },
+      { body: { data: { id: "c2", number: 802, title: "Tech-Stack-Entscheidung: Aime Coach" } } },
+      { body: { data: { id: "c3", number: 803, title: "Erste User-Journey bauen: Aime Coach" } } },
+    ]);
+
+    const result = await createProjectFromIdea(
+      {
+        workspace_id: "ws-1",
+        project_name: "Aime Coach",
+        description: "An AI accountability buddy app for therapists",
+        confirmed: true,
+        board_url: "https://board.just-ship.io",
+      },
+      cfgWith(mf),
+    );
+
+    expect(result.project.name).toBe("Aime Coach");
+    expect(result.project.slug).toBe("aime-coach");
+    expect(result.project.url).toBe("https://board.just-ship.io/p/aime-coach");
+    expect(result.epic.number).toBe(800);
+    expect(result.epic.url).toBe("https://board.just-ship.io/t/800");
+    expect(result.children).toHaveLength(3);
+    expect(result.failed_children).toBeUndefined();
+
+    // Call sequence
+    expect(calls).toHaveLength(5);
+    expect(calls[0].url).toBe("https://board.example.com/api/projects");
+    expect(calls[0].method).toBe("POST");
+    const projectBody = calls[0].body as Record<string, unknown>;
+    expect(projectBody.workspace_id).toBe("ws-1");
+    expect(projectBody.name).toBe("Aime Coach");
+    expect(projectBody.description).toBe("An AI accountability buddy app for therapists");
+
+    expect(calls[1].url).toBe("https://board.example.com/api/tickets");
+    const epicBody = calls[1].body as Record<string, unknown>;
+    expect(epicBody.project_id).toBe("proj-id");
+    expect(epicBody.parent_ticket_id).toBeUndefined();
+    expect(epicBody.title).toBe("[Epic] Projekt-Grundgeruest Aime Coach");
+    expect(epicBody.priority).toBe("high");
+
+    // Children all scoped to new project and parented to the epic
+    for (const call of calls.slice(2)) {
+      const body = call.body as Record<string, unknown>;
+      expect(body.project_id).toBe("proj-id");
+      expect(body.parent_ticket_id).toBe("epic-id");
+    }
+    // Required child titles
+    const childTitles = calls.slice(2).map((c) => (c.body as Record<string, unknown>).title);
+    expect(childTitles).toContain("Projekt-Scope klären: Aime Coach");
+    expect(childTitles).toContain("Tech-Stack-Entscheidung: Aime Coach");
+    expect(childTitles).toContain("Erste User-Journey bauen: Aime Coach");
+  });
+
+  it("uses slug placeholder URL when board_url is missing", async () => {
+    const { fetch: mf } = makeMockFetch([
+      { body: { data: { id: "p", name: "X", slug: "x-slug" } } },
+      { body: { data: { id: "e", number: 1, title: "e" } } },
+      { body: { data: { id: "c1", number: 2, title: "c1" } } },
+      { body: { data: { id: "c2", number: 3, title: "c2" } } },
+      { body: { data: { id: "c3", number: 4, title: "c3" } } },
+    ]);
+    const result = await createProjectFromIdea(
+      { workspace_id: "ws-1", project_name: "X", description: "y", confirmed: true },
+      cfgWith(mf),
+    );
+    expect(result.project.url).toBe("x-slug");
+    expect(result.epic.url).toBe("T-1");
+  });
+
+  it("throws when project creation fails (no epic or children attempted)", async () => {
+    const { fetch: mf, calls } = makeMockFetch([
+      { ok: false, status: 403, body: "forbidden" },
+    ]);
+    await expect(
+      createProjectFromIdea(
+        { workspace_id: "ws-1", project_name: "X", description: "y", confirmed: true },
+        cfgWith(mf),
+      ),
+    ).rejects.toThrow(BoardApiError);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("throws when epic fails (project exists, children never run)", async () => {
+    const { fetch: mf, calls } = makeMockFetch([
+      { body: { data: { id: "proj-id", name: "X", slug: "x" } } },
+      { ok: false, status: 500, body: "epic boom" },
+    ]);
+    await expect(
+      createProjectFromIdea(
+        { workspace_id: "ws-1", project_name: "X", description: "y", confirmed: true },
+        cfgWith(mf),
+      ),
+    ).rejects.toThrow(BoardApiError);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("collects partial child failures into failed_children while project + epic succeed", async () => {
+    const { fetch: mf } = makeMockFetch([
+      { body: { data: { id: "proj-id", name: "X", slug: "x" } } },
+      { body: { data: { id: "epic-id", number: 900, title: "e" } } },
+      { body: { data: { id: "c1", number: 901, title: "c1" } } },
+      { ok: false, status: 500, body: "child 2 boom" },
+      { body: { data: { id: "c3", number: 903, title: "c3" } } },
+    ]);
+    const result = await createProjectFromIdea(
+      { workspace_id: "ws-1", project_name: "X", description: "y", confirmed: true },
+      cfgWith(mf),
+    );
+    expect(result.project.slug).toBe("x");
+    expect(result.epic.number).toBe(900);
+    expect(result.children).toHaveLength(2);
+    expect(result.failed_children).toHaveLength(1);
+    expect(result.failed_children?.[0].index).toBe(1);
+    expect(result.failed_children?.[0].title).toContain("Tech-Stack-Entscheidung");
+    expect(result.failed_children?.[0].reason).toMatch(/HTTP 500/);
+  });
+
+  it("throws BoardApiError when project response is missing required fields", async () => {
+    const { fetch: mf } = makeMockFetch([
+      { body: { data: { id: "proj-id" } } }, // missing name and slug
+    ]);
+    await expect(
+      createProjectFromIdea(
+        { workspace_id: "ws-1", project_name: "X", description: "y", confirmed: true },
+        cfgWith(mf),
+      ),
+    ).rejects.toThrow(/missing required fields/);
+  });
+
+  it("throws BoardApiError on network failure at project step", async () => {
+    const { fetch: mf } = makeMockFetch([{ throwOn: "send", errorMessage: "econnrefused" }]);
+    await expect(
+      createProjectFromIdea(
+        { workspace_id: "ws-1", project_name: "X", description: "y", confirmed: true },
+        cfgWith(mf),
+      ),
+    ).rejects.toThrow(/econnrefused/);
   });
 });
