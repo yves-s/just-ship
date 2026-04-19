@@ -363,8 +363,23 @@ setup.sh             Install/Update Script
 
 ## Konversationelle Trigger
 
-**"passt"**, **"done"**, **"fertig"**, **"klappt"**, **"sieht gut aus"** → automatisch `/ship` ausführen
+### Explizite Trigger (immer aktiv, kein Kontext-Check)
 
 **"entwickle T-{N}"**, **"mach mal T-{N}"**, **"nimm dir T-{N} vor"**, **"fang an mit T-{N}"** → automatisch `/develop T-{N}` ausführen
 
-**Wichtig:** `/ship` läuft **vollständig autonom** — keine Rückfragen bei Commit, Push, PR oder Merge. Der User hat seine Freigabe bereits gegeben.
+Diese Trigger nennen das Ticket explizit. Keine Mehrdeutigkeit möglich.
+
+### Kontext-sensitive Trigger (nur mit Review-Kontext)
+
+**"passt"**, **"done"**, **"fertig"**, **"klappt"**, **"sieht gut aus"**, **"ok"** (einzelnes Wort), **"gut"** (einzelnes Wort) sind kurze Bestätigungen. Sie können eine Review-Freigabe sein — oder einfach "ok, verstanden, weiter".
+
+**`/ship` wird NUR getriggert, wenn ALLE drei Bedingungen erfüllt sind:**
+1. Aktueller Branch ist nicht `main`
+2. Es gibt einen offenen PR für den Branch ODER ein frischer lokaler Commit wartet auf Push
+3. Die letzte Assistant-Nachricht hat explizit auf Review/Freigabe gewartet (z.B. "PR ist bereit", "kann gemerged werden", "warte auf dein ok", "review?", "fertig, passt?")
+
+Ist auch nur eine Bedingung nicht erfüllt → normale Bestätigung, **KEINE Ship-Aktion**, einfach weiterarbeiten.
+
+Details und Beispiele: `.claude/rules/ship-trigger-context.md`.
+
+**Wichtig:** `/ship` läuft **vollständig autonom**, sobald er korrekt getriggert wurde — keine Rückfragen bei Commit, Push, PR oder Merge. Der User hat seine Freigabe dann bereits gegeben. Aber der Trigger selbst muss kontextuell verifiziert sein.
