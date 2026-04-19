@@ -362,8 +362,8 @@ The expert output flows into the artifact body. The user never sees which expert
 The policy is enforced at three layers:
 
 1. **System prompt.** The converse system prompt (`SYSTEM_PROMPT` in `pipeline/lib/sidekick-converse.ts`) contains both the allowed and forbidden topic lists with examples. This is the primary gate — the model is told the rule before it generates a turn.
-2. **Shared policy module.** `pipeline/lib/sidekick-policy.ts` exports `FORBIDDEN_QUESTION_TOPICS` and `detectImplementationLeak(text)`. Both the classifier and the converse flow import from it. New forbidden patterns go there and are automatically picked up.
-3. **Runtime metric.** Every assistant question from the converse flow is run through `detectImplementationLeak` after generation. If it matches a forbidden pattern, the turn is logged with `implementationLeak: true` and Sentry captures it. This is a telemetry layer, not a hard block — the team sees leaks and tightens the prompt (or upgrades the list) rather than surprising the user with a rejection.
+2. **Shared policy module.** `pipeline/lib/sidekick-policy.ts` exports `FORBIDDEN_QUESTION_TOPICS` and `detectImplementationLeak(text)`. Both the classifier and the converse flow import from it. New forbidden patterns added here are automatically picked up by the runtime metric layer (#3). The system prompt (#1) is a separate literal — when a pattern is added to `FORBIDDEN_QUESTION_TOPICS`, the matching category's anti-example in `SYSTEM_PROMPT` must be updated in the same commit so the model sees the new rule up-front instead of relying on detect-after-the-fact.
+3. **Runtime metric.** Every user-visible assistant turn from the converse flow (both questions on turns 1-2 and the finalize wrap on turn 3) is run through `detectImplementationLeak` after generation. If it matches a forbidden pattern, the turn is logged with `implementationLeak: true`, a `leakSurface` tag ("question" or "finalize"), and Sentry captures it. This is a telemetry layer, not a hard block — the team sees leaks and tightens the prompt (or upgrades the list) rather than surprising the user with a rejection.
 
 ### Test corpus
 
