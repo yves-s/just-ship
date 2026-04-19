@@ -25,6 +25,14 @@ import { decideResume } from "./lib/resume.ts";
 import { toBranchName, log } from "./lib/utils.ts";
 import { RateLimiter } from "./lib/rate-limiter.ts";
 import { classify, type ProjectContext } from "./lib/sidekick-classifier.ts";
+import {
+  validateCreateRequest,
+  validateUpdateRequest,
+  createFromClassification,
+  updateFromCorrection,
+  ValidationError as SidekickValidationError,
+  BoardApiError as SidekickBoardApiError,
+} from "./lib/sidekick-create.ts";
 
 // --- Mode detection ---
 const SERVER_CONFIG_PATH = process.env.SERVER_CONFIG_PATH;
@@ -139,6 +147,8 @@ const rateLimiters = {
   ship: new RateLimiter({ windowMs: 60_000, maxRequests: 10 }),
   answer: new RateLimiter({ windowMs: 60_000, maxRequests: 30 }),
   classify: new RateLimiter({ windowMs: 60_000, maxRequests: 30 }),
+  sidekickCreate: new RateLimiter({ windowMs: 60_000, maxRequests: 30 }),
+  sidekickUpdate: new RateLimiter({ windowMs: 60_000, maxRequests: 30 }),
 };
 
 function recordRun(record: RunRecord) {
@@ -1329,6 +1339,81 @@ async function handleClassifyRoute(req: IncomingMessage, res: ServerResponse): P
   }
 }
 
+async function handleSidekickCreateRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+
+  const projectIdForRL = (body.project_id as string | undefined) ?? "unknown";
+  if (!applyRateLimit(rateLimiters.sidekickCreate, projectIdForRL, "/api/sidekick/create", res)) return;
+
+  let validated;
+  try {
+    validated = validateCreateRequest(body);
+  } catch (err) {
+    if (err instanceof SidekickValidationError) {
+      sendJson(res, 400, { status: "bad_request", message: err.message });
+      return;
+    }
+    throw err;
+  }
+
+  const { apiUrl, apiKey } = getApiCredentials();
+  try {
+    const result = await createFromClassification(validated, { apiUrl, apiKey });
+    sendJson(res, 201, { status: "created", ...result });
+  } catch (err) {
+    if (err instanceof SidekickBoardApiError) {
+      const status = err.status && err.status >= 400 && err.status < 500 ? err.status : 502;
+      log(`Sidekick create failed: ${err.message}`);
+      sendJson(res, status, { status: "upstream_error", message: err.message });
+      return;
+    }
+    log(`Sidekick create crashed: ${err instanceof Error ? err.message : String(err)}`);
+    Sentry.captureException(err);
+    sendJson(res, 500, { status: "error", message: "Internal server error" });
+  }
+}
+
+async function handleSidekickUpdateRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+
+  const ticketNumForRL = body.ticket_number;
+  if (!applyRateLimit(rateLimiters.sidekickUpdate, String(ticketNumForRL ?? "unknown"), "/api/sidekick/update", res)) return;
+
+  let validated;
+  try {
+    validated = validateUpdateRequest(body);
+  } catch (err) {
+    if (err instanceof SidekickValidationError) {
+      sendJson(res, 400, { status: "bad_request", message: err.message });
+      return;
+    }
+    throw err;
+  }
+
+  const boardUrl = typeof body.board_url === "string" && body.board_url.trim() ? body.board_url : undefined;
+  const { apiUrl, apiKey } = getApiCredentials();
+  try {
+    const result = await updateFromCorrection(validated, { apiUrl, apiKey }, boardUrl);
+    sendJson(res, 200, { status: "updated", ...result });
+  } catch (err) {
+    if (err instanceof SidekickBoardApiError) {
+      const status = err.status && err.status >= 400 && err.status < 500 ? err.status : 502;
+      log(`Sidekick update failed: ${err.message}`);
+      sendJson(res, status, { status: "upstream_error", message: err.message });
+      return;
+    }
+    log(`Sidekick update crashed: ${err instanceof Error ? err.message : String(err)}`);
+    Sentry.captureException(err);
+    sendJson(res, 500, { status: "error", message: "Internal server error" });
+  }
+}
+
 async function handleShipRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (!requirePipelineKey(req, res)) return;
 
@@ -1468,6 +1553,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       case "/api/events":            return handleEventsRoute(req, res);
       case "/api/answer":            return handleAnswerRoute(req, res);
       case "/api/sidekick/classify": return handleClassifyRoute(req, res);
+      case "/api/sidekick/create":   return handleSidekickCreateRoute(req, res);
+      case "/api/sidekick/update":   return handleSidekickUpdateRoute(req, res);
       case "/api/ship":              return handleShipRoute(req, res);
       case "/api/update":      return handleUpdateRoute(req, res);
       case "/api/drain":       return handleDrainRoute(req, res);

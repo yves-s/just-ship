@@ -126,9 +126,123 @@ Errors log `err`, `modelOutput` (truncated to 500 chars), and the input preview.
 | "I want to build a new shopify analytics tool for fashion brands, separate from anything we have" | (none) | project |
 | "Let's set up Just Ship Edu — a guided coding curriculum for high schoolers, totally separate workspace" | (none) | project |
 
+## Autonomous creation — T-876
+
+Once the classifier picks `ticket` or `epic`, the Sidekick creates the artifact itself without asking the user. The rule is the same one that makes the classifier work: the platform decides, the user steers. Asking "soll ich das so anlegen?" leaks PM vocabulary into a conversational product.
+
+The creation endpoint is stateless: the caller passes the classification plus the structured input (title + body, optionally priority/tags, or an epic + children). The Engine writes it to the Board and returns enough info for the Sidekick to reply "Ist im Board: T-{N} — {Titel}. [Link]" with no further turns.
+
+### Create endpoint
+
+`POST /api/sidekick/create`
+
+**Request — category 1 (ticket):**
+```json
+{
+  "category": "ticket",
+  "project_id": "uuid",
+  "board_url": "https://board.just-ship.io",
+  "ticket": {
+    "title": "string",
+    "body": "string (Markdown)",
+    "priority": "high" | "medium" | "low",
+    "tags": ["optional"]
+  }
+}
+```
+
+**Request — category 2 (epic + children):**
+```json
+{
+  "category": "epic",
+  "project_id": "uuid",
+  "board_url": "https://board.just-ship.io",
+  "epic":     { "title": "[Epic] X", "body": "…" },
+  "children": [ { "title": "Y", "body": "…" }, … ]
+}
+```
+
+Children get `parent_ticket_id` pointing to the Epic automatically. The Epic is created first (sequentially); children are created in parallel. A child-level failure does not fail the whole request — the Epic is still usable, and failed children are listed so the Sidekick can tell the user ("2 von 3 Child-Tickets angelegt, c2 hat gehangen — willst du's nochmal?") and/or retry.
+
+**Response — category 1:**
+```json
+{
+  "status": "created",
+  "category": "ticket",
+  "ticket": { "number": 501, "id": "…", "title": "…", "url": "https://board.…/t/501" }
+}
+```
+
+**Response — category 2:**
+```json
+{
+  "status": "created",
+  "category": "epic",
+  "epic":     { "number": 500, "id": "…", "title": "[Epic] …", "url": "…" },
+  "children": [ { "number": 501, … }, { "number": 502, … } ],
+  "failed_children": [ { "index": 2, "title": "c3", "reason": "…" } ]
+}
+```
+
+`failed_children` is only present when at least one child failed.
+
+**Errors:**
+- `400` — validation (missing `category`, invalid title/body length, empty children array, too many children, unknown priority).
+- `401` — missing/invalid `X-Pipeline-Key`.
+- `429` — rate limit exceeded.
+- `502` — Board API upstream failure while creating the Epic itself.
+
+**Limits:**
+- Title: 200 chars. Body: 20 000 chars. Children: 20 per Epic.
+- Rate limit: 30 requests per minute per project.
+
+### Update endpoint (correction flow)
+
+When the user corrects the Sidekick after creation ("ne anders, der Titel soll X sein"), the Sidekick patches the existing ticket instead of creating a new one. It keeps the ticket number from the previous `create` response in its session state and hands it back via this endpoint.
+
+`POST /api/sidekick/update`
+
+**Request:**
+```json
+{
+  "ticket_number": 501,
+  "board_url": "https://board.just-ship.io",
+  "patch": {
+    "title": "optional new title",
+    "body": "optional new body",
+    "priority": "high" | "medium" | "low",
+    "tags": ["optional"],
+    "status": "backlog" | "ready_to_develop"
+  }
+}
+```
+
+Only fields present in `patch` are changed. At least one field is required.
+
+**Response:**
+```json
+{
+  "status": "updated",
+  "ticket": { "number": 501, "id": "…", "title": "…", "url": "…" }
+}
+```
+
+**Rate limit:** 30 requests per minute per ticket.
+
+### Sidekick reply format
+
+The caller formats the final chat message. Recommended templates — no PM jargon, no "Soll ich das anlegen?":
+
+| Category | Reply template |
+|---|---|
+| ticket | `Ist im Board: T-{N} — {title}. {url}` |
+| epic   | `Ist im Board als Epic T-{N} — {title}. {url}` + a short bullet list of child titles with their T-numbers |
+| epic with `failed_children` | append `Ein paar Child-Tickets haben gehangen, ich probier die gleich nochmal.` — then retry in the background |
+
+When the user later corrects ("ne, andere Formulierung"), the Sidekick calls `/api/sidekick/update` with the ticket number from its session state and replies `Hab's angepasst: T-{N} — {neuer Titel}. {url}` — never a second Ist-im-Board sentence.
+
 ## Out of scope (other tickets)
 
-- Actual ticket/epic creation — T-876
 - Project creation flow — T-877
 - Conversation flow — T-878
 - Decision Authority application beyond classification — T-879
