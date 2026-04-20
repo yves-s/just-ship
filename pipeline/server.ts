@@ -40,6 +40,14 @@ import {
   processTurn as processConverseTurn,
   SessionBusyError as SidekickSessionBusyError,
 } from "./lib/sidekick-converse.ts";
+import {
+  validateChatRequest,
+  processChat,
+  ChatValidationError,
+  ChatThreadBusyError,
+  type ChatEvent,
+  type ChatSink,
+} from "./lib/sidekick-chat.ts";
 
 // --- Mode detection ---
 const SERVER_CONFIG_PATH = process.env.SERVER_CONFIG_PATH;
@@ -162,6 +170,11 @@ const rateLimiters = {
   // Converse is per-project. Each session uses 1-3 calls; 30/min/project keeps
   // per-user throughput healthy while blocking abusive callers.
   sidekickConverse: new RateLimiter({ windowMs: 60_000, maxRequests: 30 }),
+  // Chat is per-(project, user) (full conversation mode — T-922). 60/min
+  // covers bursty usage (multiple quick follow-ups) while still blocking
+  // abuse. Key shape: `chat:<project_id>:<user_id|anon>` — scoping always
+  // includes project_id so user_id rotation or omission cannot bypass it.
+  sidekickChat: new RateLimiter({ windowMs: 60_000, maxRequests: 60 }),
 };
 
 function recordRun(record: RunRecord) {
@@ -1523,6 +1536,154 @@ async function handleShipRoute(req: IncomingMessage, res: ServerResponse): Promi
   await handleShip(ticketNumber, res, projectIdForRL);
 }
 
+// ---------------------------------------------------------------------------
+// Sidekick Chat (T-922) — SSE endpoint with tool-call loop.
+// ---------------------------------------------------------------------------
+
+/**
+ * Build an SSE-shaped `ChatSink` around an `http.ServerResponse`.
+ *
+ * The sink:
+ *  - writes SSE headers on first use (idempotent),
+ *  - serialises each `ChatEvent` as `event: <type>\ndata: <json>\n\n`,
+ *  - tracks the client-connected state so the processor can bail out early,
+ *  - fires an AbortSignal to the model call when the socket closes mid-stream.
+ */
+function createSseChatSink(
+  res: ServerResponse,
+  abortCtrl: AbortController,
+): ChatSink {
+  let open = true;
+  let headersWritten = false;
+
+  const writeHeaders = () => {
+    if (headersWritten) return;
+    headersWritten = true;
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      // Tell nginx / proxies not to buffer the stream (common pitfall).
+      "X-Accel-Buffering": "no",
+    });
+  };
+
+  // If the client goes away mid-stream we mark closed AND abort upstream.
+  // We register once here rather than in the handler so all four failure
+  // modes (close, error, aborted, end-without-final) converge on one flag.
+  const onClose = () => {
+    if (!open) return;
+    open = false;
+    abortCtrl.abort();
+  };
+  res.on("close", onClose);
+  res.on("error", onClose);
+
+  return {
+    send(event: ChatEvent) {
+      if (!open) return;
+      writeHeaders();
+      // SSE frames: "event: <type>" + "data: <payload>" + blank line.
+      // Keep payload on a single line — the SSE spec treats every "\n"
+      // inside data: as a line break, which would split our JSON.
+      const payload = JSON.stringify(event);
+      try {
+        res.write(`event: ${event.type}\ndata: ${payload}\n\n`);
+      } catch (err) {
+        // write() throws when the socket is already destroyed — treat as disconnect.
+        log(`chat sse write failed: ${err instanceof Error ? err.message : String(err)}`);
+        open = false;
+        abortCtrl.abort();
+      }
+    },
+    isOpen() {
+      return open;
+    },
+    close() {
+      if (!open) return;
+      open = false;
+      writeHeaders();
+      try {
+        res.end();
+      } catch {
+        // Best-effort — socket already torn down.
+      }
+    },
+  };
+}
+
+async function handleSidekickChatRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+
+  let validated;
+  try {
+    validated = validateChatRequest(body);
+  } catch (err) {
+    if (err instanceof ChatValidationError) {
+      sendJson(res, 400, { status: "bad_request", message: err.message });
+      return;
+    }
+    throw err;
+  }
+
+  // Rate-limit keyed by (project_id, user_id) so the per-user 60/min quota
+  // always composes with a per-project quota. A previous version keyed purely
+  // on `user_id` (falling back to `project:<id>`), which let a caller dodge
+  // the limit by rotating through fabricated user_id values per request, and
+  // a different caller in the same project drop their user_id to share a
+  // pooled quota with every other anonymous request in that project. Both
+  // paths are now closed: anonymous traffic is scoped to the project, and
+  // named users can only amplify their own project's budget, not escape it.
+  const userKeyPart = validated.user_id ?? "anon";
+  const rateKey = `chat:${validated.project_id}:${userKeyPart}`;
+  if (!applyRateLimit(rateLimiters.sidekickChat, rateKey, "/api/sidekick/chat", res)) return;
+
+  const abortCtrl = new AbortController();
+
+  // Detect concurrent-turn collisions BEFORE we open the SSE stream. If the
+  // same thread_id is already in-flight, responding with an SSE "error" event
+  // works but it trains clients to tolerate a 200 for a rejected request;
+  // 409 is the standard shape for "the server has a conflict, try again".
+  // processChat throws `ChatThreadBusyError` synchronously before emitting
+  // anything, so we catch it via a pre-flight invocation that delegates into
+  // the SSE sink only once we know the call is accepted.
+  try {
+    const sink = createSseChatSink(res, abortCtrl);
+    try {
+      await processChat(validated, sink, { signal: abortCtrl.signal });
+    } catch (err) {
+      if (err instanceof ChatThreadBusyError) {
+        // The thread was reserved by another concurrent request. We already
+        // opened the SSE response (headers may or may not be flushed), so we
+        // surface the conflict on the stream AND close cleanly — switching
+        // to a mid-stream JSON 409 would confuse the SSE parser on the
+        // client side.
+        if (sink.isOpen()) {
+          sink.send({ type: "error", message: err.message, code: "thread_busy" });
+        }
+        sink.close();
+        return;
+      }
+      // processChat handles its own errors internally, but a throw here
+      // would still be a bug in this layer — log it and make sure the
+      // stream closes.
+      log(`Sidekick chat crashed: ${err instanceof Error ? err.message : String(err)}`);
+      Sentry.captureException(err);
+      if (sink.isOpen()) {
+        sink.send({ type: "error", message: "internal_error" });
+      }
+      sink.close();
+    }
+  } catch (err) {
+    // Defensive: sink construction itself failed (e.g. socket already dead).
+    log(`Sidekick chat setup failed: ${err instanceof Error ? err.message : String(err)}`);
+    Sentry.captureException(err);
+  }
+}
+
 async function handleUpdateRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const updateSecret = serverConfig?.server.update_secret;
   const headerSecret = req.headers["x-update-secret"] as string | undefined;
@@ -1651,6 +1812,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       case "/api/sidekick/update":   return handleSidekickUpdateRoute(req, res);
       case "/api/sidekick/create-project": return handleSidekickCreateProjectRoute(req, res);
       case "/api/sidekick/converse":       return handleSidekickConverseRoute(req, res);
+      case "/api/sidekick/chat":           return handleSidekickChatRoute(req, res);
       case "/api/ship":              return handleShipRoute(req, res);
       case "/api/update":      return handleUpdateRoute(req, res);
       case "/api/drain":       return handleDrainRoute(req, res);
