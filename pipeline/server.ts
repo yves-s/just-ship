@@ -66,6 +66,11 @@ import {
   ThreadNotFoundError,
   ThreadTransitionError,
 } from "./lib/threads-store.ts";
+import {
+  handleAttach,
+  AttachValidationError,
+  AttachUploadError,
+} from "./lib/sidekick-attach.ts";
 
 // --- Mode detection ---
 const SERVER_CONFIG_PATH = process.env.SERVER_CONFIG_PATH;
@@ -200,6 +205,9 @@ const rateLimiters = {
   sidekickThreadGet: new RateLimiter({ windowMs: 60_000, maxRequests: 60 }),
   sidekickThreadUpdate: new RateLimiter({ windowMs: 60_000, maxRequests: 30 }),
   sidekickThreadList: new RateLimiter({ windowMs: 60_000, maxRequests: 60 }),
+  // Image upload proxy (T-925). Lower than chat because each request is
+  // up to 25 MB and the bucket is shared across the workspace.
+  sidekickAttach: new RateLimiter({ windowMs: 60_000, maxRequests: 20 }),
 };
 
 function recordRun(record: RunRecord) {
@@ -1698,6 +1706,54 @@ async function handleSidekickCreateProjectRoute(req: IncomingMessage, res: Serve
   }
 }
 
+// T-925: Image upload proxy. Accepts multipart/form-data with 1–5 files
+// (JPG/PNG/WebP/GIF, max 5 MB each), uploads each to the Board's
+// `ticket-attachments` Supabase bucket, and returns the public URLs in the
+// exact shape Board's own `/api/sidekick/upload` route uses — the Board
+// widget can switch endpoints without a client-side refactor.
+async function handleSidekickAttachRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  // Rate limit per-IP since multipart bodies don't have a project_id in the
+  // headers and we want to gate before parsing. We approximate the caller
+  // by remote address; in mixed-NAT setups this is coarse but fine for a
+  // 20/min ceiling whose purpose is abuse prevention, not quota.
+  const rateKey = (req.socket.remoteAddress ?? "unknown") + ":attach";
+  if (!applyRateLimit(rateLimiters.sidekickAttach, rateKey, "/api/sidekick/attach", res)) return;
+
+  try {
+    const result = await handleAttach(req);
+    // Mirror Board's `success()` helper shape: `{ data, error: null }` at
+    // HTTP 201. The Board widget reads `response.data.files` — changing
+    // this shape would break the AC "response-identical to today's Board
+    // upload route".
+    sendJson(res, 201, { data: { files: result.files }, error: null });
+  } catch (err) {
+    if (err instanceof AttachValidationError) {
+      sendJson(res, err.status, {
+        data: null,
+        error: { code: "VALIDATION_ERROR", message: err.message },
+      });
+      return;
+    }
+    if (err instanceof AttachUploadError) {
+      log(`Sidekick attach upload failed: ${err.message}`);
+      Sentry.captureException(err);
+      sendJson(res, err.status, {
+        data: null,
+        error: { code: "UPLOAD_ERROR", message: err.message },
+      });
+      return;
+    }
+    log(`Sidekick attach crashed: ${err instanceof Error ? err.message : String(err)}`);
+    Sentry.captureException(err);
+    sendJson(res, 500, {
+      data: null,
+      error: { code: "INTERNAL_ERROR", message: "Internal server error" },
+    });
+  }
+}
+
 async function handleSidekickConverseRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (!requirePipelineKey(req, res)) return;
 
@@ -2053,6 +2109,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       case "/api/sidekick/create-project": return handleSidekickCreateProjectRoute(req, res);
       case "/api/sidekick/converse":       return handleSidekickConverseRoute(req, res);
       case "/api/sidekick/chat":           return handleSidekickChatRoute(req, res);
+      case "/api/sidekick/attach":         return handleSidekickAttachRoute(req, res);
       case "/api/ship":              return handleShipRoute(req, res);
       case "/api/update":      return handleUpdateRoute(req, res);
       case "/api/drain":       return handleDrainRoute(req, res);
