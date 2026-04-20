@@ -584,7 +584,12 @@ async function execSearchTickets(ctx: ToolContext, rawArgs: unknown): Promise<To
 interface ListMyTicketsArgs { status?: string }
 
 function isListArgs(x: unknown): x is ListMyTicketsArgs {
-  if (typeof x !== "object" || x === null) return true; // empty object is valid
+  // Missing args or explicit `null` are treated as "no filter" — the tool
+  // has no required fields. Any non-object at runtime (string, number, array)
+  // is an invalid shape and must be rejected so we don't silently ignore
+  // the caller's intent.
+  if (x === undefined || x === null) return true;
+  if (typeof x !== "object") return false;
   const o = x as Record<string, unknown>;
   return o.status === undefined || typeof o.status === "string";
 }
