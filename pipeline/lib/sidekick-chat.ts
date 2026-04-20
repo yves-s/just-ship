@@ -164,14 +164,29 @@ export function validateChatRequest(raw: unknown): ChatRequest {
       if (typeof url !== "string" || !url.trim()) {
         throw new ChatValidationError(`attachments[${i}].url: must be a non-empty string`);
       }
-      if (url.length > MAX_ATTACHMENT_URL_LEN) {
+      const trimmedUrl = url.trim();
+      if (trimmedUrl.length > MAX_ATTACHMENT_URL_LEN) {
         throw new ChatValidationError(`attachments[${i}].url: must be <= ${MAX_ATTACHMENT_URL_LEN} chars`);
+      }
+      // Scheme check. The URL is embedded verbatim into the LLM prompt (and
+      // one day — Child #4 — downloaded for multimodal content blocks), so
+      // we must reject schemes that could exfiltrate local resources or
+      // hijack browser navigation: javascript:, data:, file://, relative
+      // paths, plain strings. Only http(s) is safe to pass through.
+      let parsed: URL;
+      try {
+        parsed = new URL(trimmedUrl);
+      } catch {
+        throw new ChatValidationError(`attachments[${i}].url: must be a valid absolute URL`);
+      }
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        throw new ChatValidationError(`attachments[${i}].url: only http(s) URLs are allowed`);
       }
       const mime = aObj.mime;
       if (mime !== undefined && (typeof mime !== "string" || !mime.trim())) {
         throw new ChatValidationError(`attachments[${i}].mime: must be a non-empty string when provided`);
       }
-      return { url: url.trim(), ...(typeof mime === "string" ? { mime: mime.trim() } : {}) };
+      return { url: trimmedUrl, ...(typeof mime === "string" ? { mime: mime.trim() } : {}) };
     });
   }
 

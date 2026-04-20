@@ -155,6 +155,30 @@ describe("validateChatRequest", () => {
     expect(() => validateChatRequest({ ...base, attachments: [{ mime: "image/png" }] })).toThrow(/url/);
   });
 
+  it("rejects attachment urls with non-http(s) schemes", () => {
+    for (const url of [
+      "javascript:alert(1)",
+      "data:text/html,<script>alert(1)</script>",
+      "file:///etc/passwd",
+      "vbscript:msgbox(1)",
+    ]) {
+      expect(() => validateChatRequest({ ...base, attachments: [{ url }] })).toThrow(/http\(s\)/);
+    }
+  });
+
+  it("rejects relative / non-URL attachment urls", () => {
+    for (const url of ["/relative/path.png", "img.png", "not a url"]) {
+      expect(() => validateChatRequest({ ...base, attachments: [{ url }] })).toThrow(/valid absolute URL|http\(s\)/);
+    }
+  });
+
+  it("accepts http and https attachment urls", () => {
+    const a = validateChatRequest({ ...base, attachments: [{ url: "https://cdn.example/x.png" }] });
+    const b = validateChatRequest({ ...base, attachments: [{ url: "http://cdn.example/x.png" }] });
+    expect(a.attachments?.[0]?.url).toBe("https://cdn.example/x.png");
+    expect(b.attachments?.[0]?.url).toBe("http://cdn.example/x.png");
+  });
+
   it("accepts context", () => {
     const v = validateChatRequest({
       ...base,
