@@ -12,12 +12,39 @@ import { createFromClassification, BoardApiError, ValidationError, type CreateRe
  * tool set — so the tools now live here in the engine, behind an HTTP-callable
  * shape that the chat endpoint (T-922) consumes.
  *
- * The tool SCHEMAS (what Claude sees — name, input_schema, description) are
- * identical to the Board's previous definitions; the Board client continues to
- * work unchanged. The EXECUTION moved from direct Supabase calls to Board API
- * HTTP calls because the engine has no Supabase SDK in its dependency graph —
- * it talks to the board exclusively via the REST API, which already enforces
- * RLS, pipeline-key auth, and workspace scoping.
+ * The 6 ticket/thread/status tool SHAPES (name + field set) match the Board's
+ * previous definitions so the model's expectations and the browser client's
+ * glue code carry over with minimal change. Two deliberate deviations:
+ *   - `create_ticket` makes `tags` and `priority` optional (the Board's schema
+ *     declared them required but the runtime always tolerated omission).
+ *   - `classify_input` replaces the Board's heuristic T-shirt sizer with the
+ *     engine's four-category Sidekick classifier (T-875). This is the whole
+ *     point of the port — Browser widget and Terminal sidekick now share the
+ *     same classifier via this tool. Existing Board callers that passed
+ *     `{input, affected_areas, has_dependencies, clarity}` and expected
+ *     `{classification: xs|s|m|l|xl}` must be updated when they migrate to
+ *     the engine registry.
+ *
+ * The EXECUTION moved from direct Supabase calls to Board API HTTP calls
+ * because the engine has no Supabase SDK in its dependency graph — it talks
+ * to the board exclusively via the REST API, which already enforces RLS,
+ * pipeline-key auth, and workspace scoping.
+ *
+ * Board API surface expected (defined here, implemented board-side by Epic
+ * T-921's sibling children — until each endpoint ships the corresponding
+ * tool returns a BoardApiError, surfaced to the model so the conversation
+ * recovers gracefully):
+ *   - POST   /api/threads              (Child #3)
+ *   - PATCH  /api/threads/{id}         (Child #3)
+ *   - POST   /api/threads/{id}/messages (Child #3 — used by create_ticket's
+ *                                        best-effort thread cross-reference)
+ *   - GET    /api/tickets?search=…      (exists; used by search_tickets)
+ *   - GET    /api/tickets?scope=mine&…  (needs `scope=mine` filter; Board API
+ *                                        addition tracked alongside T-923)
+ *   - GET    /api/projects/{id}/status  (aggregate endpoint — consolidates
+ *                                        the 3 separate queries the Board did
+ *                                        client-side into one server-side
+ *                                        call; tracked alongside T-923)
  *
  * Auth model:
  *   - Pipeline key (X-Pipeline-Key) — used for workspace-scoped writes and
