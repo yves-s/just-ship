@@ -34,6 +34,16 @@ export const ALLOWED_MIME_TYPES = new Set([
   "image/gif",
 ]);
 
+// Storage-path IDs are interpolated into the URL `{workspace_id}/{folder}/{uuid}.{ext}`.
+// A caller that controls either field could escape the intended namespace
+// (e.g. `workspace_id=../other-ws`), so we require a strict UUID shape
+// before any value flows into the path. Matches the server-side Board
+// contract where workspace_id / project_id / conversation_id are all UUIDs.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(v: string | undefined | null): v is string {
+  return typeof v === "string" && UUID_RE.test(v);
+}
+
 // Hard ceiling on the *entire* request: 5 files × 5 MB + slack for form
 // framing, field names, boundaries. Anything bigger is either an abuse
 // attempt or a client bug — we refuse upfront rather than buffer megabytes
@@ -411,26 +421,44 @@ export async function handleAttach(
 
   // `project_id` is required so we can scope the storage folder (matches
   // Board behavior — keeps uploads scoped per project for easier cleanup
-  // and RLS audits).
-  const projectId = form.fields["project_id"];
-  if (!projectId || !projectId.trim()) {
+  // and RLS audits). Must be a UUID so we can't be tricked into using a
+  // malformed identifier elsewhere in the pipeline.
+  const projectId = form.fields["project_id"]?.trim();
+  if (!projectId) {
     throw new AttachValidationError("project_id required");
+  }
+  if (!isUuid(projectId)) {
+    throw new AttachValidationError("project_id must be a UUID");
   }
   // `workspace_id` is required because the storage path format
   // `{workspace_id}/{folder}/{file}` is how the Board widget + RLS policies
-  // find the attachment. Callers have this from their auth context.
-  const workspaceId = form.fields["workspace_id"];
-  if (!workspaceId || !workspaceId.trim()) {
+  // find the attachment. It is interpolated directly into the storage
+  // object key, so we MUST reject anything that isn't a canonical UUID —
+  // otherwise a caller with a valid X-Pipeline-Key could pass
+  // `workspace_id=../other-workspace` and write into another tenant's
+  // namespace (path traversal via the storage URL).
+  const workspaceId = form.fields["workspace_id"]?.trim();
+  if (!workspaceId) {
     throw new AttachValidationError("workspace_id required");
+  }
+  if (!isUuid(workspaceId)) {
+    throw new AttachValidationError("workspace_id must be a UUID");
   }
   // `conversation_id` is optional — used as subfolder for easier cleanup
   // later; falls back to "pending" (same rule as the Board upload route).
-  const folder = form.fields["conversation_id"]?.trim() || "pending";
+  // When present it must be a UUID for the same path-traversal reason as
+  // above; a malformed value falls back to the safe literal "pending"
+  // rather than propagating attacker-controlled strings into the path.
+  const rawConversationId = form.fields["conversation_id"]?.trim();
+  if (rawConversationId && !isUuid(rawConversationId)) {
+    throw new AttachValidationError("conversation_id must be a UUID");
+  }
+  const folder = rawConversationId || "pending";
 
   const storage = getStorageConfig(opts.storage);
   const uploaded: UploadedFile[] = [];
   for (const file of form.files) {
-    const result = await uploadOne(file, workspaceId.trim(), folder, storage);
+    const result = await uploadOne(file, workspaceId, folder, storage);
     uploaded.push(result);
   }
 

@@ -24,6 +24,13 @@ import {
 
 const BOUNDARY = "----JustShipTestBoundary";
 
+// Fixture UUIDs used across tests — workspace_id / project_id / conversation_id
+// must be UUIDs (enforced by the handler as a path-traversal guard). Keep them
+// hand-rolled so any future change to UUID validation fails loudly here.
+const WS_UUID = "11111111-1111-4111-8111-111111111111";
+const PROJ_UUID = "22222222-2222-4222-8222-222222222222";
+const CONV_UUID = "33333333-3333-4333-8333-333333333333";
+
 interface FilePart {
   field?: string;
   filename: string;
@@ -286,8 +293,8 @@ describe("handleAttach (happy path)", () => {
 
   it("uploads 1 file and returns a URL in the files array", async () => {
     const body = buildMultipartBody([
-      { name: "project_id", value: "proj-1" },
-      { name: "workspace_id", value: "ws-1" },
+      { name: "project_id", value: PROJ_UUID },
+      { name: "workspace_id", value: WS_UUID },
       { filename: "hello.png", mimeType: "image/png", data: pngBytes(200) },
     ]);
     const { cfg, calls } = storageCfgWithOk();
@@ -298,26 +305,26 @@ describe("handleAttach (happy path)", () => {
     expect(result.files).toHaveLength(1);
     expect(result.files[0].name).toBe("hello.png");
     expect(result.files[0].type).toBe("image/png");
-    expect(result.files[0].url).toContain(`/public/${BUCKET}/ws-1/pending/`);
+    expect(result.files[0].url).toContain(`/public/${BUCKET}/${WS_UUID}/pending/`);
   });
 
   it("uses conversation_id as folder when provided", async () => {
     const body = buildMultipartBody([
-      { name: "project_id", value: "proj-1" },
-      { name: "workspace_id", value: "ws-1" },
-      { name: "conversation_id", value: "conv-123" },
+      { name: "project_id", value: PROJ_UUID },
+      { name: "workspace_id", value: WS_UUID },
+      { name: "conversation_id", value: CONV_UUID },
       { filename: "a.png", mimeType: "image/png", data: pngBytes(100) },
     ]);
     const { cfg, calls } = storageCfgWithOk();
     const result = await handleAttach(makeRequest(body), { storage: cfg });
-    expect(calls[0].url).toContain("/ws-1/conv-123/");
-    expect(result.files[0].url).toContain("/ws-1/conv-123/");
+    expect(calls[0].url).toContain(`/${WS_UUID}/${CONV_UUID}/`);
+    expect(result.files[0].url).toContain(`/${WS_UUID}/${CONV_UUID}/`);
   });
 
   it("uploads 5 files and preserves MIME types", async () => {
     const body = buildMultipartBody([
-      { name: "project_id", value: "proj-1" },
-      { name: "workspace_id", value: "ws-1" },
+      { name: "project_id", value: PROJ_UUID },
+      { name: "workspace_id", value: WS_UUID },
       { filename: "a.jpg", mimeType: "image/jpeg", data: pngBytes(50) },
       { filename: "b.png", mimeType: "image/png", data: pngBytes(60) },
       { filename: "c.webp", mimeType: "image/webp", data: pngBytes(70) },
@@ -355,8 +362,8 @@ describe("handleAttach (rejections)", () => {
 
   it("rejects 6 files with 400", async () => {
     const body = buildMultipartBody([
-      { name: "project_id", value: "proj-1" },
-      { name: "workspace_id", value: "ws-1" },
+      { name: "project_id", value: PROJ_UUID },
+      { name: "workspace_id", value: WS_UUID },
       ...Array.from({ length: 6 }, (_, i) => ({
         filename: `f${i}.png`,
         mimeType: "image/png",
@@ -375,8 +382,8 @@ describe("handleAttach (rejections)", () => {
 
   it("rejects a file > 5 MB with 413", async () => {
     const body = buildMultipartBody([
-      { name: "project_id", value: "proj-1" },
-      { name: "workspace_id", value: "ws-1" },
+      { name: "project_id", value: PROJ_UUID },
+      { name: "workspace_id", value: WS_UUID },
       {
         filename: "big.png",
         mimeType: "image/png",
@@ -395,8 +402,8 @@ describe("handleAttach (rejections)", () => {
 
   it("rejects wrong MIME types with 415", async () => {
     const body = buildMultipartBody([
-      { name: "project_id", value: "proj-1" },
-      { name: "workspace_id", value: "ws-1" },
+      { name: "project_id", value: PROJ_UUID },
+      { name: "workspace_id", value: WS_UUID },
       { filename: "evil.svg", mimeType: "image/svg+xml", data: pngBytes(100) },
     ]);
     const { cfg } = storageCfgWithOk();
@@ -411,7 +418,7 @@ describe("handleAttach (rejections)", () => {
 
   it("rejects missing project_id with 400", async () => {
     const body = buildMultipartBody([
-      { name: "workspace_id", value: "ws-1" },
+      { name: "workspace_id", value: WS_UUID },
       { filename: "a.png", mimeType: "image/png", data: pngBytes(100) },
     ]);
     const { cfg } = storageCfgWithOk();
@@ -426,7 +433,7 @@ describe("handleAttach (rejections)", () => {
 
   it("rejects missing workspace_id with 400", async () => {
     const body = buildMultipartBody([
-      { name: "project_id", value: "proj-1" },
+      { name: "project_id", value: PROJ_UUID },
       { filename: "a.png", mimeType: "image/png", data: pngBytes(100) },
     ]);
     const { cfg } = storageCfgWithOk();
@@ -439,10 +446,63 @@ describe("handleAttach (rejections)", () => {
     }
   });
 
+  it("rejects non-UUID workspace_id (path-traversal guard)", async () => {
+    const body = buildMultipartBody([
+      { name: "project_id", value: PROJ_UUID },
+      { name: "workspace_id", value: "../other-workspace" },
+      { filename: "a.png", mimeType: "image/png", data: pngBytes(100) },
+    ]);
+    const { cfg, calls } = storageCfgWithOk();
+    try {
+      await handleAttach(makeRequest(body), { storage: cfg });
+      throw new Error("expected throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(AttachValidationError);
+      expect((err as AttachValidationError).message).toMatch(/workspace_id/);
+    }
+    // Must NOT reach storage — reject before any network call.
+    expect(calls).toHaveLength(0);
+  });
+
+  it("rejects non-UUID project_id (path-traversal guard)", async () => {
+    const body = buildMultipartBody([
+      { name: "project_id", value: "../../admin" },
+      { name: "workspace_id", value: WS_UUID },
+      { filename: "a.png", mimeType: "image/png", data: pngBytes(100) },
+    ]);
+    const { cfg, calls } = storageCfgWithOk();
+    try {
+      await handleAttach(makeRequest(body), { storage: cfg });
+      throw new Error("expected throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(AttachValidationError);
+      expect((err as AttachValidationError).message).toMatch(/project_id/);
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  it("rejects non-UUID conversation_id (path-traversal guard)", async () => {
+    const body = buildMultipartBody([
+      { name: "project_id", value: PROJ_UUID },
+      { name: "workspace_id", value: WS_UUID },
+      { name: "conversation_id", value: "../../../etc/passwd" },
+      { filename: "a.png", mimeType: "image/png", data: pngBytes(100) },
+    ]);
+    const { cfg, calls } = storageCfgWithOk();
+    try {
+      await handleAttach(makeRequest(body), { storage: cfg });
+      throw new Error("expected throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(AttachValidationError);
+      expect((err as AttachValidationError).message).toMatch(/conversation_id/);
+    }
+    expect(calls).toHaveLength(0);
+  });
+
   it("surfaces storage failures as AttachUploadError", async () => {
     const body = buildMultipartBody([
-      { name: "project_id", value: "proj-1" },
-      { name: "workspace_id", value: "ws-1" },
+      { name: "project_id", value: PROJ_UUID },
+      { name: "workspace_id", value: WS_UUID },
       { filename: "a.png", mimeType: "image/png", data: pngBytes(200) },
     ]);
     const cfg = storageCfgWithError(500);
