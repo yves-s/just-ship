@@ -30,12 +30,36 @@ Nicht Sidekick-Intent: explizite Commands (`/ticket`, `/develop`, `/ship`, `/rec
 |---|---|---|---|
 | **1 — ticket** | "Der Toggle schließt sich nicht richtig", "Änder die Empty-State-Copy auf X", "Füge einen Copy-Link-Button hinzu" | `/ticket` (Single-Ticket-Flow, kein Split) | `Ist im Board: T-{N} — {title}. {url}` |
 | **2 — epic** | "Wir brauchen ein Notifications-System mit Settings, Bell, Email, Inbox", "Build the Workspace Billing feature", "Vollständige Keyboard-Navigation mit j/k/c//" | `/ticket` mit Split-Flag → erzeugt Epic + Children automatisch | `Ist im Board als Epic T-{N} — {title}. {url}` + bullet-Liste der Children |
-| **3 — conversation** | "Sollen wir vielleicht Analytics einbauen?", "Was denkst du über neues Onboarding?", "Ich hab da eine Idee, weiß aber nicht wie" | `sparring` Skill laden, strukturierte Diskussion führen | Sparring-Gesprächsergebnis; am Ende exakt eine Frage: "Soll ich ein Ticket anlegen?" |
+| **3 — conversation** | "Sollen wir vielleicht Analytics einbauen?", "Was denkst du über neues Onboarding?", "Ich hab da eine Idee, weiß aber nicht wie" | Engine-Chat (`POST /api/sidekick/chat` via `sidekick-api.sh chat`) — SSE-Stream, Thread-Persistenz, Tool-Loop. Nur bei fehlender Engine-Konfig fällt das Terminal auf `sparring` zurück. | Live-Token-Stream im Terminal, am Ende: Artefakt-Link oder eine gezielte Business-Frage (gemäß `sidekick-converse`) |
 | **4 — project** | "Ich will Aime Coach bauen — AI-Accountability-App für Therapeuten", "Neues Shopify-Tool für Fashion-Brands", "Setup Just Ship Edu — eigenständiger Workspace" | `add-project`/`init` Skill laden; dann `/ticket` für Init-Epic + 3 Child-Tickets (Scope klären, Tech-Stack-Entscheidung, Erste User-Journey bauen) | Einmalige Bestätigung: "Das klingt nach einem neuen Projekt. Soll ich {Name} als Projekt anlegen?" → nach "ja": Project-URL + Init-Epic + Children-Liste |
 
 **Kategorie 4 ist der einzige Bestätigungspunkt.** Grund: ein neues Projekt ist strukturell größer (neuer Workspace-Scope, neue Audience). Identisch zur Browser-Widget-Regel aus T-877.
 
 **Kategorien 1-2 bestätigen NIE.** Der Skill wird aufgerufen, das Artefakt direkt erzeugt, der Link ausgegeben. "Soll ich das so anlegen?" ist verboten — es leakt PM-Sprache in den Konversationsfluss (T-876/T-879). Kategorie 3 endet mit genau einer Frage ("Soll ich ein Ticket anlegen?") — das ist kein Pre-Creation-Confirm, sondern der Abschluss der strukturierten Diskussion.
+
+## Kategorie 3 — Engine-Chat-Flow im Terminal (T-926)
+
+Für Kategorie 3 ist der Engine-Chat-Endpoint die Single Source of Truth — er ist derselbe Endpoint, den das Browser-Widget aufruft. Das Terminal wickelt das über `.claude/scripts/sidekick-api.sh` ab, das Credentials versteckt und SSE-Frames in lesbare Ausgabe reduziert.
+
+### Flow
+
+1. **Thread-Erkennung.** Wenn der User eine bestehende Konversation weiterführen will ("der Thread von gestern zu Notifications", "lass uns das mit dem Analytics-Dashboard weitermachen"), rufe zuerst `sidekick-api.sh thread-list --project-id <uuid> --status draft,waiting_for_input,ready_to_plan,planned,approved,in_progress` auf und wähle den passenden Thread — **nicht den User danach fragen**, den Titel-Match selbst machen. Bei Ambiguität den aktivsten (höchstes `last_activity_at`) nehmen und im Output kurz vermerken ("Weiter in Thread {title} — {id}"). Die Thread-ID wird in `.claude/.sidekick-thread` persistiert, damit Folge-Turns im selben Ticket ohne erneuten Listing-Call weitermachen.
+2. **Chat-Turn starten.** `sidekick-api.sh chat --project-id <uuid> [--thread-id <uuid>] --text "<user input>"` ausführen. Der SSE-Stream landet live im Terminal (stdout für Text-Deltas, stderr für Status-Frames wie `[tool_call …]`, `[thread_id=…]`). Neuer Turn ohne Thread-ID → Engine vergibt eine, wird im `[thread_id=…]`-Frame zurückgeliefert und dann persistiert.
+3. **Image-Pfade.** Erkenne lokale Image-Pfade im User-Input per Muster `\b(?:/|\./|\.\./)[^ ]+\.(?:png|jpe?g|webp|gif)\b` oder explizit gedroppte Pfade. Vor dem Chat-Call: `sidekick-api.sh attach <path> [<path>…]` aufrufen, die zurückgegebenen `files[*].url` sammeln und als `--attach <url>`-Flags ans `chat`-Command übergeben. Der User-Text bleibt unverändert — das Bild landet als `attachments[]` im Chat-Request.
+4. **Thread-State-Übergänge.** Wenn der Engine-Chat einen Tool-Call ausführt, der den Thread-Status ändert (z.B. auf `delivered`), gibt der SSE-Stream `[tool_call …]` / `[tool_result …]` aus. Nach dem finalen `message`-Frame den aktuellen Status per `sidekick-api.sh thread-get <id>` prüfen und dem User in einer einzigen Zeile zurückmelden: `Thread {title} ist jetzt {status}.` — keine Tabelle, kein Raw-JSON.
+5. **Fallback ohne Engine-Config.** Wenn weder `ENGINE_API_URL` noch `BOARD_API_URL` auflösbar sind (Exit 1 von `sidekick-api.sh`), lädt das Terminal stattdessen `skills/sparring.md` wie vor T-926. Das ist der Notfallpfad für Projekte ohne Engine-Deployment.
+
+### Anti-Patterns
+
+❌ **Thread-ID den User fragen.** Wenn bekannte Trigger ("der gestrige Thread", "weiter mit X") fallen, erledigt das Terminal das Matching selbst via `thread-list`. Nachfragen = Autonomy-Violation.
+
+❌ **Raw-JSON aus `thread-get`/`thread-list` an den User ausgeben.** Immer auf eine Zeile reduzieren: Titel + Status + ggf. Timestamp-Relative ("vor 2h aktualisiert").
+
+❌ **Parallele Chat-Turns im selben Thread.** Der Endpoint antwortet dann mit `409 thread_busy`. Im Fehlerfall: eine Zeile Rückmeldung, kein Retry-Loop — der User entscheidet.
+
+❌ **Image-Pfade als Markdown-Links an den Engine senden.** Der Engine erwartet `attachments: [{ url }]`; Text-Inlining würde die Deduplikation und die Storage-URL-Rotation brechen.
+
+✅ **Parity check.** Wenn der User dieselbe Eingabe ins Browser-Widget und ins Terminal tippt, erzeugt beides denselben Thread-Fortschritt und dasselbe finale Artefakt — weil beide Pfade denselben Engine-Endpoint treffen.
 
 ## Internal Expert Consultation
 

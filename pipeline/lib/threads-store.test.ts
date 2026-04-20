@@ -8,6 +8,7 @@ import {
   createThread,
   updateThread,
   listThreadMessages,
+  listThreads,
   ThreadValidationError,
   ThreadTransitionError,
   ThreadNotFoundError,
@@ -389,5 +390,84 @@ describe("listThreadMessages", () => {
     await listThreadMessages(VALID_UUID_D, { limit: 10, offset: 25 }, { fetchFn: fn });
     expect(calls[1].url).toContain("offset=25");
     expect(calls[1].url).toContain("limit=11");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listThreads (T-926)
+// ---------------------------------------------------------------------------
+
+describe("listThreads", () => {
+  it("rejects a fully-empty filter set — listing all threads cross-workspace is unsafe", async () => {
+    await expect(listThreads({})).rejects.toThrow(ThreadValidationError);
+  });
+
+  it("rejects non-UUID project_id / user_id / workspace_id", async () => {
+    await expect(listThreads({ project_id: "nope" })).rejects.toThrow(ThreadValidationError);
+    await expect(listThreads({ user_id: "nope" })).rejects.toThrow(ThreadValidationError);
+    await expect(listThreads({ workspace_id: "nope" })).rejects.toThrow(ThreadValidationError);
+  });
+
+  it("rejects unknown status values", async () => {
+    await expect(
+      listThreads({ project_id: VALID_UUID_B, status: "foo" as ThreadStatus }),
+    ).rejects.toThrow(ThreadValidationError);
+    await expect(
+      listThreads({ project_id: VALID_UUID_B, status: ["draft", "bogus" as ThreadStatus] }),
+    ).rejects.toThrow(ThreadValidationError);
+  });
+
+  it("queries with project_id filter and orders by last_activity_at desc", async () => {
+    const row = makeThread();
+    const { fn, calls } = createMockFetch([jsonResponse([row])]);
+
+    const res = await listThreads({ project_id: VALID_UUID_B }, { fetchFn: fn });
+    expect(res.has_more).toBe(false);
+    expect(res.threads).toEqual([row]);
+    expect(calls[0].url).toContain(`project_id=eq.${VALID_UUID_B}`);
+    expect(calls[0].url).toContain("order=last_activity_at.desc");
+    expect(calls[0].url).toContain("select=*");
+  });
+
+  it("combines multiple filters and status list into an in.() clause", async () => {
+    const { fn, calls } = createMockFetch([jsonResponse([])]);
+
+    await listThreads(
+      {
+        project_id: VALID_UUID_B,
+        user_id: VALID_UUID_C,
+        workspace_id: VALID_UUID_A,
+        status: ["draft", "in_progress"],
+      },
+      { fetchFn: fn },
+    );
+
+    const url = calls[0].url;
+    expect(url).toContain(`project_id=eq.${VALID_UUID_B}`);
+    expect(url).toContain(`user_id=eq.${VALID_UUID_C}`);
+    expect(url).toContain(`workspace_id=eq.${VALID_UUID_A}`);
+    // Status list may be encoded with percent-escapes; match either literal or encoded.
+    expect(/status=in\.%28draft%2Cin_progress%29|status=in\.\(draft,in_progress\)/.test(url)).toBe(true);
+  });
+
+  it("returns has_more=true when rows exceed limit", async () => {
+    const extra = [makeThread({ id: VALID_UUID_A }), makeThread({ id: VALID_UUID_B }), makeThread({ id: VALID_UUID_C })];
+    const { fn } = createMockFetch([jsonResponse(extra)]);
+
+    const res = await listThreads({ project_id: VALID_UUID_B, limit: 2 }, { fetchFn: fn });
+    expect(res.has_more).toBe(true);
+    expect(res.threads).toHaveLength(2);
+  });
+
+  it("clamps limit to the allowed bounds", async () => {
+    const { fn, calls } = createMockFetch([jsonResponse([]), jsonResponse([])]);
+
+    await listThreads({ project_id: VALID_UUID_B, limit: 9999 }, { fetchFn: fn });
+    // limit+1 from a clamped value of 200
+    expect(calls[0].url).toContain("limit=201");
+
+    await listThreads({ project_id: VALID_UUID_B, limit: -5 }, { fetchFn: fn });
+    // floor of 1 + 1
+    expect(calls[1].url).toContain("limit=2");
   });
 });
