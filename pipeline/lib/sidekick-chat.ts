@@ -219,6 +219,25 @@ interface ThreadState {
   messages: ChatMessage[];
   createdAt: number;
   lastSeenAt: number;
+  /**
+   * Concurrent-turn guard. The store is a single-node in-memory Map with no
+   * lock — two overlapping requests for the same thread_id would otherwise
+   * double-push the user turn, interleave assistant deltas, and corrupt the
+   * transcript. Mirrors `sidekick-converse.ts`'s `inFlight` pattern; the
+   * server maps the surfaced error to HTTP 409.
+   */
+  inFlight: boolean;
+}
+
+/**
+ * Raised when a second concurrent request arrives for a thread that is still
+ * processing its previous turn. The server maps this to HTTP 409.
+ */
+export class ChatThreadBusyError extends Error {
+  constructor(threadId: string) {
+    super(`thread ${threadId} is already processing a turn`);
+    this.name = "ChatThreadBusyError";
+  }
 }
 
 const threads = new Map<string, ThreadState>();
@@ -240,23 +259,35 @@ function getOrCreateThread(req: ChatRequest, now: number): ThreadState {
   const existingId = req.thread_id;
   if (existingId) {
     const t = threads.get(existingId);
-    if (t && now - t.lastSeenAt <= THREAD_TTL_MS) {
+    // Only reuse the thread if BOTH the TTL is still valid AND the thread
+    // belongs to the caller's project. A thread_id guessed or leaked from
+    // another project must never surface its history — silently starting a
+    // fresh thread avoids both the data-leak and an oracle-style 404/409
+    // that would confirm the id exists elsewhere.
+    if (t && now - t.lastSeenAt <= THREAD_TTL_MS && t.projectId === req.project_id) {
       t.lastSeenAt = now;
       return t;
     }
-    // Expired / unknown id → start a fresh thread rather than erroring out.
-    // The client already committed to this id; silently upgrading keeps the
-    // UX smooth and the client treats our reply as the canonical thread.
-    if (t) threads.delete(existingId);
+    // Expired id → drop it. Foreign-project id → DO NOT drop (that would let
+    // any caller evict another project's thread by guessing its id). In both
+    // cases we fall through and create a brand-new thread with a fresh uuid.
+    if (t && now - t.lastSeenAt > THREAD_TTL_MS) threads.delete(existingId);
   }
   evictExpiredThreads(now);
-  const id = existingId ?? randomUUID();
+  // If the caller supplied a thread_id but it was unknown, expired, or owned
+  // by another project, assign a brand-new uuid so we never reuse an id that
+  // could collide with another project's thread. The caller's reply will
+  // echo this new id back.
+  const existing = existingId ? threads.get(existingId) : undefined;
+  const canReuseId = !existingId || !existing;
+  const id = canReuseId && existingId ? existingId : randomUUID();
   const state: ThreadState = {
     id,
     projectId: req.project_id,
     messages: [],
     createdAt: now,
     lastSeenAt: now,
+    inFlight: false,
   };
   threads.set(id, state);
   return state;
@@ -481,9 +512,21 @@ export async function processChat(
   const startedAt = Date.now();
   const thread = getOrCreateThread(req, startedAt);
 
+  // Concurrent-turn guard. Without this, two overlapping requests for the
+  // same thread_id would both push a user turn, both call the model, and
+  // both try to write an assistant reply — corrupting the transcript and
+  // returning interleaved SSE streams to whichever client still holds a
+  // socket. The HTTP handler maps this error to 409.
+  if (thread.inFlight) {
+    throw new ChatThreadBusyError(thread.id);
+  }
+  thread.inFlight = true;
+
   // Commit the user turn up front so that even if the model call errors we
   // keep a coherent transcript (matching the Board's existing behaviour).
-  thread.messages.push({ role: "user", text: req.user_text });
+  // We snapshot the index we just wrote so we can roll it back on failure,
+  // keeping the next turn's prompt clean.
+  const userTurnIndex = thread.messages.push({ role: "user", text: req.user_text }) - 1;
 
   const prompt = buildPrompt(thread, req.user_text, req.context, req.attachments);
 
@@ -536,6 +579,16 @@ export async function processChat(
       thread.messages.push({ role: "assistant", text: finalText, id: finalId });
       thread.lastSeenAt = Date.now();
       sink.send({ type: "message", id: finalId, thread_id: thread.id, text: finalText });
+    } else {
+      // Turn did not complete (aborted, error, or disconnect). Roll back the
+      // user turn we optimistically pushed up front. Otherwise the next turn
+      // on this thread would carry an orphaned user message with no matching
+      // assistant reply, confusing the model and duplicating the user text
+      // if the client auto-retries the same request.
+      if (userTurnIndex === thread.messages.length - 1
+          && thread.messages[userTurnIndex]?.role === "user") {
+        thread.messages.pop();
+      }
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -547,7 +600,17 @@ export async function processChat(
     if (sink.isOpen()) {
       sink.send({ type: "error", message: "internal_error" });
     }
+    // Roll back the orphaned user turn on unexpected errors too — same
+    // reasoning as the non-completing path above.
+    if (userTurnIndex === thread.messages.length - 1
+        && thread.messages[userTurnIndex]?.role === "user") {
+      thread.messages.pop();
+    }
   } finally {
+    // Always release the concurrent-turn lock, even if the thread was evicted
+    // mid-call. Reading thread.inFlight on a stale reference is safe because
+    // the object is still held in this closure.
+    thread.inFlight = false;
     logger.info(
       {
         threadId: thread.id,

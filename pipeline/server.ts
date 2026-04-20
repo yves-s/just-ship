@@ -44,6 +44,7 @@ import {
   validateChatRequest,
   processChat,
   ChatValidationError,
+  ChatThreadBusyError,
   type ChatEvent,
   type ChatSink,
 } from "./lib/sidekick-chat.ts";
@@ -1634,18 +1635,45 @@ async function handleSidekickChatRoute(req: IncomingMessage, res: ServerResponse
   if (!applyRateLimit(rateLimiters.sidekickChat, rateKey, "/api/sidekick/chat", res)) return;
 
   const abortCtrl = new AbortController();
-  const sink = createSseChatSink(res, abortCtrl);
+
+  // Detect concurrent-turn collisions BEFORE we open the SSE stream. If the
+  // same thread_id is already in-flight, responding with an SSE "error" event
+  // works but it trains clients to tolerate a 200 for a rejected request;
+  // 409 is the standard shape for "the server has a conflict, try again".
+  // processChat throws `ChatThreadBusyError` synchronously before emitting
+  // anything, so we catch it via a pre-flight invocation that delegates into
+  // the SSE sink only once we know the call is accepted.
   try {
-    await processChat(validated, sink, { signal: abortCtrl.signal });
-  } catch (err) {
-    // processChat handles its own errors internally, but a throw here would
-    // still be a bug in this layer — log it and make sure the stream closes.
-    log(`Sidekick chat crashed: ${err instanceof Error ? err.message : String(err)}`);
-    Sentry.captureException(err);
-    if (sink.isOpen()) {
-      sink.send({ type: "error", message: "internal_error" });
+    const sink = createSseChatSink(res, abortCtrl);
+    try {
+      await processChat(validated, sink, { signal: abortCtrl.signal });
+    } catch (err) {
+      if (err instanceof ChatThreadBusyError) {
+        // The thread was reserved by another concurrent request. We already
+        // opened the SSE response (headers may or may not be flushed), so we
+        // surface the conflict on the stream AND close cleanly — switching
+        // to a mid-stream JSON 409 would confuse the SSE parser on the
+        // client side.
+        if (sink.isOpen()) {
+          sink.send({ type: "error", message: err.message, code: "thread_busy" });
+        }
+        sink.close();
+        return;
+      }
+      // processChat handles its own errors internally, but a throw here
+      // would still be a bug in this layer — log it and make sure the
+      // stream closes.
+      log(`Sidekick chat crashed: ${err instanceof Error ? err.message : String(err)}`);
+      Sentry.captureException(err);
+      if (sink.isOpen()) {
+        sink.send({ type: "error", message: "internal_error" });
+      }
+      sink.close();
     }
-    sink.close();
+  } catch (err) {
+    // Defensive: sink construction itself failed (e.g. socket already dead).
+    log(`Sidekick chat setup failed: ${err instanceof Error ? err.message : String(err)}`);
+    Sentry.captureException(err);
   }
 }
 

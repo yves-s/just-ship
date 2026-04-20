@@ -3,6 +3,7 @@ import {
   validateChatRequest,
   processChat,
   ChatValidationError,
+  ChatThreadBusyError,
   _resetChatThreadsForTests,
   _getChatThreadForTests,
   _internal,
@@ -413,5 +414,177 @@ describe("processChat pass-through", () => {
     expect(capturedPrompt).toContain("https://cdn.example/screenshot.png");
     expect(capturedPrompt).toContain("https://board.just-ship.io/t/42");
     expect(capturedPrompt).toContain("T-42");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// processChat — cross-project isolation (security)
+// ---------------------------------------------------------------------------
+
+describe("processChat project isolation", () => {
+  it("does not leak thread history when a different project supplies the same thread_id", async () => {
+    // Turn 1 — project A creates a thread with secret content.
+    mockModel([{ kind: "assistant_final", id: "a1", text: "secret content for project A" }]);
+    const a = memorySink();
+    await processChat(
+      { user_text: "hello from A", project_id: "project-A" },
+      a.sink,
+      { signal: new AbortController().signal },
+    );
+    const aThreadId = (a.events.find(e => e.type === "message") as Extract<ChatEvent, { type: "message" }>).thread_id;
+
+    // Turn 2 — project B tries to reuse A's thread_id. The server must NOT
+    // splice A's history into B's prompt, and must issue a new thread_id.
+    let capturedPrompt = "";
+    vi.restoreAllMocks();
+    vi.spyOn(_internal, "callChatModel").mockImplementation(async function* (prompt) {
+      capturedPrompt = prompt;
+      yield { kind: "assistant_final", id: "b1", text: "ok" };
+    });
+    const b = memorySink();
+    await processChat(
+      { user_text: "hello from B", project_id: "project-B", thread_id: aThreadId },
+      b.sink,
+      { signal: new AbortController().signal },
+    );
+
+    expect(capturedPrompt).not.toContain("secret content for project A");
+    expect(capturedPrompt).not.toContain("hello from A");
+    const bFinal = b.events.find(e => e.type === "message") as Extract<ChatEvent, { type: "message" }>;
+    expect(bFinal.thread_id).not.toBe(aThreadId);
+
+    // And A's thread must still exist untouched.
+    const aStored = _getChatThreadForTests(aThreadId);
+    expect(aStored).not.toBeNull();
+    expect(aStored?.[0]?.text).toBe("hello from A");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// processChat — concurrent-turn guard
+// ---------------------------------------------------------------------------
+
+describe("processChat concurrent-turn guard", () => {
+  it("rejects a second overlapping request for the same thread_id with ChatThreadBusyError", async () => {
+    // First call — seed a thread we can then hit concurrently.
+    mockModel([{ kind: "assistant_final", id: "m1", text: "first" }]);
+    const first = memorySink();
+    await processChat(
+      { user_text: "turn 1", project_id: "p-1" },
+      first.sink,
+      { signal: new AbortController().signal },
+    );
+    const threadId = (first.events.find(e => e.type === "message") as Extract<ChatEvent, { type: "message" }>).thread_id;
+
+    // Now fire two turns against the same thread where the first one pauses
+    // mid-stream (never yields its final event until we release it). The
+    // second turn must throw before emitting anything on its own.
+    vi.restoreAllMocks();
+    let releaseFirst: (() => void) | null = null;
+    const firstDone = new Promise<void>(resolve => {
+      releaseFirst = resolve;
+    });
+
+    vi.spyOn(_internal, "callChatModel").mockImplementation(async function* () {
+      yield { kind: "text_delta", text: "..." };
+      await firstDone;
+      yield { kind: "assistant_final", id: "m2", text: "done" };
+    });
+
+    const slow = memorySink();
+    const slowPromise = processChat(
+      { user_text: "turn 2", project_id: "p-1", thread_id: threadId },
+      slow.sink,
+      { signal: new AbortController().signal },
+    );
+
+    // Give the first call a microtask to enter the loop and claim the lock.
+    await new Promise(r => setImmediate(r));
+
+    const racing = memorySink();
+    await expect(
+      processChat(
+        { user_text: "turn 2 racer", project_id: "p-1", thread_id: threadId },
+        racing.sink,
+        { signal: new AbortController().signal },
+      ),
+    ).rejects.toBeInstanceOf(ChatThreadBusyError);
+
+    // Release the first and clean up.
+    releaseFirst!();
+    await slowPromise;
+  });
+
+  it("releases the concurrent-turn lock on error so subsequent turns succeed", async () => {
+    // Seed the thread.
+    mockModel([{ kind: "assistant_final", id: "m1", text: "first" }]);
+    const first = memorySink();
+    await processChat(
+      { user_text: "turn 1", project_id: "p-1" },
+      first.sink,
+      { signal: new AbortController().signal },
+    );
+    const threadId = (first.events.find(e => e.type === "message") as Extract<ChatEvent, { type: "message" }>).thread_id;
+
+    // Turn that throws mid-stream. inFlight must be reset in the finally
+    // block; otherwise the thread is permanently locked.
+    vi.restoreAllMocks();
+    vi.spyOn(_internal, "callChatModel").mockImplementation(async function* () {
+      throw new Error("boom");
+      // eslint-disable-next-line no-unreachable
+      yield { kind: "assistant_final", id: "x", text: "" };
+    });
+    const errSink = memorySink();
+    await processChat(
+      { user_text: "turn 2", project_id: "p-1", thread_id: threadId },
+      errSink.sink,
+      { signal: new AbortController().signal },
+    );
+    expect(errSink.events.find(e => e.type === "error")).toBeDefined();
+
+    // Third turn should succeed — the lock was released.
+    vi.restoreAllMocks();
+    mockModel([{ kind: "assistant_final", id: "m3", text: "recovered" }]);
+    const third = memorySink();
+    await processChat(
+      { user_text: "turn 3", project_id: "p-1", thread_id: threadId },
+      third.sink,
+      { signal: new AbortController().signal },
+    );
+    expect((third.events.find(e => e.type === "message") as any).text).toBe("recovered");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// processChat — orphaned user-turn rollback
+// ---------------------------------------------------------------------------
+
+describe("processChat rollback on failure", () => {
+  it("does not leave the failed user turn in the thread transcript", async () => {
+    // Turn 1 — succeed normally.
+    mockModel([{ kind: "assistant_final", id: "m1", text: "ok" }]);
+    const first = memorySink();
+    await processChat(
+      { user_text: "first", project_id: "p-1" },
+      first.sink,
+      { signal: new AbortController().signal },
+    );
+    const threadId = (first.events.find(e => e.type === "message") as Extract<ChatEvent, { type: "message" }>).thread_id;
+
+    // Turn 2 — model errors, user turn must be rolled back.
+    vi.restoreAllMocks();
+    mockModel([
+      { kind: "error", message: "upstream_overloaded", code: "rate_limit" },
+    ]);
+    const second = memorySink();
+    await processChat(
+      { user_text: "RETRY_ME", project_id: "p-1", thread_id: threadId },
+      second.sink,
+      { signal: new AbortController().signal },
+    );
+
+    const stored = _getChatThreadForTests(threadId);
+    expect(stored?.map(m => m.text)).toEqual(["first", "ok"]);
+    expect(stored?.some(m => m.text === "RETRY_ME")).toBe(false);
   });
 });
