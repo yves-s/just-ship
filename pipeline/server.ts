@@ -170,9 +170,10 @@ const rateLimiters = {
   // Converse is per-project. Each session uses 1-3 calls; 30/min/project keeps
   // per-user throughput healthy while blocking abusive callers.
   sidekickConverse: new RateLimiter({ windowMs: 60_000, maxRequests: 30 }),
-  // Chat is per-user (full conversation mode — T-922). 60/min/user covers
-  // bursty usage (multiple quick follow-ups) while still blocking abuse. Key
-  // falls back to project_id when user_id is absent.
+  // Chat is per-(project, user) (full conversation mode — T-922). 60/min
+  // covers bursty usage (multiple quick follow-ups) while still blocking
+  // abuse. Key shape: `chat:<project_id>:<user_id|anon>` — scoping always
+  // includes project_id so user_id rotation or omission cannot bypass it.
   sidekickChat: new RateLimiter({ windowMs: 60_000, maxRequests: 60 }),
 };
 
@@ -1628,10 +1629,16 @@ async function handleSidekickChatRoute(req: IncomingMessage, res: ServerResponse
     throw err;
   }
 
-  // Rate-limit per user when supplied (AC: 60/min/user). Falls back to
-  // project_id when anonymous so a single noisy project cannot overwhelm
-  // the SSE worker pool either.
-  const rateKey = validated.user_id ?? `project:${validated.project_id}`;
+  // Rate-limit keyed by (project_id, user_id) so the per-user 60/min quota
+  // always composes with a per-project quota. A previous version keyed purely
+  // on `user_id` (falling back to `project:<id>`), which let a caller dodge
+  // the limit by rotating through fabricated user_id values per request, and
+  // a different caller in the same project drop their user_id to share a
+  // pooled quota with every other anonymous request in that project. Both
+  // paths are now closed: anonymous traffic is scoped to the project, and
+  // named users can only amplify their own project's budget, not escape it.
+  const userKeyPart = validated.user_id ?? "anon";
+  const rateKey = `chat:${validated.project_id}:${userKeyPart}`;
   if (!applyRateLimit(rateLimiters.sidekickChat, rateKey, "/api/sidekick/chat", res)) return;
 
   const abortCtrl = new AbortController();
