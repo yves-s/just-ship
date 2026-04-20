@@ -48,6 +48,24 @@ import {
   type ChatEvent,
   type ChatSink,
 } from "./lib/sidekick-chat.ts";
+import {
+  validateCreateConversationRequest,
+  createConversation,
+  listConversationMessages,
+  ConversationValidationError,
+  ConversationNotFoundError,
+} from "./lib/sidekick-conversations-store.ts";
+import {
+  validateCreateThreadRequest,
+  validateUpdateThreadRequest,
+  createThread,
+  getThread,
+  updateThread,
+  listThreadMessages,
+  ThreadValidationError,
+  ThreadNotFoundError,
+  ThreadTransitionError,
+} from "./lib/threads-store.ts";
 
 // --- Mode detection ---
 const SERVER_CONFIG_PATH = process.env.SERVER_CONFIG_PATH;
@@ -175,6 +193,13 @@ const rateLimiters = {
   // abuse. Key shape: `chat:<project_id>:<user_id|anon>` — scoping always
   // includes project_id so user_id rotation or omission cannot bypass it.
   sidekickChat: new RateLimiter({ windowMs: 60_000, maxRequests: 60 }),
+  // Conversation + thread store routes (T-924). Keyed by project_id or resource id.
+  sidekickConversationCreate: new RateLimiter({ windowMs: 60_000, maxRequests: 10 }),
+  sidekickConversationList: new RateLimiter({ windowMs: 60_000, maxRequests: 60 }),
+  sidekickThreadCreate: new RateLimiter({ windowMs: 60_000, maxRequests: 10 }),
+  sidekickThreadGet: new RateLimiter({ windowMs: 60_000, maxRequests: 60 }),
+  sidekickThreadUpdate: new RateLimiter({ windowMs: 60_000, maxRequests: 30 }),
+  sidekickThreadList: new RateLimiter({ windowMs: 60_000, maxRequests: 60 }),
 };
 
 function recordRun(record: RunRecord) {
@@ -1325,6 +1350,202 @@ async function handleAnswerRoute(req: IncomingMessage, res: ServerResponse): Pro
   })();
 }
 
+// ---------------------------------------------------------------------------
+// Sidekick conversation + thread store routes (T-924)
+// ---------------------------------------------------------------------------
+
+// UUID regex used for path validation — matches the same pattern as the stores.
+const ROUTE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function handleConversationCreateRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+
+  const projectIdForRL = (body.project_id as string | undefined) ?? "unknown";
+  if (!applyRateLimit(rateLimiters.sidekickConversationCreate, projectIdForRL, "/api/sidekick/conversations", res)) return;
+
+  let validated;
+  try {
+    validated = validateCreateConversationRequest(body);
+  } catch (err) {
+    if (err instanceof ConversationValidationError) {
+      sendJson(res, 400, { status: "bad_request", message: err.message });
+      return;
+    }
+    throw err;
+  }
+
+  try {
+    const conversation = await createConversation(validated);
+    sendJson(res, 201, { status: "created", conversation });
+  } catch (err) {
+    log(`Conversation create failed: ${err instanceof Error ? err.message : String(err)}`);
+    Sentry.captureException(err);
+    sendJson(res, 500, { status: "error", message: "Internal server error" });
+  }
+}
+
+async function handleConversationMessagesRoute(req: IncomingMessage, res: ServerResponse, conversationId: string, rawUrl: string): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  if (!ROUTE_UUID_RE.test(conversationId)) {
+    sendJson(res, 400, { status: "bad_request", message: "conversation id must be a valid UUID" });
+    return;
+  }
+
+  // Parse query params from the raw URL
+  const qIdx = rawUrl.indexOf("?");
+  const searchParams = new URLSearchParams(qIdx >= 0 ? rawUrl.slice(qIdx + 1) : "");
+  const limitRaw = searchParams.get("limit");
+  const offsetRaw = searchParams.get("offset");
+  const limit = limitRaw !== null ? Math.min(200, Math.max(1, parseInt(limitRaw, 10) || 50)) : 50;
+  const offset = offsetRaw !== null ? Math.max(0, parseInt(offsetRaw, 10) || 0) : 0;
+
+  if (!applyRateLimit(rateLimiters.sidekickConversationList, conversationId, `/api/sidekick/conversations/${conversationId}/messages`, res)) return;
+
+  try {
+    const result = await listConversationMessages(conversationId, { limit, offset });
+    sendJson(res, 200, { status: "ok", messages: result.messages, has_more: result.has_more, limit, offset });
+  } catch (err) {
+    if (err instanceof ConversationNotFoundError) {
+      sendJson(res, 404, { status: "not_found", message: err.message });
+      return;
+    }
+    log(`Conversation messages list failed: ${err instanceof Error ? err.message : String(err)}`);
+    Sentry.captureException(err);
+    sendJson(res, 500, { status: "error", message: "Internal server error" });
+  }
+}
+
+async function handleThreadCreateRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+
+  const projectIdForRL = (body.project_id as string | undefined) ?? "unknown";
+  if (!applyRateLimit(rateLimiters.sidekickThreadCreate, projectIdForRL, "/api/sidekick/threads", res)) return;
+
+  let validated;
+  try {
+    validated = validateCreateThreadRequest(body);
+  } catch (err) {
+    if (err instanceof ThreadValidationError) {
+      sendJson(res, 400, { status: "bad_request", message: err.message });
+      return;
+    }
+    throw err;
+  }
+
+  try {
+    const thread = await createThread(validated);
+    sendJson(res, 201, { status: "created", thread });
+  } catch (err) {
+    log(`Thread create failed: ${err instanceof Error ? err.message : String(err)}`);
+    Sentry.captureException(err);
+    sendJson(res, 500, { status: "error", message: "Internal server error" });
+  }
+}
+
+async function handleThreadGetRoute(req: IncomingMessage, res: ServerResponse, threadId: string): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  if (!ROUTE_UUID_RE.test(threadId)) {
+    sendJson(res, 400, { status: "bad_request", message: "thread id must be a valid UUID" });
+    return;
+  }
+
+  if (!applyRateLimit(rateLimiters.sidekickThreadGet, threadId, `/api/sidekick/threads/${threadId}`, res)) return;
+
+  try {
+    const thread = await getThread(threadId);
+    sendJson(res, 200, { status: "ok", thread });
+  } catch (err) {
+    if (err instanceof ThreadNotFoundError) {
+      sendJson(res, 404, { status: "not_found", message: err.message });
+      return;
+    }
+    log(`Thread get failed: ${err instanceof Error ? err.message : String(err)}`);
+    Sentry.captureException(err);
+    sendJson(res, 500, { status: "error", message: "Internal server error" });
+  }
+}
+
+async function handleThreadUpdateRoute(req: IncomingMessage, res: ServerResponse, threadId: string): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  if (!ROUTE_UUID_RE.test(threadId)) {
+    sendJson(res, 400, { status: "bad_request", message: "thread id must be a valid UUID" });
+    return;
+  }
+
+  if (!applyRateLimit(rateLimiters.sidekickThreadUpdate, threadId, `/api/sidekick/threads/${threadId}`, res)) return;
+
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+
+  let validated;
+  try {
+    validated = validateUpdateThreadRequest(body);
+  } catch (err) {
+    if (err instanceof ThreadValidationError) {
+      sendJson(res, 400, { status: "bad_request", message: err.message });
+      return;
+    }
+    throw err;
+  }
+
+  try {
+    const thread = await updateThread(threadId, validated);
+    sendJson(res, 200, { status: "ok", thread });
+  } catch (err) {
+    if (err instanceof ThreadNotFoundError) {
+      sendJson(res, 404, { status: "not_found", message: err.message });
+      return;
+    }
+    if (err instanceof ThreadTransitionError) {
+      sendJson(res, 409, { status: "conflict", from: err.from, to: err.to, message: err.message });
+      return;
+    }
+    log(`Thread update failed: ${err instanceof Error ? err.message : String(err)}`);
+    Sentry.captureException(err);
+    sendJson(res, 500, { status: "error", message: "Internal server error" });
+  }
+}
+
+async function handleThreadMessagesRoute(req: IncomingMessage, res: ServerResponse, threadId: string, rawUrl: string): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  if (!ROUTE_UUID_RE.test(threadId)) {
+    sendJson(res, 400, { status: "bad_request", message: "thread id must be a valid UUID" });
+    return;
+  }
+
+  const qIdx = rawUrl.indexOf("?");
+  const searchParams = new URLSearchParams(qIdx >= 0 ? rawUrl.slice(qIdx + 1) : "");
+  const limitRaw = searchParams.get("limit");
+  const offsetRaw = searchParams.get("offset");
+  const limit = limitRaw !== null ? Math.min(200, Math.max(1, parseInt(limitRaw, 10) || 50)) : 50;
+  const offset = offsetRaw !== null ? Math.max(0, parseInt(offsetRaw, 10) || 0) : 0;
+
+  if (!applyRateLimit(rateLimiters.sidekickThreadList, threadId, `/api/sidekick/threads/${threadId}/messages`, res)) return;
+
+  try {
+    const result = await listThreadMessages(threadId, { limit, offset });
+    sendJson(res, 200, { status: "ok", messages: result.messages, has_more: result.has_more, limit, offset });
+  } catch (err) {
+    if (err instanceof ThreadNotFoundError) {
+      sendJson(res, 404, { status: "not_found", message: err.message });
+      return;
+    }
+    log(`Thread messages list failed: ${err instanceof Error ? err.message : String(err)}`);
+    Sentry.captureException(err);
+    sendJson(res, 500, { status: "error", message: "Internal server error" });
+  }
+}
+
 async function handleClassifyRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (!requirePipelineKey(req, res)) return;
 
@@ -1784,7 +2005,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": allowedOrigin,
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, X-Pipeline-Key",
       "Access-Control-Max-Age": "86400",
     });
@@ -1799,6 +2020,23 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 
     const statusMatch = url.match(/^\/api\/status\/(\d+)$/);
     if (statusMatch) return handleStatusRoute(req, res, Number(statusMatch[1]));
+
+    // Dynamic sidekick conversation + thread message list routes (T-924)
+    const convMsgsMatch = url.match(/^\/api\/sidekick\/conversations\/([^/?]+)\/messages(?:\?.*)?$/);
+    if (convMsgsMatch) return handleConversationMessagesRoute(req, res, convMsgsMatch[1], url);
+
+    const threadMsgsMatch = url.match(/^\/api\/sidekick\/threads\/([^/?]+)\/messages(?:\?.*)?$/);
+    if (threadMsgsMatch) return handleThreadMessagesRoute(req, res, threadMsgsMatch[1], url);
+
+    // GET /api/sidekick/threads/:id — must come after /messages to avoid shadowing
+    const threadGetMatch = url.match(/^\/api\/sidekick\/threads\/([^/?]+)(?:\?.*)?$/);
+    if (threadGetMatch) return handleThreadGetRoute(req, res, threadGetMatch[1]);
+  }
+
+  // --- PATCH routes ---
+  if (method === "PATCH") {
+    const threadPatchMatch = url.match(/^\/api\/sidekick\/threads\/([^/?]+)$/);
+    if (threadPatchMatch) return handleThreadUpdateRoute(req, res, threadPatchMatch[1]);
   }
 
   // --- POST routes ---
@@ -1807,6 +2045,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       case "/api/launch":            return handleLaunchRoute(req, res);
       case "/api/events":            return handleEventsRoute(req, res);
       case "/api/answer":            return handleAnswerRoute(req, res);
+      case "/api/sidekick/conversations": return handleConversationCreateRoute(req, res);
+      case "/api/sidekick/threads":       return handleThreadCreateRoute(req, res);
       case "/api/sidekick/classify": return handleClassifyRoute(req, res);
       case "/api/sidekick/create":   return handleSidekickCreateRoute(req, res);
       case "/api/sidekick/update":   return handleSidekickUpdateRoute(req, res);
