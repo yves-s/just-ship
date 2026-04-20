@@ -295,6 +295,15 @@ interface CachedEntry<T> {
 }
 
 const PROJECT_STATUS_CACHE_TTL_MS = 30_000;
+/**
+ * Bound on the cache's entry count to prevent unbounded growth in a
+ * long-running worker that serves many workspaces. 30s TTL means entries
+ * naturally expire; the cap is a safety net against pathological fan-out
+ * (e.g. a misbehaving caller with synthetic workspace ids). When the cap is
+ * hit, we evict the oldest insertion — Map preserves insertion order in JS,
+ * so `.keys().next().value` yields the first-in entry.
+ */
+const PROJECT_STATUS_CACHE_MAX_ENTRIES = 200;
 const projectStatusCache = new Map<string, CachedEntry<ProjectStatusResult>>();
 
 /**
@@ -779,6 +788,13 @@ async function execGetProjectStatus(ctx: ToolContext): Promise<ToolResult<Projec
       throw new BoardApiError("board returned no project status data");
     }
 
+    // Evict the oldest entry before writing a new key when the cap is reached.
+    // If the key already exists, `set` just updates in place — no eviction
+    // needed and recency remains at the tail.
+    if (!projectStatusCache.has(cacheKey) && projectStatusCache.size >= PROJECT_STATUS_CACHE_MAX_ENTRIES) {
+      const oldest = projectStatusCache.keys().next().value;
+      if (oldest !== undefined) projectStatusCache.delete(oldest);
+    }
     projectStatusCache.set(cacheKey, { value: json.data, expiresAt: now + PROJECT_STATUS_CACHE_TTL_MS });
     return { ok: true, result: json.data };
   } catch (err) {

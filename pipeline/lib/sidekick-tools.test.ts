@@ -469,6 +469,39 @@ describe("get_project_status", () => {
     expect(fetchFn).toHaveBeenCalledTimes(2);
   });
 
+  it("bounds the cache size so long-running workers don't leak memory", async () => {
+    // 201 distinct workspace:project keys → cache cap (200) should evict the
+    // oldest entry, so the very first key must MISS on a re-fetch after the
+    // fill even though every entry is still within the 30s TTL.
+    const successPayload = { data: { total_tickets: 1, by_status: {}, in_progress: [], recently_completed: [], recent_agent_activity: [] } };
+    const fetchFn = vi.fn(async () => ({
+      ok: true, status: 200, statusText: "OK",
+      json: async () => successPayload, text: async () => "",
+    } as Response));
+
+    // Fill the cache to exactly the cap with 200 distinct keys.
+    for (let i = 0; i < 200; i++) {
+      const ctx = baseCtx({ workspaceId: `ws-${i}`, projectId: `proj-${i}`, fetchFn: fetchFn as unknown as typeof fetch });
+      await executeSidekickTool("get_project_status", ctx, {});
+    }
+    expect(fetchFn).toHaveBeenCalledTimes(200);
+
+    // Writing one more key should evict the oldest (ws-0:proj-0).
+    const ctxN = baseCtx({ workspaceId: "ws-200", projectId: "proj-200", fetchFn: fetchFn as unknown as typeof fetch });
+    await executeSidekickTool("get_project_status", ctxN, {});
+    expect(fetchFn).toHaveBeenCalledTimes(201);
+
+    // Re-fetching the first key must MISS and re-issue a 202nd network call
+    // because its entry was evicted.
+    const ctx0 = baseCtx({ workspaceId: "ws-0", projectId: "proj-0", fetchFn: fetchFn as unknown as typeof fetch });
+    await executeSidekickTool("get_project_status", ctx0, {});
+    expect(fetchFn).toHaveBeenCalledTimes(202);
+
+    // But re-fetching the most recent key should still HIT (no extra call).
+    await executeSidekickTool("get_project_status", ctxN, {});
+    expect(fetchFn).toHaveBeenCalledTimes(202);
+  });
+
   it("returns a board error when the API returns non-2xx (and does not cache failures)", async () => {
     const fetchFn = vi.fn();
     fetchFn.mockResolvedValueOnce({
