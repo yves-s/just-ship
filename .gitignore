@@ -66,6 +66,7 @@ scripts/*
 !scripts/provision-pipeline.sh
 !scripts/validate-skill-frontmatter.sh
 !scripts/scan-plugin-security.sh
+!scripts/backfill-sidekick-to-engine.ts
 .worktrees/
 
 # Git worktrees
