@@ -162,7 +162,7 @@ Jede User-Nachricht, die eine **Idee, einen Feature-Wunsch, einen Bug-Report, ei
 |---|---|---|
 | **1 — ticket** | `/ticket` (Single-Ticket-Flow) | `Ist im Board: T-{N} — {title}. {url}` |
 | **2 — epic** | `/ticket` mit Split-Flag → Epic + Children | `Ist im Board als Epic T-{N} — {title}. {url}` + Children-Liste |
-| **3 — conversation** | `skills/sparring.md` laden, strukturierte Diskussion, am Ende: "Soll ich ein Ticket anlegen?" | Diskussions-Ergebnis + Artefakt-Link nach Bestätigung |
+| **3 — conversation** | Engine-Chat via `sidekick-api.sh chat` (SSE-Stream, Thread-Persistenz, Tool-Loop — identisch zum Browser-Widget). Fallback: `skills/sparring.md` nur wenn Engine nicht konfiguriert. Lokale Image-Pfade werden erkannt und vor dem Chat hochgeladen. Thread-Fortsetzung und -Listing laufen über `sidekick-api.sh thread-list` / `thread-get`. | Live-Token-Stream + Artefakt-Link oder gezielte Business-Frage (per `sidekick-converse`-Regeln) |
 | **4 — project** | Einmalige Bestätigung ("Das klingt nach einem neuen Projekt. Soll ich {Name} anlegen?") → `skills/add-project.md` bzw. `skills/init.md` + Init-Epic via `/ticket` mit 3 Child-Tickets (Scope klären / Tech-Stack / Erste User-Journey) | Project-URL + Epic-Link + Children-Liste |
 
 **Kategorien 1/2/3 bestätigen nie vorher** ("Soll ich das anlegen?" ist verboten — T-876/T-879). Kategorie 4 ist die einzige Ausnahme, weil ein neues Projekt strukturell größer ist.

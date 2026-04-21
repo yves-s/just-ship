@@ -62,9 +62,12 @@ import {
   getThread,
   updateThread,
   listThreadMessages,
+  listThreads,
+  THREAD_STATUSES,
   ThreadValidationError,
   ThreadNotFoundError,
   ThreadTransitionError,
+  type ThreadStatus,
 } from "./lib/threads-store.ts";
 import {
   handleAttach,
@@ -1457,6 +1460,76 @@ async function handleThreadCreateRoute(req: IncomingMessage, res: ServerResponse
   }
 }
 
+async function handleThreadListRoute(req: IncomingMessage, res: ServerResponse, rawUrl: string): Promise<void> {
+  if (!requirePipelineKey(req, res)) return;
+
+  const qIdx = rawUrl.indexOf("?");
+  const searchParams = new URLSearchParams(qIdx >= 0 ? rawUrl.slice(qIdx + 1) : "");
+
+  const projectId = searchParams.get("project_id") ?? undefined;
+  const userId = searchParams.get("user_id") ?? undefined;
+  const workspaceId = searchParams.get("workspace_id") ?? undefined;
+  const statusRaw = searchParams.getAll("status");
+
+  if (!projectId && !userId && !workspaceId) {
+    sendJson(res, 400, {
+      status: "bad_request",
+      message: "at least one of project_id, user_id, workspace_id is required",
+    });
+    return;
+  }
+
+  // Validate status values against the known enum before hitting the DB.
+  // Accepts repeated query param (`?status=draft&status=in_progress`) or a
+  // single comma-separated value (`?status=draft,in_progress`).
+  const statusExpanded = statusRaw.flatMap((s) => s.split(",").map((v) => v.trim()).filter(Boolean));
+  for (const s of statusExpanded) {
+    if (!(THREAD_STATUSES as readonly string[]).includes(s)) {
+      sendJson(res, 400, {
+        status: "bad_request",
+        message: `status: must be one of ${THREAD_STATUSES.join(", ")}`,
+      });
+      return;
+    }
+  }
+
+  const limitRaw = searchParams.get("limit");
+  const offsetRaw = searchParams.get("offset");
+  const limit = limitRaw !== null ? Math.min(200, Math.max(1, parseInt(limitRaw, 10) || 50)) : 50;
+  const offset = offsetRaw !== null ? Math.max(0, parseInt(offsetRaw, 10) || 0) : 0;
+
+  // Key rate limiting by the most-specific filter present so a chatty user
+  // against one project cannot drown out another project's listing traffic.
+  const rlKey = projectId ?? userId ?? workspaceId ?? "unknown";
+  if (!applyRateLimit(rateLimiters.sidekickThreadList, rlKey, "/api/sidekick/threads", res)) return;
+
+  try {
+    const result = await listThreads({
+      ...(projectId ? { project_id: projectId } : {}),
+      ...(userId ? { user_id: userId } : {}),
+      ...(workspaceId ? { workspace_id: workspaceId } : {}),
+      ...(statusExpanded.length > 0 ? { status: statusExpanded as ThreadStatus[] } : {}),
+      limit,
+      offset,
+    });
+    sendJson(res, 200, {
+      status: "ok",
+      threads: result.threads,
+      has_more: result.has_more,
+      limit,
+      offset,
+    });
+  } catch (err) {
+    if (err instanceof ThreadValidationError) {
+      sendJson(res, 400, { status: "bad_request", message: err.message });
+      return;
+    }
+    log(`Thread list failed: ${err instanceof Error ? err.message : String(err)}`);
+    Sentry.captureException(err);
+    sendJson(res, 500, { status: "error", message: "Internal server error" });
+  }
+}
+
 async function handleThreadGetRoute(req: IncomingMessage, res: ServerResponse, threadId: string): Promise<void> {
   if (!requirePipelineKey(req, res)) return;
 
@@ -2083,6 +2156,12 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 
     const threadMsgsMatch = url.match(/^\/api\/sidekick\/threads\/([^/?]+)\/messages(?:\?.*)?$/);
     if (threadMsgsMatch) return handleThreadMessagesRoute(req, res, threadMsgsMatch[1], url);
+
+    // GET /api/sidekick/threads (list) — bare path, optional query string.
+    // Must come BEFORE the `/:id` match to prevent the id regex from
+    // accidentally swallowing a bare list call if the URL shape shifts.
+    const threadListMatch = url.match(/^\/api\/sidekick\/threads(?:\?.*)?$/);
+    if (threadListMatch) return handleThreadListRoute(req, res, url);
 
     // GET /api/sidekick/threads/:id — must come after /messages to avoid shadowing
     const threadGetMatch = url.match(/^\/api\/sidekick\/threads\/([^/?]+)(?:\?.*)?$/);

@@ -128,6 +128,20 @@ export interface ListThreadMessagesResult {
   has_more: boolean;
 }
 
+export interface ListThreadsOptions {
+  project_id?: string;
+  user_id?: string;
+  workspace_id?: string;
+  status?: ThreadStatus | ThreadStatus[];
+  limit?: number;
+  offset?: number;
+}
+
+export interface ListThreadsResult {
+  threads: Thread[];
+  has_more: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Error classes
 // ---------------------------------------------------------------------------
@@ -458,4 +472,77 @@ export async function listThreadMessages(
   const messages = has_more ? allRows.slice(0, limit) : allRows;
 
   return { messages, has_more };
+}
+
+/**
+ * List threads with optional filters. At least one of project_id / user_id /
+ * workspace_id must be provided — an unfiltered listing across the whole table
+ * would surface other workspaces' threads. `status` is an optional single value
+ * or an array of statuses (e.g. all non-closed for an "open threads" view).
+ * Ordered by last_activity_at DESC so the most recently-touched threads surface
+ * first — which is what a user scanning "my open threads" expects.
+ */
+export async function listThreads(
+  opts: ListThreadsOptions,
+  deps: ThreadStoreDeps = {},
+): Promise<ListThreadsResult> {
+  if (!opts.project_id && !opts.user_id && !opts.workspace_id) {
+    throw new ThreadValidationError(
+      "listThreads requires at least one of: project_id, user_id, workspace_id",
+    );
+  }
+  if (opts.project_id !== undefined && !isUuid(opts.project_id)) {
+    throw new ThreadValidationError("project_id: must be a valid UUID");
+  }
+  if (opts.user_id !== undefined && !isUuid(opts.user_id)) {
+    throw new ThreadValidationError("user_id: must be a valid UUID");
+  }
+  if (opts.workspace_id !== undefined && !isUuid(opts.workspace_id)) {
+    throw new ThreadValidationError("workspace_id: must be a valid UUID");
+  }
+
+  const statusList: ThreadStatus[] | undefined = Array.isArray(opts.status)
+    ? opts.status
+    : opts.status !== undefined
+    ? [opts.status]
+    : undefined;
+  if (statusList) {
+    for (const s of statusList) {
+      if (!(THREAD_STATUSES as readonly unknown[]).includes(s)) {
+        throw new ThreadValidationError(
+          `status: must be one of ${THREAD_STATUSES.join(", ")}`,
+        );
+      }
+    }
+  }
+
+  const restOpts: SupabaseRestOptions = deps.fetchFn ? { fetchFn: deps.fetchFn } : {};
+
+  const limit = Math.min(
+    LIST_LIMIT_MAX,
+    Math.max(LIST_LIMIT_MIN, opts.limit ?? LIST_LIMIT_DEFAULT),
+  );
+  const offset = Math.max(0, opts.offset ?? LIST_OFFSET_DEFAULT);
+
+  const filters: string[] = [];
+  if (opts.workspace_id) filters.push(`workspace_id=eq.${encodeURIComponent(opts.workspace_id)}`);
+  if (opts.project_id) filters.push(`project_id=eq.${encodeURIComponent(opts.project_id)}`);
+  if (opts.user_id) filters.push(`user_id=eq.${encodeURIComponent(opts.user_id)}`);
+  if (statusList && statusList.length > 0) {
+    filters.push(`status=in.(${statusList.map(encodeURIComponent).join(",")})`);
+  }
+
+  // Fetch limit+1 to detect has_more
+  const fetchLimit = limit + 1;
+  const query =
+    filters.join("&") +
+    `&order=last_activity_at.desc&limit=${fetchLimit}&offset=${offset}&select=*`;
+
+  const rows = await supabaseGet<Thread[]>(`/rest/v1/threads?${query}`, restOpts);
+
+  const allRows = rows ?? [];
+  const has_more = allRows.length > limit;
+  const threads = has_more ? allRows.slice(0, limit) : allRows;
+
+  return { threads, has_more };
 }
