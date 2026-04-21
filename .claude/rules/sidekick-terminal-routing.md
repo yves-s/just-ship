@@ -11,8 +11,91 @@ Erkenne Sidekick-Intent an Signal-Mustern. Jedes reicht:
 - **Feature-Wunsch an bestehendes Produkt:** "Füg X hinzu", "X fehlt noch", "wir brauchen X in Y", "ändere Y sodass..."
 - **Bug-Report oder Copy-Tweak:** "X funktioniert nicht", "der Text auf Y sollte Z sein", "Button macht nicht was er soll"
 - **Neues Produkt / neue Audience:** "ich will Y für Z bauen", "neues Projekt: ...", "eigene App für ..."
+- **Rollen-Anrede mit Feature-/Build-/UI-Signal:** "Design Lead, ...", "CTO, ...", "Backend, ..." + einem der oben genannten Intents. Siehe eigene Sektion unten.
 
 Nicht Sidekick-Intent: explizite Commands (`/ticket`, `/develop`, `/ship`, `/recover`), Status-Fragen ("wie steht's"), Diagnose-Anfragen ("der CTO soll sich das anschauen"), oder reine Wissensfragen ("wie funktioniert X im Code"). Diese laufen über ihre bestehenden Pfade (Abschnitt "Intent-Erkennung" in CLAUDE.md).
+
+## Rollen-Anrede-Pattern
+
+Rollen-Anreden sind **keine Pair-Programming-Commands**. Eine Nachricht wie "Design Lead, lass uns die X-UI überarbeiten" adressiert zwar eine Rolle namentlich, aber der Kern-Intent bleibt ein Feature-Wunsch — und jeder Feature-Wunsch läuft durch den Sidekick-Intake. Rollen-Anrede + Feature/Build/UI-Signal → **immer Sidekick-Intake**, auch wenn die Rolle namentlich adressiert ist.
+
+### Warum diese Regel existiert
+
+Am 2026-04-21 hat eine Session auf "Design Lead, lass uns mal diese Interaktionselemente optimieren" direkt angefangen zu coden — Rolle adressiert, Implementation-Skill (`frontend-design`) geladen, Ticket-Flow übersprungen, Code auf `main` geschrieben. Der vollständige Incident-Report liegt unter `docs/incidents/2026-04-21-workflow-bypass-design-lead.md`. Die Rolle im Anruf verführt zum "ich bin dran" — in Wahrheit ist es genau die Stelle, an der der Sidekick-Flow starten muss.
+
+### Klassifikations-Logik
+
+Rollen-Anrede = einer dieser Präfixe am Anfang der User-Nachricht (oder als erste Zeile vor dem eigentlichen Request):
+
+- "Design Lead, ...", "Design-Lead: ...", "Dear Design Lead, ..."
+- "CTO, ...", "@CTO ...", "Hey CTO ..."
+- "Backend, ...", "Backend Dev, ..."
+- "Frontend, ...", "Frontend Dev, ..."
+- "PM, ...", "Product Manager, ..."
+- "Data Engineer, ...", "UX Lead, ...", "Creative Director, ..."
+
+Feature/Build/UI-Signal = einer der Signal-Typen aus der Trigger-Liste oben (Ideen-Rohform, Build-Intent, Feature-Wunsch, Bug-Report, Copy-Tweak).
+
+Wenn **beide** Signale gemeinsam in derselben Nachricht auftreten → Sidekick-Intake, keine Ausnahme.
+
+### Beispiele
+
+#### Beispiel 1 — Design Lead + UI-Tweak
+
+```
+User: Design Lead, lass uns die Card-Buttons im Detail-Panel optimieren. Die sind mini und passen nicht zum Rest.
+
+Fehler (was 2026-04-21 passiert ist):
+❌ frontend-design laden, Files grepen, Edits auf main schreiben.
+
+Richtig:
+✅ sidekick-intake laden, klassifizieren. Kategorie 1 (Feature-Wunsch an bestehendes Produkt).
+   /ticket erzeugt T-{N}. Ausgabe: "Ist im Board: T-{N} — Detail-Panel Button-Sizing. {url}".
+```
+
+#### Beispiel 2 — CTO + Architektur-Wunsch
+
+```
+User: CTO, wir brauchen einen Cache-Layer vor dem Classifier, das ist zu langsam.
+
+Fehler:
+❌ product-cto als Implementation-Skill lesen, Cache-Code hinhacken.
+
+Richtig:
+✅ sidekick-intake laden. Kategorie 1 oder 2 je nach Scope (Single-Ticket vs. Epic für größere Architektur).
+   Ticket(s) erstellen. product-cto wird intern konsultiert für ACs und Out-of-Scope (siehe "Internal Expert Consultation").
+```
+
+#### Beispiel 3 — Backend + neues Endpoint
+
+```
+User: Backend, füge einen POST /api/sidekick/feedback Endpoint hinzu, damit User im Widget die Klassifikation korrigieren können.
+
+Fehler:
+❌ backend-Skill laden, Endpoint-Code schreiben, Tests machen.
+
+Richtig:
+✅ sidekick-intake laden. Kategorie 1 (Feature-Wunsch, klar umrissen, Single-Ticket).
+   /ticket mit Endpoint-Spec im Body. Backend-Skill wird im späteren /develop-Flow geladen.
+```
+
+### Ausnahme — Rollen-Anrede ohne Feature-Signal
+
+Wenn die Rollen-Anrede nur ein Status-Check, eine Wissensfrage oder eine Diagnose ist, ist es **kein** Sidekick-Intent:
+
+- "CTO, was denkst du über den aktuellen Pipeline-Aufbau?" → Diagnose → `product-cto` laden, analysieren, keine Ticket-Erstellung.
+- "Design Lead, wie funktioniert unser Theme-System?" → Wissensfrage → antworten, kein Ticket.
+- "Backend, warum ist das letzte Deploy gecrasht?" → Diagnose → Logs checken, Root-Cause, ggf. Ticket für den Fix.
+
+Der Unterschied: **"wie/was/warum"** = Wissensfrage. **"lass uns / bau / füge hinzu / ändere"** = Feature-Intent = Sidekick-Intake, auch mit Rollen-Anrede.
+
+### Selbst-Check
+
+Bevor du auf eine Rollen-Anrede reagierst:
+
+1. Enthält die Nachricht ein Feature-/Build-/UI-Signal (bauen, ändern, hinzufügen, optimieren, fixen)?
+2. Wenn ja: Sidekick-Intake, kein Direkt-Coden. Auch wenn die Rolle namentlich angesprochen ist.
+3. Wenn nein (reine Wissensfrage, Status, Diagnose): normaler Rollen-Skill-Flow, kein Ticket.
 
 ## Flow
 
