@@ -88,3 +88,20 @@ Ausgabe (NICHT in einem Code-Block, damit der Link klickbar ist):
 - **Tokens NIEMALS im Chat verarbeiten** — immer auf `just-ship connect` im Terminal verweisen
 - **Keine Credentials im Chat ausgeben** — weder API Keys noch Token-Inhalte
 - **Nicht erklären wie das Board funktioniert** — das Board hat seinen eigenen Onboarding-Flow
+
+---
+
+## Multi-Projekt-Szenarien (`just-ship connect` in bereits verbundenem Projekt)
+
+Wenn der User `just-ship connect <token>` in einem Projekt ausführt, das schon eine Verbindung hat, vergleicht das CLI den Token mit `project.json` und reagiert abhängig davon:
+
+| Szenario | Was das CLI tut |
+|---|---|
+| **fresh** — Kein `workspace_id` in `project.json` | Normaler Erst-Connect. |
+| **refresh** — Token zeigt auf denselben Workspace + dasselbe Projekt (oder v2-Token ohne Projekt) | Silent key rotation — nur `.env.local` wird aktualisiert. |
+| **switch** — Token zeigt auf dasselbe Workspace, aber anderes Projekt | Einmalige Bestätigung im Terminal: `Auf das neue Projekt wechseln? (Y/n)`. Default = Yes. |
+| **mismatch** — Token zeigt auf einen **anderen** Workspace | Warnung (`bist du im richtigen Ordner?`). Default-Antwort = No. Ohne explizite Bestätigung wird nichts geschrieben. |
+
+**Für den Skill heißt das:** Beim Status-Check (Schritt 2) reflektiert `project.json` immer den zuletzt bestätigten Zustand — der User muss nichts zusätzlich tun. Wenn der User fragt "warum hat mein `just-ship connect` nichts gemacht?", ist die Antwort meist: das CLI hat den Mismatch erkannt und die Bestätigung wurde abgelehnt. Dann verweise auf das Terminal-Output des CLI-Aufrufs.
+
+**Workspace-Key-Hinweis:** Wenn ein Workspace-Key mehrere Projekte sieht, zeigt das CLI nach erfolgreichem Connect einmalig die Projekt-Liste mit Markierung des aktuellen Default-Projekts. Das ist rein informativ — `project.json` speichert weiterhin genau **ein** `pipeline.project_id` als Default-Hint.
