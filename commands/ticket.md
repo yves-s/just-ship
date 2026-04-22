@@ -13,6 +13,15 @@ Erstelle ein strukturiertes Ticket aus dem Input des Users. Du schreibst **nur**
 2. Der Skill erstellt ein PM-Quality Ticket (Titel, Problem, Desired Behavior, ACs, Out of Scope)
 3. Liefere das Ticket an Pipeline (Supabase) — falls `pipeline.project_id` in `project.json` gesetzt ist
 
+## Ziel-Projekt (optional)
+
+`/ticket --project <slug-or-uuid> "..."` legt das Ticket in einem anderen Projekt im selben Workspace an. Ohne `--project` gilt `pipeline.project_id` aus `project.json` als Default.
+
+- **UUID** (mit Bindestrichen): direkt als `project_id` an die Board API übergeben.
+- **Slug** (z.B. `just-ship-board`): vor dem Create per `bash .claude/scripts/board-api.sh get projects` zur UUID aufgelöst (Match auf `data.projects[].slug`). Kein Match → Fehler ausgeben, kein Ticket erstellen.
+
+Der `--project`-Wert wird vor dem Skill-Aufruf aus `$ARGUMENTS` extrahiert und an den Ticket-Writer-Skill weitergegeben, der ihn in jedem `POST tickets`-Body als `project_id` setzt. Das überschreibt die Default-Injection in `board-api.sh` und gilt auch für Split-Children und Epic-Container.
+
 ## Split-Modus
 
 Wenn der Ticket-Writer das Ticket als zu gross erkennt (Split-Signale aus dem Skill), oder der User explizit einen Split anfordert:
