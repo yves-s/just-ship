@@ -11,6 +11,12 @@
 #   board-api.sh patch tickets/{N} '{"status": "in_progress"}'
 #   board-api.sh post tickets '{"title": "...", "body": "..."}'
 #
+# Default project_id (POST tickets only):
+#   When the body has no `project_id`, the script auto-injects
+#   project.json → pipeline.project_id so workspace-scoped keys still target
+#   the correct project. Pass an explicit `project_id` in the body to override
+#   the default; pass `"project_id": null` for cross-project epics.
+#
 # Credential resolution (4-tier fallback):
 #   Tier 1: PIPELINE_KEY + BOARD_API_URL from environment (Plugin-native)
 #   Tier 2: .env.local in project directory (project-local credentials)
@@ -109,6 +115,24 @@ else
 fi
 
 exec 2>&3  # Restore stderr for curl errors
+
+# --- Default project_id injection (POST tickets only) ---
+# When the body for `POST tickets` does not carry an explicit `project_id`,
+# fall back to project.json → pipeline.project_id so workspace-scoped keys
+# still land tickets in the correct project. An explicit `project_id` in the
+# body — including `null` (cross-project epics) — is always passed through.
+if [ "$METHOD" = "POST" ] && [ "$ENDPOINT" = "tickets" ] && [ -n "$BODY" ]; then
+  BODY=$(node -e "
+    let body;
+    try { body = JSON.parse(process.argv[1]); } catch(e) { process.stdout.write(process.argv[1]); process.exit(0); }
+    if (body && typeof body === 'object' && !Array.isArray(body) && !Object.prototype.hasOwnProperty.call(body, 'project_id')) {
+      let defaultPid = '';
+      try { defaultPid = require('./project.json').pipeline?.project_id || ''; } catch(e) {}
+      if (defaultPid) body.project_id = defaultPid;
+    }
+    process.stdout.write(JSON.stringify(body));
+  " "$BODY" 2>/dev/null) || true
+fi
 
 # --- Make API call ---
 # Build curl command (key is in variable, not visible in ps output when using --header)

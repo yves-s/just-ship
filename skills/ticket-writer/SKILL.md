@@ -415,6 +415,19 @@ Set these for every ticket:
 - **Priority**: `high` / `medium` / `low` — see Priority Guide below
 - **Type**: User Story / Bug / Improvement / Spike / Tech Debt
 - **Size**: S / M / L / XL — **omit for Epics** (Epics are scope containers, not sized work items)
+- **Project**: every `POST tickets` body must carry the target `project_id` UUID — see Target Project resolution below.
+
+### Target Project resolution
+
+Every ticket lives in exactly one project. The Board API reads `project_id` from the request body — workspace-scoped keys do not pick a project on their own.
+
+Resolution order, highest priority first:
+
+1. **Explicit override.** `/ticket --project <slug-or-uuid> "..."` — the Slash-Command parses `--project` out of the input, resolves a slug to a UUID via `GET /api/projects` (match on `data.projects[].slug`), and passes the UUID through to every POST in this ticket creation (Single, Epic-Container, Children, Manual-Grouping). A bad slug aborts with an error — never silently fall back to the default.
+2. **Default hint from `project.json`.** When no override is passed, every POST sets `project_id` to `pipeline.project_id`. `board-api.sh` also auto-injects this default if a body is missing `project_id`, so the bash call is safe even when the skill forgets — but the skill should still set it explicitly so split-flows stay deterministic.
+3. **Cross-project Epic** (Auto-Epic on Split, T-903 mode). The Epic POST sends `project_id: null`; every child POST sends the inferred project UUID per child. The `--project` override does not apply here — cross-project splits explicitly opt out of single-project mode.
+
+The script `bash .claude/scripts/board-api.sh post tickets` accepts `project_id` in the JSON body and forwards it untouched. No CLI flags, no headers — the project is always part of the request payload.
 
 ### Priority Guide
 
