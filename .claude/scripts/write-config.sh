@@ -61,6 +61,63 @@ write_env_local() {
   chmod 600 "$envfile"
 }
 
+# detect_connect_scenario — compare incoming token's workspace/project against
+# the currently-configured project.json. Emits a single JSON line on stdout:
+#
+#   {"scenario": "fresh|refresh|switch|mismatch",
+#    "current_workspace_id": "...", "current_project_id": "...",
+#    "new_workspace_id": "...",     "new_project_id": "..."}
+#
+# Scenarios:
+#   fresh     — no existing pipeline.workspace_id → first connect
+#   refresh   — same workspace, same project (or token has no project) → silent key rotation
+#   switch    — same workspace, different project → one confirmation
+#   mismatch  — different workspace → warn, require explicit confirmation
+detect_connect_scenario() {
+  local pjson="$1" new_workspace_id="$2" new_project_id="${3:-}"
+
+  JS_PJSON="$pjson" \
+  JS_NEW_WS="$new_workspace_id" \
+  JS_NEW_PR="${new_project_id:-}" \
+  node -e "
+    const fs = require('fs');
+    const pjsonPath = process.env.JS_PJSON;
+    const newWs = process.env.JS_NEW_WS;
+    const newPr = process.env.JS_NEW_PR || '';
+
+    let currentWs = '', currentPr = '';
+    try {
+      if (fs.existsSync(pjsonPath)) {
+        const pj = JSON.parse(fs.readFileSync(pjsonPath, 'utf-8'));
+        currentWs = (pj.pipeline && pj.pipeline.workspace_id) || '';
+        currentPr = (pj.pipeline && pj.pipeline.project_id) || '';
+      }
+    } catch (_) {
+      // Malformed project.json → treat as fresh
+    }
+
+    let scenario;
+    if (!currentWs) {
+      scenario = 'fresh';
+    } else if (currentWs !== newWs) {
+      scenario = 'mismatch';
+    } else if (!newPr || !currentPr || newPr === currentPr) {
+      // v2 token (no p) or identical project → refresh
+      scenario = 'refresh';
+    } else {
+      scenario = 'switch';
+    }
+
+    process.stdout.write(JSON.stringify({
+      scenario,
+      current_workspace_id: currentWs,
+      current_project_id: currentPr,
+      new_workspace_id: newWs,
+      new_project_id: newPr,
+    }));
+  "
+}
+
 usage() {
   cat <<'USAGE'
 Usage: write-config.sh <command> [options]
@@ -729,10 +786,41 @@ cmd_connect() {
   ")
 
   # -------------------------------------------------------------------------
+  # Detect scenario: fresh / refresh / switch / mismatch
+  # -------------------------------------------------------------------------
+  local scenario_json scenario current_ws current_pr
+  scenario_json=$(detect_connect_scenario \
+    "${project_dir}/project.json" \
+    "$workspace_id" \
+    "${project_id_from_token:-}")
+  scenario=$(JS_SC="$scenario_json" node -e "process.stdout.write(JSON.parse(process.env.JS_SC).scenario)")
+  current_ws=$(JS_SC="$scenario_json" node -e "process.stdout.write(JSON.parse(process.env.JS_SC).current_workspace_id)")
+  current_pr=$(JS_SC="$scenario_json" node -e "process.stdout.write(JSON.parse(process.env.JS_SC).current_project_id)")
+
+  # -------------------------------------------------------------------------
   # Plugin mode: skip global config, output JSON result
   # -------------------------------------------------------------------------
   if [ "$plugin_mode" = "true" ]; then
     local pjson="${project_dir}/project.json"
+
+    # Workspace-mismatch in plugin mode: refuse write, return structured error
+    if [ "$scenario" = "mismatch" ]; then
+      JS_NEW_WS="$workspace_id" \
+      JS_NEW_SLUG="$workspace" \
+      JS_CURRENT_WS="$current_ws" \
+      node -e "
+        const result = {
+          success: false,
+          error: 'workspace_mismatch',
+          message: 'Token points to a different workspace than the current project.',
+          current_workspace_id: process.env.JS_CURRENT_WS,
+          new_workspace_id: process.env.JS_NEW_WS,
+          new_workspace_slug: process.env.JS_NEW_SLUG,
+        };
+        console.log(JSON.stringify(result, null, 2));
+      "
+      return 0
+    fi
 
     # Update project.json with workspace_id (and project_id if v3)
     if [ -f "$pjson" ]; then
@@ -787,9 +875,12 @@ cmd_connect() {
     JS_VERSION="$token_version" \
     JS_VERIFIED="$verified" \
     JS_VERIFY_ERROR="${verify_error:-}" \
+    JS_SCENARIO="$scenario" \
+    JS_CURRENT_PR="$current_pr" \
     node -e "
       const result = {
         success: true,
+        scenario: process.env.JS_SCENARIO,
         workspace_id: process.env.JS_WORKSPACE_ID,
         workspace_slug: process.env.JS_WORKSPACE_SLUG,
         board_url: process.env.JS_BOARD_URL,
@@ -799,6 +890,9 @@ cmd_connect() {
       };
       if (process.env.JS_PROJECT_ID) {
         result.project_id = process.env.JS_PROJECT_ID;
+      }
+      if (process.env.JS_CURRENT_PR) {
+        result.previous_project_id = process.env.JS_CURRENT_PR;
       }
       if (process.env.JS_VERIFY_ERROR) {
         result.verify_error = process.env.JS_VERIFY_ERROR;
@@ -812,6 +906,58 @@ cmd_connect() {
   # -------------------------------------------------------------------------
   # Standard mode: write credentials to .env.local, interactive project selection
   # -------------------------------------------------------------------------
+
+  # Scenario gate — handle refresh/switch/mismatch before writing anything.
+  # The scenario was detected above (for both modes). Standard mode shows
+  # user-facing messages and asks at most one confirmation.
+  case "$scenario" in
+    mismatch)
+      echo ""
+      echo "⚠  Workspace-Mismatch"
+      echo ""
+      echo "   Aktuelles Projekt ist mit Workspace ${current_ws} verbunden."
+      echo "   Der Token zeigt auf Workspace '${workspace}' (${workspace_id})."
+      echo ""
+      echo "   Bist du im richtigen Ordner? Wenn nicht, brich ab und wechsle das Verzeichnis."
+      echo ""
+      local confirm=""
+      read -r -p "   Trotzdem den Workspace wechseln? (y/N): " confirm
+      confirm="${confirm:-N}"
+      if [[ ! "$confirm" =~ ^[yY]$ ]]; then
+        echo ""
+        echo "✗ Abgebrochen — nichts geschrieben."
+        return 0
+      fi
+      echo ""
+      ;;
+    switch)
+      echo ""
+      echo "ℹ  Projekt-Wechsel erkannt"
+      echo ""
+      echo "   Aktuell verknüpft: Projekt ${current_pr}"
+      echo "   Neues Token zeigt auf: Projekt ${project_id_from_token}"
+      echo "   (beide im Workspace '${workspace}')"
+      echo ""
+      local confirm=""
+      read -r -p "   Auf das neue Projekt wechseln? (Y/n): " confirm
+      confirm="${confirm:-Y}"
+      if [[ ! "$confirm" =~ ^[yY]$ ]]; then
+        echo ""
+        echo "✗ Abgebrochen — nichts geschrieben."
+        return 0
+      fi
+      echo ""
+      ;;
+    refresh)
+      # Silent — same workspace + same project (or v2 token without project).
+      # The only effect is rotating .env.local credentials.
+      :
+      ;;
+    fresh|*)
+      # No existing connection → normal flow.
+      :
+      ;;
+  esac
 
   # Step 2: Write credentials to .env.local (project-local, gitignored)
   local envfile="${project_dir}/.env.local"
@@ -848,19 +994,49 @@ cmd_connect() {
     echo ""
     echo "✓ Credentials in .env.local gespeichert"
     echo "✓ Workspace '${workspace}' verbunden"
-    echo "✓ Projekt verknüpft (via Token)"
-    # Still validate connection
+    if [ "$scenario" = "switch" ]; then
+      echo "✓ Projekt gewechselt (von ${current_pr} → ${project_id_from_token})"
+    elif [ "$scenario" = "refresh" ]; then
+      echo "✓ Key aktualisiert (Projekt unverändert)"
+    else
+      echo "✓ Projekt verknüpft (via Token)"
+    fi
+    # Validate connection and fetch project list for workspace-key hint
     local http_code response_body
     response_body=$(mktemp)
     trap "rm -f '$response_body'" EXIT
     http_code=$(curl -s -o "$response_body" -w "%{http_code}" \
       -H "X-Pipeline-Key: ${key}" "${board}/api/projects" 2>/dev/null || echo "000")
-    rm -f "$response_body"
     if [ "$http_code" = "200" ]; then
       echo "✓ Board-Verbindung verifiziert"
+
+      # If the workspace-scoped key gives access to multiple projects, show
+      # the list once as an informational hint (AC #4 from T-967).
+      local ws_list
+      ws_list=$(JS_BODY="$(cat "$response_body")" JS_CURRENT="$project_id_from_token" node -e "
+        try {
+          const data = JSON.parse(process.env.JS_BODY);
+          const projects = data.data && data.data.projects ? data.data.projects : [];
+          const current = process.env.JS_CURRENT;
+          if (projects.length <= 1) { process.exit(0); }
+          const lines = projects.map(p => {
+            const marker = p.id === current ? ' (aktuelles Default)' : '';
+            return '   • ' + p.name + marker;
+          });
+          process.stdout.write(String(projects.length) + '\n' + lines.join('\n'));
+        } catch (_) { process.exit(0); }
+      ") || ws_list=""
+      if [ -n "$ws_list" ]; then
+        local ws_count
+        ws_count=$(echo "$ws_list" | head -n 1)
+        echo ""
+        echo "ℹ  Workspace-Key erkannt — Zugriff auf ${ws_count} Projekte:"
+        echo "$ws_list" | tail -n +2
+      fi
     elif [ "$http_code" = "401" ]; then
       echo "⚠ API-Key wurde abgelehnt (HTTP 401) — prüfe Board → Settings → API Keys"
     fi
+    rm -f "$response_body"
     echo ""
     echo "Erstelle dein erstes Ticket mit /ticket in Claude Code."
     return 0
