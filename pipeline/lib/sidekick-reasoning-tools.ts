@@ -14,6 +14,7 @@ import {
   type CreatedProject,
 } from "./sidekick-create.ts";
 import { createThread as createThreadRow, type Thread } from "./threads-store.ts";
+import { runAuditAsTool } from "./audit-runtime.ts";
 
 /**
  * Sidekick reasoning-first tool layer — T-983 (child of T-978).
@@ -446,9 +447,22 @@ export interface AuditReport {
 
 async function execRunExpertAudit(
   _ctx: ToolContext,
-  _args: z.infer<typeof RunExpertAuditSchema>,
+  args: z.infer<typeof RunExpertAuditSchema>,
 ): Promise<ToolResult<AuditReport>> {
-  return { ok: false, error: EXPERT_RUNTIME_PENDING_MSG, code: EXPERT_RUNTIME_PENDING_CODE };
+  // Delegates to the audit runtime in `audit-runtime.ts`. The runtime owns the
+  // read-only tool whitelist, the canUseTool callback, the 5-minute hard cap,
+  // and the Sentry instrumentation. Keeping this handler thin means the tool
+  // registry stays focused on the tool-use API surface; the runtime can evolve
+  // (add caching, swap model, change prompt) without touching this file.
+  //
+  // ctx is intentionally unused — the audit agent has no board access, no
+  // pipeline key, and no user bearer. That's the whole point of the read-only
+  // contract (see .claude/rules/expert-audit-scope.md).
+  return runAuditAsTool({
+    scope: args.scope,
+    expertSkill: args.expert_skill,
+    projectId: args.project_id,
+  });
 }
 
 export interface ConsultResponse {
