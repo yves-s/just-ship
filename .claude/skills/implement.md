@@ -43,7 +43,7 @@ Pipeline-Config wird **ignoriert** — dieser Command läuft immer im Standalone
 
 Bevor irgendeine Planungs- oder Implementierungsentscheidung getroffen wird, müssen die zur Spec passenden Domain-Skills im Main-Context geladen werden. Der Main-Assistant trifft in Schritt 1–3 die architektonischen, UI-, UX- und Routing-Entscheidungen — ohne geladene Skills passieren die aus dem Bauch, nicht aus Expertise. Das ist die Umsetzung von CLAUDE.md → **Skill Loading — Mandatory, not optional**.
 
-> **Guard-Precedence:** Falls der Guard in Schritt 1 greift (keine Spec ableitbar, STOP), wird Schritt 0 **übersprungen** — der Guard hat Vorrang, es wird dann weder klassifiziert noch ein Skill geladen.
+> **Guard-Precedence:** Der Guard aus Schritt 1 wird **vor** der Klassifikation ausgewertet. Wenn kein Argument übergeben wurde UND kein klares Implementierungsziel aus der Konversation ableitbar ist (leere Session, themenfremdes Gespräch, mehrere widersprüchliche Themen), springe direkt zu Schritt 1 und gib die STOP-Message aus — **ohne** Skill-Klassifikation, **ohne** Announcement. Der Guard hat Vorrang vor Step 0.
 
 #### 0a. Spec-Quelle identifizieren
 
@@ -133,7 +133,7 @@ Nach Schritt 0 geht es ohne Bestätigung direkt zu Schritt 1 weiter.
 
 ### 1. Spec ableiten
 
-> **Guard:** Falls kein Argument übergeben wurde UND kein klares Implementierungsziel aus der Konversation ableitbar ist (leere Session, themenfremdes Gespräch, mehrere widersprüchliche Themen) → **STOP**: "Ich konnte kein klares Implementierungsziel aus dem Chat ableiten. Bitte beschreibe kurz, was gebaut werden soll." (Der Guard hat Vorrang vor Schritt 0 — wenn er greift, wurden auch keine Skills geladen.)
+> **Guard:** Falls kein Argument übergeben wurde UND kein klares Implementierungsziel aus der Konversation ableitbar ist (leere Session, themenfremdes Gespräch, mehrere widersprüchliche Themen) → **STOP**: "Ich konnte kein klares Implementierungsziel aus dem Chat ableiten. Bitte beschreibe kurz, was gebaut werden soll." Der Guard wird konzeptionell **vor** Schritt 0 ausgewertet — wenn er greift, werden weder Skills klassifiziert noch geladen noch announced.
 
 **Mit Argument (`/implement Beschreibung`):**
 Nutze `$ARGUMENTS` direkt als Spec-Basis.
