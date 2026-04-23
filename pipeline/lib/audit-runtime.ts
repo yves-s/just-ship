@@ -29,6 +29,23 @@ const EXPERT_SKILL_VALUES = [
   "ticket-writer",
 ] as const satisfies readonly ExpertSkill[];
 
+// Compile-time lockstep guard: forces `EXPERT_SKILL_VALUES` to cover every
+// member of `ExpertSkill`. `satisfies readonly ExpertSkill[]` above only
+// checks the subset direction (every listed value is a valid ExpertSkill);
+// it does NOT catch the case where `sidekick-reasoning-tools.ts` adds a new
+// expert and this file forgets to mirror it. The check below forces the
+// superset direction at compile time: if an `ExpertSkill` member is missing
+// from the tuple, `Exclude<ExpertSkill, (typeof EXPERT_SKILL_VALUES)[number]>`
+// evaluates to a non-`never` type and the assignment errors out.
+//
+// If you add a skill to `EXPERT_SKILLS` in `sidekick-reasoning-tools.ts`,
+// typecheck will fail here until you add it to `EXPERT_SKILL_VALUES` too.
+type _ExpertSkillLockstep = [Exclude<ExpertSkill, (typeof EXPERT_SKILL_VALUES)[number]>] extends [never]
+  ? true
+  : "EXPERT_SKILL_VALUES is missing ExpertSkill members — keep in lockstep with sidekick-reasoning-tools.ts";
+const _expertSkillLockstepCheck: _ExpertSkillLockstep = true;
+void _expertSkillLockstepCheck;
+
 /**
  * Audit agent runtime — T-985 (child of Epic T-978).
  *
