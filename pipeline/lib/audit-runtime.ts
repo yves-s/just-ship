@@ -163,10 +163,31 @@ const UNIVERSAL_WRITE_FLAGS = new Set([
   "tee",
 ]);
 
-/** `find` flags that can execute or delete. */
-const FIND_WRITE_FLAGS = new Set(["-exec", "-execdir", "-delete", "-ok", "-okdir"]);
+/**
+ * `find` flags that can execute commands, delete files, or write to arbitrary
+ * paths. Covers GNU find's `-fprint*` / `-fls` family, which write
+ * filesystem listings to a named file — a classic exfiltration / overwrite
+ * primitive that is easy to miss because it looks like a read-only option.
+ */
+const FIND_WRITE_FLAGS = new Set([
+  "-exec",
+  "-execdir",
+  "-delete",
+  "-ok",
+  "-okdir",
+  "-fprint",
+  "-fprint0",
+  "-fprintf",
+  "-fls",
+]);
 
-/** `sed` flags that write in place. */
+/**
+ * `sed` flags that write output or execute commands. `--in-place`/`-i` edit
+ * files on disk. `-e`/`--expression` may carry a script that uses sed's `e`
+ * command (execute-via-shell) or `w`/`W` commands (write to file) — we block
+ * any `e` / `w` script usage unconditionally via the segment-level script
+ * inspection below.
+ */
 const SED_WRITE_FLAGS = new Set(["-i", "--in-place"]);
 
 /** `git branch`/`tag`/`remote`/`worktree`/`stash`/`config` sub-flags that write. */
@@ -196,6 +217,23 @@ export function classifyBashCommand(raw: string): { allowed: true } | { allowed:
     return { allowed: false, reason: "empty Bash command" };
   }
 
+  // Reject newlines and carriage returns outright. They act as command
+  // separators in bash and would let a caller smuggle a second command past
+  // the segment splitter (`ls\nrm foo` tokenizes to `["ls","rm","foo"]` after
+  // a naive whitespace split, so the `ls` binary check would pass and `rm`
+  // would still execute).
+  if (/[\r\n]/.test(trimmed)) {
+    return { allowed: false, reason: "Bash: newlines are not allowed in the command" };
+  }
+
+  // NUL bytes and other C0 control characters are likewise rejected — they
+  // cause surprising tokenizer behavior and have no legitimate use in an
+  // auditor workflow.
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(trimmed)) {
+    return { allowed: false, reason: "Bash: control characters are not allowed in the command" };
+  }
+
   // Reject any metacharacters that open the door to chained writes.
   // `|` is allowed (read pipelines), `&&`/`||` also allowed (short-circuits).
   //
@@ -217,6 +255,14 @@ export function classifyBashCommand(raw: string): { allowed: true } | { allowed:
   // auditors don't need stdin.
   if (/(?:^|\s)>>?(?:\s|$)/.test(trimmed) || /(?:^|\s)<</.test(trimmed)) {
     return { allowed: false, reason: "Bash: redirection is not allowed" };
+  }
+
+  // Reject `&` (background job separator) unless it's part of `&&`. A single
+  // `&` between two commands runs both: `ls & rm foo` would pass the binary
+  // check (`ls`) while still executing `rm`. Detect a bare `&` that is NOT
+  // preceded or followed by another `&`.
+  if (/(?:^|[^&])&(?:[^&]|$)/.test(trimmed)) {
+    return { allowed: false, reason: "Bash: background '&' is not allowed" };
   }
 
   // Split on ; && || | to handle chained commands. Each segment must pass.
@@ -266,16 +312,111 @@ function classifyBashSegment(segment: string): { allowed: true } | { allowed: fa
   if (binary === "find") {
     for (const a of args) {
       if (FIND_WRITE_FLAGS.has(a)) {
-        return { allowed: false, reason: `Bash: find '${a}' can execute or delete` };
+        return { allowed: false, reason: `Bash: find '${a}' can execute, delete, or write` };
       }
     }
   }
 
   if (binary === "sed") {
+    // Any `-i`/`--in-place` variant (GNU's `-iSUFFIX` attached form and
+    // BSD's `--in-place=BACKUP` included).
     for (const a of args) {
-      if (SED_WRITE_FLAGS.has(a) || a.startsWith("-i")) {
-        return { allowed: false, reason: "Bash: sed -i writes in place" };
+      if (SED_WRITE_FLAGS.has(a) || a.startsWith("-i") || a.startsWith("--in-place")) {
+        return { allowed: false, reason: "Bash: sed -i / --in-place writes in place" };
       }
+    }
+    // sed scripts can carry the `e` command (execute via shell — GNU
+    // extension), `w`/`W` (write pattern space to a file), or the `s///e`
+    // flag (execute replacement via shell — GNU extension). `-f SCRIPT`
+    // points at an external script file we can't vet.
+    //
+    // Conservative heuristic: strip the leading `sed` token from the raw
+    // segment, then scan the remainder for any of the dangerous forms.
+    // Using the raw (un-tokenized) text avoids a correctness bug the naive
+    // whitespace tokenizer introduces around quoted script arguments:
+    // `sed 'e rm foo' file` tokenizes to `["'e", "rm", "foo'", "file"]`,
+    // which loses the script boundary. Scanning the raw segment catches the
+    // dangerous patterns regardless of quoting.
+    //
+    // Heuristic rules (all applied to script content only — not to sed's
+    // own flag forms like `-e`, which is a flag, not a script `e` command):
+    //   - `s/.../.../[flags][ewW]` — substitution flag containing e/w/W.
+    //   - A bare `e`, `w`, or `W` command — optionally prefixed by an
+    //     address (`1e`, `$e`, `/regex/e`) — that sits standalone.
+    //   - Any `-f`/`--file` pointing at an external script file.
+    for (let j = 0; j < args.length; j++) {
+      const a = args[j]!;
+      if (a === "-f" || a === "--file") {
+        return { allowed: false, reason: "Bash: sed -f (external script file) is not allowed" };
+      }
+    }
+    // Strip the leading `sed` token and the `-e`/`--expression` flag tokens
+    // themselves (not their payload) from the segment, then strip every
+    // unescaped single/double quote character. That last step is the one
+    // that matters: the naive whitespace tokenizer breaks quoted scripts
+    // across spaces (`sed 'e rm foo' file` → tokens `["'e","rm","foo'",…]`),
+    // so we intentionally work on the raw segment text and just remove the
+    // quote characters before pattern-matching. False positives from this
+    // are fine — auditors can always fall back to `Read`/`Grep`/`Glob`.
+    const unquoted = segment
+      .replace(/^\s*sed\b\s*/, "")
+      .replace(/(^|\s)(-e|--expression)(?=\s)/g, " ")
+      // Remove all unescaped single/double quote characters.
+      .replace(/(?<!\\)['"]/g, "");
+    const dangerousSed =
+      // `s/…/…/…[ewW]` flag — the replacement flag block contains e/w/W.
+      /s[^a-zA-Z0-9\s\\]\S*?[^\\][^a-zA-Z0-9\s\\]\S*?[^\\][^a-zA-Z0-9\s\\][a-zA-Z]*[ewW]/.source;
+    // A bare `e`, `w`, or `W` command, optionally address-prefixed, at
+    // script start / after a `;` / after whitespace that follows an
+    // address. We accept both `^` and whitespace/`;` as starts.
+    const bareEwW = /(?:^|[;\s])(?:\d+|\$|\/(?:[^/\\]|\\.)*\/)?\s*[ewW](?:\s|$)/.source;
+    const sedDangerRe = new RegExp(`${dangerousSed}|${bareEwW}`);
+    if (sedDangerRe.test(unquoted)) {
+      return { allowed: false, reason: "Bash: sed script uses `e`/`w`/`W` (execute-shell or write-to-file)" };
+    }
+  }
+
+  if (binary === "awk") {
+    // awk scripts can call `system()`, pipe to a command (`print | "cmd"`),
+    // read from a command (`"cmd" | getline`), or redirect (`print > file`).
+    // GNU awk's `-i inplace` rewrites files. `-f SCRIPT_FILE` points at a
+    // script we can't vet. Reject all of these.
+    for (let j = 0; j < args.length; j++) {
+      const a = args[j]!;
+      if (a === "-i" || a === "--include") {
+        const next = args[j + 1];
+        if (next === "inplace") {
+          return { allowed: false, reason: "Bash: awk -i inplace rewrites files" };
+        }
+      }
+      if (a === "-f" || a === "--file") {
+        return { allowed: false, reason: "Bash: awk -f (external script file) is not allowed" };
+      }
+    }
+    // Scan the raw segment (minus the leading `awk` token) for dangerous
+    // script constructs. Strip unescaped quotes so the naive whitespace
+    // tokenizer boundary doesn't hide script patterns — `awk 'BEGIN{system("x")}'`
+    // without the unquote step looks like `BEGIN{system(` in one token and
+    // `"x")}` in another; scanning the raw text is simpler and correct.
+    const awkHaystack = segment
+      .replace(/^\s*awk\b\s*/, "")
+      .replace(/(?<!\\)['"`]/g, "");
+    if (/\bsystem\s*\(/.test(awkHaystack)) {
+      return { allowed: false, reason: "Bash: awk system() executes shell commands" };
+    }
+    // `print|getline …` / `"cmd"|getline` — command-pipe into getline runs
+    // the left side as a shell command. After quote-stripping we detect any
+    // `|` followed by `getline`.
+    if (/\|\s*getline\b/.test(awkHaystack)) {
+      return { allowed: false, reason: "Bash: awk getline-from-command executes shell" };
+    }
+    // `print x | "cmd"` / `printf ... | "cmd"` — pipe to a command string.
+    if (/\|\s*\S/.test(awkHaystack) && /\b(?:print(?:f)?)\b[^|]*\|/.test(awkHaystack)) {
+      return { allowed: false, reason: "Bash: awk pipe-to-command executes shell" };
+    }
+    // `print > file` / `print >> file` — redirect into a file.
+    if (/\b(?:print(?:f)?)\b[^>]*>>?\s*\S/.test(awkHaystack)) {
+      return { allowed: false, reason: "Bash: awk redirect-to-file writes state" };
     }
   }
 
@@ -292,6 +433,41 @@ function classifyBashSegment(segment: string): { allowed: true } | { allowed: fa
         }
       }
     }
+    // `git diff --output=FILE` / `-o FILE` writes the patch to a file.
+    if (sub === "diff" || sub === "show" || sub === "log" || sub === "shortlog") {
+      for (let j = 1; j < args.length; j++) {
+        const a = args[j]!;
+        if (a === "-o" || a === "--output" || a.startsWith("--output=")) {
+          return { allowed: false, reason: `Bash: git ${sub} --output writes to a file` };
+        }
+      }
+    }
+    // `git grep -O<cmd>` / `--open-files-in-pager=<cmd>` executes an
+    // arbitrary binary as the "pager". Block both attached and separate
+    // forms.
+    if (sub === "grep") {
+      for (let j = 1; j < args.length; j++) {
+        const a = args[j]!;
+        if (
+          a === "-O" ||
+          a.startsWith("-O") ||
+          a === "--open-files-in-pager" ||
+          a.startsWith("--open-files-in-pager")
+        ) {
+          return { allowed: false, reason: "Bash: git grep -O / --open-files-in-pager runs an external command" };
+        }
+      }
+    }
+    // `-c core.pager=<cmd>` / `-c <key>=<cmd>` and `--exec-path=<path>` can
+    // redirect git's behavior to an external binary. Block top-level `-c`
+    // overrides and `--exec-path` in all sub-commands.
+    for (const a of args.slice(1)) {
+      if (a === "-c" || a.startsWith("--exec-path")) {
+        return { allowed: false, reason: `Bash: git '${a}' can override config and execute external binaries` };
+      }
+    }
+    // `--upload-pack` on git fetch/ls-remote runs an arbitrary binary;
+    // fetch/ls-remote aren't in the read allow-list anyway. Leave as-is.
   }
 
   return { allowed: true };

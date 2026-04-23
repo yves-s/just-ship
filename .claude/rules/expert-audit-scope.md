@@ -35,9 +35,11 @@ Current allow-list (binaries): `ls`, `cat`, `head`, `tail`, `wc`, `file`, `stat`
 
 Narrowing rules layered on top:
 
-- `find` rejects `-exec`, `-execdir`, `-delete`, `-ok`, `-okdir`.
-- `sed` rejects `-i` / `--in-place` (writes in place).
-- `git` accepts only read sub-commands (`log`, `diff`, `show`, `status`, `blame`, `ls-files`, `ls-tree`, `rev-parse`, …). Write flags on otherwise-read sub-commands (`git branch -d`, `git tag --delete`, `git remote add`, `git worktree add`, `git stash push`, `git config --add`) are rejected.
+- `find` rejects `-exec`, `-execdir`, `-delete`, `-ok`, `-okdir`, and the GNU `-fprint`, `-fprint0`, `-fprintf`, `-fls` flags (the `-fprint*` family writes filesystem listings to a named file).
+- `sed` rejects `-i` / `--in-place` / `--in-place=...` / attached `-iSUFFIX` (edits files) and `-f` (external script file). Scripts containing the `e` command (execute via shell — GNU extension), `w`/`W` commands (write pattern space to file), or the `s///e` / `s///w` substitution flags are rejected. Plain substitution (`s/from/to/g`, `s/a/b/`) is still allowed.
+- `awk` rejects `-i inplace` (gawk in-place rewrite), `-f` (external script file), and any script containing `system(`, `| getline`, pipes to a command (`print ... | "cmd"`), or output redirection (`print > file`). Pure data-transform scripts (`awk '{print $1}'`) are still allowed.
+- `git` accepts only read sub-commands (`log`, `diff`, `show`, `status`, `blame`, `ls-files`, `ls-tree`, `rev-parse`, …). Write flags on otherwise-read sub-commands (`git branch -d`, `git tag --delete`, `git remote add`, `git worktree add`, `git stash push`, `git config --add`) are rejected. In addition: `git diff|show|log|shortlog --output=FILE` / `-o FILE` (writes patch/log to a file), `git grep -O<cmd>` / `--open-files-in-pager=<cmd>` (runs an arbitrary binary as the "pager"), top-level `git -c <k>=<v>` config overrides, and `git --exec-path=<path>` are all rejected.
+- Separator layer: every occurrence of a bare `&` (background job starter), a literal newline / CR, or a NUL / control byte is rejected before segment splitting — these are the easy splitter-bypass primitives that let an attacker hide a second command inside what looks like a single allowed invocation.
 - Output redirection (`>`, `>>`), `tee`, process substitution (`<(...)`, `>(...)`), command substitution (`` ` ``, `$(...)`), heredocs (`<<`), and absolute-path binaries (`/usr/bin/foo`, `./script.sh`) are rejected universally.
 
 The logic lives in `classifyBashCommand()` in `pipeline/lib/audit-runtime.ts`. It's conservative on purpose — false positives are better than false negatives, because `Read`/`Grep`/`Glob` are always available as a fallback.

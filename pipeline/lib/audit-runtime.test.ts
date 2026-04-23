@@ -131,6 +131,44 @@ describe("classifyBashCommand", () => {
     ["chained rm after ok prefix", "ls ; rm foo"],
     ["chained rm with &&", "ls && rm foo"],
     ["chained rm with ||", "false || rm foo"],
+    // --- Shell-separator bypasses that a naive splitter misses --------------
+    ["background '&' separator", "ls & rm foo"],
+    ["background '&' at end", "rm foo &"],
+    ["literal newline separator", "ls\nrm foo"],
+    ["literal CR separator", "ls\rrm foo"],
+    ["NUL byte", "ls\x00rm foo"],
+    // --- find write-to-file flags -----------------------------------------
+    ["find -fprint", "find . -fprint out.txt"],
+    ["find -fprintf", "find . -fprintf out.txt '%p\\n'"],
+    ["find -fprint0", "find . -fprint0 out.txt"],
+    ["find -fls", "find . -fls out.txt"],
+    // --- sed exec / write commands -----------------------------------------
+    ["sed --in-place=.bak", "sed --in-place=.bak s/a/b/ file"],
+    ["sed -iEXT (attached)", "sed -i.bak s/a/b/ file"],
+    ["sed s///e flag (exec)", "sed 's/foo/bar/e' file"],
+    ["sed s///eg flag (exec)", "sed 's/foo/bar/eg' file"],
+    ["sed s///w flag (write)", "sed 's/foo/bar/w out.txt' file"],
+    ["sed bare e command", "sed 'e rm foo' file"],
+    ["sed address+e command", "sed '1e rm foo' file"],
+    ["sed bare w command", "sed 'w out.txt' file"],
+    ["sed -e with exec", "sed -e 'e rm foo' file"],
+    ["sed -f external script", "sed -f script.sed file"],
+    // --- awk script exec / write -------------------------------------------
+    ["awk system()", "awk 'BEGIN{system(\"rm foo\")}'"],
+    ["awk getline pipe", "awk 'BEGIN{\"ls\" | getline x}'"],
+    ["awk pipe to command", "awk '{print $0 | \"sh\"}'"],
+    ["awk redirection", "awk '{print > \"out.txt\"}'"],
+    ["awk -f external script", "awk -f script.awk file"],
+    ["awk -i inplace", "awk -i inplace '{print}' file"],
+    // --- git sub-flag exploits ---------------------------------------------
+    ["git diff --output=FILE", "git diff --output=out.patch"],
+    ["git diff -o FILE", "git diff -o out.patch HEAD"],
+    ["git log --output=FILE", "git log --output=log.txt"],
+    ["git grep -O attached", "git grep -Opager foo"],
+    ["git grep -O separate", "git grep -O pager foo"],
+    ["git grep --open-files-in-pager", "git grep --open-files-in-pager=sh foo"],
+    ["git -c config override", "git -c core.pager=sh log"],
+    ["git --exec-path override", "git --exec-path=/tmp log"],
   ])("denies write/dangerous command: %s", (_label, command) => {
     const res = classifyBashCommand(command);
     expect(res.allowed).toBe(false);
@@ -139,6 +177,18 @@ describe("classifyBashCommand", () => {
   it("rejects a non-string input", () => {
     const res = classifyBashCommand(undefined as unknown as string);
     expect(res.allowed).toBe(false);
+  });
+
+  it("still allows plain sed substitution without e/w/W flags", () => {
+    expect(classifyBashCommand("sed 's/foo/bar/g' file").allowed).toBe(true);
+    expect(classifyBashCommand("sed 's/a/b/' file").allowed).toBe(true);
+    // The word 'edit' in the pattern must not false-match the `e` command.
+    expect(classifyBashCommand("sed 's/edit/new/' file").allowed).toBe(true);
+  });
+
+  it("still allows awk without system/pipe/redirect", () => {
+    expect(classifyBashCommand("awk '{print $1}' file").allowed).toBe(true);
+    expect(classifyBashCommand("awk 'BEGIN{OFS=\",\"}{print $1,$2}' file").allowed).toBe(true);
   });
 });
 
