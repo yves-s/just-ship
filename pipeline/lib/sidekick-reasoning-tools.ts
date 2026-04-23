@@ -329,11 +329,47 @@ async function execStartConversationThread(
     };
   }
 
+  // UUID guards at the tool boundary — the threads table has UUID columns, so
+  // a non-UUID value would otherwise surface as a confusing Supabase 400 with
+  // a raw Postgres error. The Sidekick chat endpoint (T-981) will supply
+  // authenticated UUIDs; this is a defense-in-depth check against a caller
+  // that wires `ctx` incorrectly or receives a non-UUID `project_id` from the
+  // model's tool arguments.
+  if (!isUuid(ctx.workspaceId)) {
+    return {
+      ok: false,
+      error: "workspace_id: must be a valid UUID",
+      code: "invalid_args",
+    };
+  }
+  if (!isUuid(ctx.userId)) {
+    return {
+      ok: false,
+      error: "user_id: must be a valid UUID",
+      code: "invalid_args",
+    };
+  }
+  if (!isUuid(args.project_id)) {
+    return {
+      ok: false,
+      error: "project_id: must be a valid UUID",
+      code: "invalid_args",
+    };
+  }
+
   // We don't stamp a `classification` on the thread row because the
   // threads-store enum is a T-shirt-sizer ("xs".."xl", "status_query") —
   // legacy of the classifier era — and the reasoning-first Sidekick has no
   // analogous concept. Leaving it null tells downstream consumers "this
   // thread came through the new orchestrator".
+  //
+  // `pending_questions` stays empty on creation. The field's semantic purpose
+  // is "questions the PM is waiting on the CEO for" — seeding it with the
+  // user's opening message would misuse it and confuse any code that reads
+  // pending_questions expecting actual outstanding questions. The initial
+  // context is passed to T-981's orchestrator via the tool-call arguments
+  // themselves; it appends proper messages to the thread-messages table as
+  // the conversation progresses.
   try {
     const row = await createThreadRow(
       {
@@ -342,11 +378,7 @@ async function execStartConversationThread(
         user_id: ctx.userId,
         title: args.topic,
         status: "draft",
-        // Store the opening context as a pending-question entry so the
-        // conversation has something to resume against. The orchestrator
-        // (T-981) will append proper user/assistant messages as the thread
-        // progresses.
-        pending_questions: [{ role: "user", content: args.initial_context }],
+        pending_questions: [],
       },
       ctx.fetchFn ? { fetchFn: ctx.fetchFn } : {},
     );
@@ -370,6 +402,16 @@ async function execStartConversationThread(
 function buildThreadUrl(boardUrl: string | undefined, threadId: string): string {
   if (!boardUrl) return threadId;
   return `${boardUrl.replace(/\/+$/, "")}/threads/${threadId}`;
+}
+
+// Format-only UUID check — matches threads-store's existing private helper so
+// behavior stays in lockstep. We intentionally do NOT enforce the RFC-4122
+// version/variant nibbles because test fixtures and legacy IDs in the codebase
+// use all-zero or all-repeated UUIDs that don't set those bits, and the
+// Postgres uuid column itself is version-agnostic.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(v: unknown): v is string {
+  return typeof v === "string" && UUID_RE.test(v);
 }
 
 // ---------------------------------------------------------------------------

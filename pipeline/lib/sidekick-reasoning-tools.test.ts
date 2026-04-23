@@ -481,6 +481,75 @@ describe("start_conversation_thread", () => {
     if (!res.ok) expect(res.code).toBe("not_authenticated");
     expect(calls).toHaveLength(0);
   });
+
+  it("returns invalid_args when ctx.workspaceId is not a UUID (error path)", async () => {
+    const { fn, calls } = makeMockFetch([]);
+    const ctx = makeCtx({ fetchFn: fn, workspaceId: "not-a-uuid" });
+
+    const res = await executeSidekickReasoningTool("start_conversation_thread", ctx, {
+      topic: "Idea",
+      initial_context: "rough thought",
+      project_id: "22222222-2222-2222-2222-222222222222",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.code).toBe("invalid_args");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("returns invalid_args when ctx.userId is not a UUID (error path)", async () => {
+    const { fn, calls } = makeMockFetch([]);
+    const ctx = makeCtx({ fetchFn: fn, userId: "not-a-uuid" });
+
+    const res = await executeSidekickReasoningTool("start_conversation_thread", ctx, {
+      topic: "Idea",
+      initial_context: "rough thought",
+      project_id: "22222222-2222-2222-2222-222222222222",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.code).toBe("invalid_args");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("returns invalid_args when args.project_id is not a UUID (error path)", async () => {
+    const { fn, calls } = makeMockFetch([]);
+    const ctx = makeCtx({ fetchFn: fn });
+
+    const res = await executeSidekickReasoningTool("start_conversation_thread", ctx, {
+      topic: "Idea",
+      initial_context: "rough thought",
+      project_id: "not-a-uuid",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.code).toBe("invalid_args");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("passes an empty pending_questions array on creation (no user-message leak)", async () => {
+    const row = {
+      id: "th-uuid-2",
+      workspace_id: "00000000-0000-0000-0000-000000000001",
+      project_id: "22222222-2222-2222-2222-222222222222",
+      user_id: "11111111-1111-1111-1111-111111111111",
+      title: "Analytics idea",
+      status: "draft",
+      classification: null,
+      pending_questions: [],
+      last_activity_at: "2026-04-23T00:00:00Z",
+      created_at: "2026-04-23T00:00:00Z",
+    };
+    const { fn, calls } = makeMockFetch([{ body: row }]);
+    const ctx = makeCtx({ fetchFn: fn });
+
+    const res = await executeSidekickReasoningTool("start_conversation_thread", ctx, {
+      topic: "Analytics idea",
+      initial_context: "Rough idea — not sure if we need it",
+      project_id: "22222222-2222-2222-2222-222222222222",
+    });
+
+    expect(res.ok).toBe(true);
+    const body = calls[0].body as { pending_questions: unknown };
+    expect(body.pending_questions).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------
