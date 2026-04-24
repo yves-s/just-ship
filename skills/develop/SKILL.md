@@ -259,6 +259,41 @@ Lies `project.json` für Pfade und Stack-Details.
 
 **Dann: Instruktionen für Agents formulieren** — mit exakten Code-Änderungen und neuen Dateien direkt im Prompt.
 
+#### Routing — welcher Skill für welchen Ticket-Typ
+
+Die Skill-Auswahl folgt dem Inhalt des Tickets. Diese Tabelle ist Heuristik, kein Automat: mehrere Skills können parallel gelten, der Orchestrator entscheidet welche tatsächlich Mehrwert bringen.
+
+| Ticket-Typ | Skills |
+|---|---|
+| UI/Frontend-Änderung an bestehendem Design-System | `frontend-design` |
+| Neue Seite / neues Feature mit eigener UX | `design-lead` (frame first) + `ux-planning` + ggf. `creative-design` (Greenfield) |
+| Produkt-Struktur / Interaction-Philosophie / Design-System-Richtung | `design-lead` |
+| Cross-Feature-Konsistenz-Review | `design-lead` |
+| Architektur / Performance / Ops / Security-Strategie | `product-cto` |
+| API- oder Hook-Änderung | `backend` |
+| Schema- oder Migration-Arbeit | `data-engineer` |
+| Test-Strategie, neue Test-Suite | `webapp-testing` + `test-driven-development` → QA-Agent |
+
+**Peer-Regel:** `design-lead` und `product-cto` sind gleichberechtigt. Bei Cross-Cutting-Entscheidungen (Technik + UX) laufen beide. Bei reinen Design-/Produkt-Struktur-Fragen entscheidet `design-lead` allein. Bei reinen Architektur-/Ops-Fragen entscheidet `product-cto` allein.
+
+#### Definition of Done — Pipeline-Tickets
+
+Tickets, die `pipeline/`, `commands/develop.md`, `commands/ship.md` oder `.claude/scripts/` ändern, dürfen NICHT als done markiert werden ohne:
+
+1. **Lokaler Smoke-Test passed:** `bash scripts/pipeline-smoke-test.sh` — verifiziert Board-API-Round-Trip und Stuck-Recovery-Pfad. FAIL = Fix nicht verifiziert, nicht mergen.
+2. **VPS-Integration-Test passed:** `bash scripts/pipeline-vps-test.sh --host <vps-host>` — erstellt ein echtes Ticket, schickt es durch die VPS-Pipeline, verifiziert Agents liefen, PR erstellt, Status `in_review`. FAIL = Pipeline funktioniert nicht end-to-end auf VPS.
+
+Für spezifische Bereiche gilt zusätzlich manuelle Verifikation:
+
+| Änderung | VPS-Verifikation |
+|---|---|
+| Worker-Logik (lifecycle, recovery, retry) | Worker-Log zeigt erwartetes Verhalten; Ticket-State manuell manipulieren und Recovery beobachten |
+| Pipeline-Phase (triage, orchestrator, qa) | Ein echtes Ticket autonom durchlaufen lassen und Phasen-Output prüfen |
+| Status-Updates / Board-Events | Board-UI zeigt korrekten Status ohne Hänger nach Ticket-Durchlauf |
+| Scripts / Config | Script auf VPS ausführen, Output verifizieren |
+
+**Warum:** Code kann lokal korrekt aussehen und den Smoke-Test bestehen, aber auf der VPS trotzdem brechen — unterschiedliche Node-Version, fehlende Env-Vars, echte Supabase-Latenz, systemd-Eigenheiten.
+
 ### 5. Implementierung (parallel wo möglich)
 
 **Für JEDEN Agent-Spawn — Events senden UND Ausgabe anzeigen:**
