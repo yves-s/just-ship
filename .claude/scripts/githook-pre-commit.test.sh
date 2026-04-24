@@ -166,6 +166,24 @@ run_commit_test "GIT_ALLOW_INSTALLED_EDIT=1 bypasses block" "$TMP/self2" ".pipel
 setup_repo self-install "$TMP/self3"
 run_delete_test "$TMP/self3" ".pipeline/lib/load-skills.ts"
 
+# Regression: filenames with shell-special characters must NOT bypass the
+# block. `git diff --cached --name-only` (without `-z`) C-quotes such names
+# (`.pipeline/weird"name.ts` → `".pipeline/weird\"name.ts"`), which used to
+# cause the prefix `case` match to miss. The hook now uses `-z` to read raw
+# bytes; this test guards that fix.
+setup_repo self-install "$TMP/self4"
+SPECIAL_FILE='.pipeline/weird"name.ts'
+echo "content" > "$TMP/self4/$SPECIAL_FILE"
+(cd "$TMP/self4" && git add -- "$SPECIAL_FILE")
+(cd "$TMP/self4" && git commit -q -m "test commit" >/dev/null 2>&1)
+rc=$?
+if [ $rc -ne 0 ]; then
+  pass "blocks .pipeline/ file with quote in name (no C-quote bypass)"
+else
+  fail "FAIL: .pipeline/ file with quote in name slipped through"
+  (cd "$TMP/self4" && git reset -q --hard HEAD^ 2>/dev/null || true)
+fi
+
 echo ""
 echo "Scenario 2: customer project (only .pipeline/, no pipeline/)"
 setup_repo customer "$TMP/customer"
