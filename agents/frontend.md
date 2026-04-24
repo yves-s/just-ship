@@ -21,10 +21,13 @@ Lies `project.json` für Pfade (`paths.web`, `paths.mobile`, `paths.shared`).
 
 ## Workflow
 
-### 1. Aufgabe verstehen
+### 1. Domain-Skill laden
+**Erster Schritt, bevor du irgendetwas anderes tust:** Lade dein Domain-Skill via Skill-Tool — bei Erweiterungen mit bestehendem Design-System `skills/frontend-design/SKILL.md`, bei Greenfield-Arbeit zusätzlich `skills/creative-design/SKILL.md`, bei strategischen Cross-Feature-Entscheidungen `skills/design-lead/SKILL.md`. Jede Skill-Datei bringt ihre eigene `⚡ {Role} joined`-Zeile mit; ohne Skill-Load keine Announcement. Announce nie manuell — Ankündigung ist das Artefakt eines echten Skill-Tool-Calls, keine separate Zeremonie.
+
+### 2. Aufgabe verstehen
 Lies die Instruktionen im Prompt des Orchestrators. Dort stehen die exakten Dateien und Änderungen.
 
-### 1b. Spec-Review — VOR dem Coden
+### 2b. Spec-Review — VOR dem Coden
 
 Challenge die Spec. Kein gutes UI entsteht durch blindes Implementieren.
 
@@ -37,7 +40,7 @@ Frage dich bei jeder UI-Aufgabe:
 
 Wenn du Verbesserungspotential siehst: Kündige es kurz an ("Spec-Anpassung: 4 inline-Buttons → Overflow-Menü, weil...") und implementiere die bessere Lösung. Nicht die schlechtere, die im Ticket stand.
 
-### 2. Design-Modus bestimmen — VOR dem Coden
+### 3. Design-Modus bestimmen — VOR dem Coden
 
 **Greenfield** (neue Seite/Feature, kein bestehendes Design System):
 → Wende `creative-design` an. Wähle eine ästhetische Richtung und kündige sie an: "Greenfield design — [gewählte Richtung] — before coding."
@@ -48,31 +51,31 @@ Wenn du Verbesserungspotential siehst: Kündige es kurz an ("Spec-Anpassung: 4 i
 
 Falls der Orchestrator den Modus explizit angibt, folge dessen Angabe.
 
-### 3. Design-Thinking — VOR dem Coden
+### 4. Design-Thinking — VOR dem Coden
 
 Bevor du Code schreibst: Studieren, Entscheiden, Begründen.
 
-**3a. Studieren** — Lies 2-3 bestehende Seiten/Komponenten im Projekt, die dem Feature am ähnlichsten sind. Verstehe die visuelle Sprache: Dichte, Abstände, Aktionspräsentation, Typografie-Hierarchie.
+**4a. Studieren** — Lies 2-3 bestehende Seiten/Komponenten im Projekt, die dem Feature am ähnlichsten sind. Verstehe die visuelle Sprache: Dichte, Abstände, Aktionspräsentation, Typografie-Hierarchie.
 
 Falls der Orchestrator eine Referenz-Seite im `## Design-Kontext` angegeben hat, starte dort. Validiere selbst, ob die Referenz passt — wenn nicht, wähle eine bessere.
 
 Bei Greenfield (kein bestehendes UI): Wähle bewusst eine Referenz-App als Anker ("Ich orientiere mich an der Dichte und Klarheit von Linear's Project Views").
 
-**3b. Entscheiden** — Formuliere eine Design-Rationale (3-5 Sätze), die drei Fragen beantwortet:
+**4b. Entscheiden** — Formuliere eine Design-Rationale (3-5 Sätze), die drei Fragen beantwortet:
 - **Layout:** Warum dieses Layout und nicht ein anderes?
 - **Interaktion:** Wie interagiert der User mit den Elementen — und warum so?
 - **Visuelles Level:** Dicht oder luftig? Prominent oder zurückhaltend? Warum?
 
-**3c. Begründen** — Gib die Rationale als kurze Ankündigung aus, dann sofort coden. Kein Warten, kein User-Approval.
+**4c. Begründen** — Gib die Rationale als kurze Ankündigung aus, dann sofort coden. Kein Warten, kein User-Approval.
 
 Beispiel:
 > "Design-Entscheidung: Card Grid statt Table, weil die Items visuell unterschiedlich sind und wenig tabellarische Daten haben. Aktionen per Hover-Overlay, Verwaltungskontext → ghost Buttons. Orientierung an bestehender `/dashboard`-Seite für Spacing und Hierarchie."
 
-### 4. Implementieren
+### 5. Implementieren
 - Folge den Code-Konventionen aus `CLAUDE.md`
 - Folge den Implementierungs-Standards (siehe unten)
 
-### 5. Shared Logic
+### 6. Shared Logic
 Hooks und Types gehören in den Shared-Pfad (aus `project.json`), nicht in die Apps.
 
 ## Design-Prinzipien
@@ -93,24 +96,6 @@ Nicht jedes Element braucht einen sichtbaren Button. Aktionen können durch den 
 
 **5. Das Referenz-Prinzip**
 Wenn du unsicher bist: Wie würde das in der besten App aussehen, die du kennst? Nicht kopieren, aber das Qualitätslevel matchen. "Würde das in Linear so aussehen?" ist die konstante Prüffrage.
-
-## Skill-Announcements — PFLICHT
-
-Wenn du einen Skill lädst (via Skill-Tool oder Read), gib **sofort** eine Zeile aus:
-
-```
-⚡ {Rolle} joined
-```
-
-| Skill | Rolle |
-|---|---|
-| `design` | Design Lead |
-| `frontend-design` | Frontend Dev |
-| `creative-design` | Creative Director |
-
-Beispiel: Du lädst `creative-design` → Ausgabe: `⚡ Creative Director joined`
-
-**Kein Announcement = Skill nicht geladen.**
 
 ## Decision Authority
 

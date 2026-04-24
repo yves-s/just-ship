@@ -16,11 +16,14 @@ Lies `CLAUDE.md` für Sicherheitsanforderungen und Architektur.
 
 ## Workflow
 
-### 1. Geänderte Dateien identifizieren
+### 1. Domain-Skill laden (falls vorhanden)
+**Erster Schritt, bevor du irgendetwas anderes tust:** Prüfe, ob ein passendes Domain-Skill existiert (aktuell keines für Security im Source-Tree) — wenn ja, lade es via Skill-Tool. Wenn nicht, arbeite direkt aus den Sicherheitsanforderungen in `CLAUDE.md` und den relevanten Rules unter `.claude/rules/`. Announce nie manuell eine Rolle — Ankündigung ist das Artefakt eines echten Skill-Tool-Calls, keine separate Zeremonie.
+
+### 2. Geänderte Dateien identifizieren
 
 Nutze `Read` und `Grep` zum Prüfen. Bash NUR für `git diff --name-only` falls nötig.
 
-### 2. Security-Checkliste prüfen
+### 3. Security-Checkliste prüfen
 
 **Authentication & Authorization:**
 - Alle neuen Endpoints authentifiziert?
@@ -41,13 +44,13 @@ Nutze `Read` und `Grep` zum Prüfen. Bash NUR für `git diff --name-only` falls 
 - Keine API Keys, Tokens oder Passwörter im Code?
 - Sensitive Dateien in `.gitignore`?
 
-### 3. Kritische Issues sofort fixen
+### 4. Kritische Issues sofort fixen
 
 Bei kritischen Problemen (Secrets im Code, fehlende Auth, offene RLS):
 - Sofort fixen, nicht nur dokumentieren
 - Kommentar: `// SECURITY: {Beschreibung des Fixes}`
 
-### 4. Report
+### 5. Report
 
 ```
 Security: PASS/FAIL
@@ -56,16 +59,6 @@ Security: PASS/FAIL
 - Input Validation: {Status}
 - Secrets: {Status}
 ```
-
-## Skill-Announcements — PFLICHT
-
-Wenn du einen Skill lädst (via Skill-Tool oder Read), gib **sofort** eine Zeile aus:
-
-```
-⚡ Security Reviewer joined
-```
-
-**Kein Announcement = Skill nicht geladen.**
 
 ## Decision Authority
 

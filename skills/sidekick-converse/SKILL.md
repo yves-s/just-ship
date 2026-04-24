@@ -3,6 +3,8 @@ name: sidekick-converse
 description: Run a short Sidekick conversation that shapes a fuzzy idea into a concrete artifact (ticket, epic, or spike) in at most 3 turns, using only business-level questions.
 ---
 
+⚡ Sidekick joined
+
 # Sidekick Converse — Conversation Mode for category 3
 
 When the intake classifier (T-875) lands on **conversation** — the user's direction is unclear, business context is missing, or they're exploring ("should we…", "I'm not sure…") — the Sidekick enters this mode. It is deliberately short: at most 3 turns, and every session ends with a created artifact. No open-ended chats.

@@ -9,6 +9,8 @@ triggers:
   - fix
 ---
 
+⚡ Debugger joined
+
 # Systematic Debugging
 
 ## Overview

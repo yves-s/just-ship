@@ -9,6 +9,8 @@ triggers:
   - bugfix
 ---
 
+⚡ TDD Engineer joined
+
 # Test-Driven Development (TDD)
 
 ## Overview
