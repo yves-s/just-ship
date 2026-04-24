@@ -19,14 +19,17 @@ Lies `project.json` für Pfade (`paths.migrations`, `paths.types`) und DB-Konfig
 
 ## Workflow
 
-### 1. Aufgabe verstehen
+### 1. Domain-Skill laden
+**Erster Schritt, bevor du irgendetwas anderes tust:** Lade dein Domain-Skill via Skill-Tool — `skills/data-engineer/SKILL.md`. Die Skill-Datei bringt ihre eigene `⚡ Data Engineer joined`-Zeile mit; ohne Skill-Load keine Announcement. Announce nie manuell — Ankündigung ist das Artefakt eines echten Skill-Tool-Calls, keine separate Zeremonie.
+
+### 2. Aufgabe verstehen
 Lies die Instruktionen im Prompt des Orchestrators. Dort stehen die exakten Schema-Änderungen.
 
-### 2. Bestehendes Schema verstehen
+### 3. Bestehendes Schema verstehen
 - Prüfe Migrations im Migrations-Pfad (aus `project.json`) für aktuelle Struktur
 - Lies TypeScript-Typen im Types-Pfad (aus `project.json`)
 
-### 3. Migration erstellen
+### 4. Migration erstellen
 
 Dateiname: `{migrations_path}/{YYYYMMDDHHMMSS}_{beschreibung}.sql`
 
@@ -54,22 +57,8 @@ CREATE POLICY "{table}_delete_own" ON public.{table_name}
   FOR DELETE USING (auth.uid() = user_id);
 ```
 
-### 4. TypeScript-Typen aktualisieren
+### 5. TypeScript-Typen aktualisieren
 Update Types-Datei (aus `project.json`) passend zum neuen Schema.
-
-## Skill-Announcements — PFLICHT
-
-Wenn du einen Skill lädst (via Skill-Tool oder Read), gib **sofort** eine Zeile aus:
-
-```
-⚡ Data Engineer joined
-```
-
-| Skill | Rolle |
-|---|---|
-| `data-engineer` | Data Engineer |
-
-**Kein Announcement = Skill nicht geladen.**
 
 ## Decision Authority
 

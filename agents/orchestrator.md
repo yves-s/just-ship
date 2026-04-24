@@ -23,7 +23,7 @@ Lies `project.json` für Stack, Build-Commands, Pfade und Supabase-Config.
 
 1. **Ticket verstehen** — Titel, Beschreibung, Acceptance Criteria
 2. **Relevante Dateien lesen** — Nur die 5-10 betroffenen Dateien direkt lesen (Read/Glob/Grep), NICHT die gesamte Codebase
-3. **Cross-Cutting Skills konsultieren** — Bei Features die mehrere Domains betreffen (Frontend + Backend, UI + Architektur), lies `skills/product-cto.md` und/oder `skills/frontend-design.md` und wende deren Standards auf deine Planung an. Architekturentscheidungen → Product CTO. UI/UX-Entscheidungen → Frontend Design.
+3. **Cross-Cutting Skills konsultieren** — Bei Features die mehrere Domains betreffen (Frontend + Backend, UI + Architektur), lade via Skill-Tool `skills/product-cto/SKILL.md` und/oder `skills/frontend-design/SKILL.md` und wende deren Standards auf deine Planung an. Architekturentscheidungen → Product CTO. UI/UX-Entscheidungen → Frontend Design.
 4. **Implementation-Plan im Kopf** — Welche Dateien neu/geändert, welche Agents nötig
 
 **KEIN Planner-Agent spawnen.** Du hast das Projekt-Wissen und kannst die betroffenen Dateien selbst lesen. Ein Planner-Agent würde die Codebase redundant durchsuchen.
@@ -148,32 +148,9 @@ Standardmäßig übernimmt der QA-Agent den Security-Quick-Check. Für sicherhei
 8. **Sonnet für Kreatives** — UI-Komponenten, Business Logic
 9. **Implementation-Agents bekommen den exakten Code** den sie schreiben sollen, soweit möglich
 
-## Skill-Announcements — PFLICHT
+## Skill-Loading
 
-Wenn du einen Skill lädst (via Skill-Tool oder Read), gib **sofort** eine Zeile aus:
-
-```
-⚡ {Rolle} joined
-```
-
-Rollenname pro Skill:
-
-| Skill | Rolle |
-|---|---|
-| `product-cto` | CTO |
-| `frontend-design` | Frontend Dev |
-| `creative-design` | Creative Director |
-| `design` | Design Lead |
-| `backend` | Backend Dev |
-| `data-engineer` | Data Engineer |
-| `webapp-testing` / `test-driven-development` | Testing Engineer |
-| `ux-planning` | UX Lead |
-| `ticket-writer` | PM |
-| `autonomy-boundary` | Autonomy Coach |
-
-Beispiel: Du lädst `product-cto.md` → Ausgabe: `⚡ CTO joined`
-
-**Kein Announcement = Skill nicht geladen.** Der User muss jederzeit sehen können, welche Expertise gerade aktiv ist.
+Wenn du Cross-Cutting-Expertise brauchst (Architektur → `skills/product-cto/SKILL.md`, UI/UX → `skills/frontend-design/SKILL.md` oder `skills/design-lead/SKILL.md`, UX-Flows → `skills/ux-planning/SKILL.md`, Autonomie-Fragen → `skills/autonomy-boundary/SKILL.md`), lade das Skill via Skill-Tool. Jede Skill-Datei bringt ihre eigene `⚡ {Role} joined`-Zeile mit; ohne Skill-Load keine Announcement. Announce nie manuell eine Rolle — Ankündigung ist das Artefakt eines echten Skill-Tool-Calls, keine separate Zeremonie.
 
 ## Decision Authority — ZERO TOLERANCE
 

@@ -17,11 +17,14 @@ Lies `CLAUDE.md` für projektspezifische Build-Details.
 
 ## Workflow
 
-### 1. Build-Checks ausführen
+### 1. Domain-Skill laden (falls vorhanden)
+**Erster Schritt, bevor du irgendetwas anderes tust:** Prüfe, ob ein passendes Domain-Skill existiert (aktuell keines für DevOps im Source-Tree) — wenn ja, lade es via Skill-Tool. Wenn nicht, arbeite direkt aus den Konventionen in `CLAUDE.md` und `project.json`. Announce nie manuell eine Rolle — Ankündigung ist das Artefakt eines echten Skill-Tool-Calls, keine separate Zeremonie.
+
+### 2. Build-Checks ausführen
 
 Lies die Build-Commands aus `project.json` und führe sie aus.
 
-### 2. Fehler beheben
+### 3. Fehler beheben
 
 Bei fehlgeschlagenen Checks:
 
@@ -29,25 +32,15 @@ Bei fehlgeschlagenen Checks:
 2. **Build Errors:** Konfiguration prüfen, fehlende Dependencies
 3. **Import Errors:** Pfade prüfen, Circular Dependencies auflösen
 
-### 3. Konfiguration prüfen
+### 4. Konfiguration prüfen
 
 - `tsconfig.json` — Neue Pfade/Aliase korrekt?
 - `package.json` — Dependencies korrekt?
 - Projektspezifische Config-Dateien laut `CLAUDE.md`
 
-### 4. Erneut prüfen
+### 5. Erneut prüfen
 
 Nach Fixes: Build-Checks nochmal ausführen bis alles PASS ist.
-
-## Skill-Announcements — PFLICHT
-
-Wenn du einen Skill lädst (via Skill-Tool oder Read), gib **sofort** eine Zeile aus:
-
-```
-⚡ DevOps Engineer joined
-```
-
-**Kein Announcement = Skill nicht geladen.**
 
 ## Decision Authority
 

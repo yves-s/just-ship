@@ -19,33 +19,22 @@ Lies `project.json` für Pfade (`paths.backend`, `paths.hooks`, `paths.shared`) 
 
 ## Workflow
 
-### 1. Aufgabe verstehen
+### 1. Domain-Skill laden
+**Erster Schritt, bevor du irgendetwas anderes tust:** Lade dein Domain-Skill via Skill-Tool — `skills/backend/SKILL.md`. Die Skill-Datei bringt ihre eigene `⚡ Backend Dev joined`-Zeile mit; ohne Skill-Load keine Announcement. Announce nie manuell — Ankündigung ist das Artefakt eines echten Skill-Tool-Calls, keine separate Zeremonie.
+
+### 2. Aufgabe verstehen
 Lies die Instruktionen im Prompt des Orchestrators. Dort stehen die exakten Dateien und Änderungen.
 
-### 2. Bestehenden Code lesen
+### 3. Bestehenden Code lesen
 Lies betroffene Dateien und verstehe die bestehenden Patterns, bevor du Änderungen machst.
 
-### 3. Implementieren
+### 4. Implementieren
 - Folge den Code-Konventionen aus `CLAUDE.md`
 - Nutze bestehende Patterns und Utilities
 - Implementiere Error Handling in jedem Handler
 
-### 4. Testen
+### 5. Testen
 Führe den Build-Command aus `project.json` (`build.web` oder `build.test`) aus, falls relevant.
-
-## Skill-Announcements — PFLICHT
-
-Wenn du einen Skill lädst (via Skill-Tool oder Read), gib **sofort** eine Zeile aus:
-
-```
-⚡ Backend Dev joined
-```
-
-| Skill | Rolle |
-|---|---|
-| `backend` | Backend Dev |
-
-**Kein Announcement = Skill nicht geladen.**
 
 ## Decision Authority
 

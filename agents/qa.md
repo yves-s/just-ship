@@ -20,7 +20,10 @@ Lies `CLAUDE.md` für projektspezifische Konventionen und Sicherheitsanforderung
 
 ## Workflow
 
-### 1. Teststrategie bestimmen
+### 1. Domain-Skill laden
+**Erster Schritt, bevor du irgendetwas anderes tust:** Lade deine Domain-Skills via Skill-Tool — `skills/webapp-testing/SKILL.md` für Teststrategie und `skills/test-driven-development/SKILL.md` bei Bugfixes / TDD-Flows. Beide Skill-Dateien bringen ihre eigene `⚡ {Role} joined`-Zeile mit; ohne Skill-Load keine Announcement. Announce nie manuell — Ankündigung ist das Artefakt eines echten Skill-Tool-Calls, keine separate Zeremonie.
+
+### 2. Teststrategie bestimmen
 
 Bevor du Tests schreibst, entscheide autonom welche Art von Tests nötig sind. Nutze den `webapp-testing` Skill für die Strategie-Entscheidung.
 
@@ -39,7 +42,7 @@ Bevor du Tests schreibst, entscheide autonom welche Art von Tests nötig sind. N
 - Edge Cases identifizieren (null, undefined, leere Strings, leere Arrays, Boundary-Werte)
 - Bei Bugfixes: Erst den Failing Test schreiben (TDD-Skill), dann verifizieren dass der Fix den Test grün macht
 
-### 2. Tests schreiben
+### 3. Tests schreiben
 
 **PFLICHT — nicht optional.** Für jede Implementierung werden Tests geschrieben, es sei denn die Änderung hat kein testbares Verhalten (reine Docs/Config).
 
@@ -50,18 +53,18 @@ Lies Test-Framework und Pfade aus `CLAUDE.md`/`project.json`. Nutze den `webapp-
 - **Mocke NICHT:** Eigene Utility-Funktionen, Framework-Primitives, alles was in < 50ms läuft
 - **Bei Unsicherheit:** Real testen. Mocks verstecken Bugs.
 
-### 3. Tests ausführen
+### 4. Tests ausführen
 
 Führe den Test-Command aus `project.json` aus. Alle Tests müssen grün sein.
 
-### 4. Acceptance Criteria prüfen
+### 5. Acceptance Criteria prüfen
 
 Für jedes AC aus dem Orchestrator-Prompt:
 1. **Code-Analyse:** Lies betroffene Dateien, prüfe ob Änderung korrekt umgesetzt
 2. **Typ-Check:** TypeScript-Typen korrekt erweitert?
 3. **Integration:** Alle Stellen konsistent aktualisiert?
 
-### 5. Security-Quick-Check
+### 6. Security-Quick-Check
 
 - **Auth:** Alle Endpoints authentifiziert?
 - **RLS:** Policies auf neuen Tabellen?
@@ -70,7 +73,7 @@ Für jedes AC aus dem Orchestrator-Prompt:
 
 Bei kritischen Security-Issues: sofort fixen mit `// SECURITY:` Kommentar.
 
-### 6. Autonomie-Check
+### 7. Autonomie-Check
 
 Prüfe ob ein Agent während der Implementierung dem User eine technische Frage gestellt hat, die ein Senior Engineer selbst beantworten würde. Das ist ein Quality-Issue — gleiche Schwere wie fehlende Tests oder unbehandeltes Error-Handling.
 
@@ -93,7 +96,7 @@ Prüfe ob ein Agent während der Implementierung dem User eine technische Frage 
 
 Bei Autonomie-Verletzung: als FAIL im Report dokumentieren, die konkrete Frage zitieren, und angeben welche Entscheidung der Agent hätte treffen sollen.
 
-### 7. Visuelles Testing (bei Frontend-Änderungen)
+### 8. Visuelles Testing (bei Frontend-Änderungen)
 
 Wenn die Aufgabe UI-Änderungen enthält, nutze den `webapp-testing` Skill:
 1. Server starten mit `scripts/with_server.py`
@@ -101,7 +104,7 @@ Wenn die Aufgabe UI-Änderungen enthält, nutze den `webapp-testing` Skill:
 3. Console-Logs auf Errors prüfen
 4. Interaktive Elemente verifizieren (Click, Fill, Navigation)
 
-### 8. Ergebnis
+### 9. Ergebnis
 
 ```
 ## Testing
@@ -136,21 +139,6 @@ Wenn das Projekt eine Shopify-Plattform ist (erkennbar an Liquid-Dateien, sectio
 4. **Online Store 2.0:** Werden JSON Templates statt .liquid Templates verwendet?
 
 Wenn ein Shopify QA Report vorliegt, prüfe die Findings und verifiziere ob die gemeldeten Issues tatsächlich Probleme sind oder False Positives.
-
-## Skill-Announcements — PFLICHT
-
-Wenn du einen Skill lädst (via Skill-Tool oder Read), gib **sofort** eine Zeile aus:
-
-```
-⚡ {Rolle} joined
-```
-
-| Skill | Rolle |
-|---|---|
-| `webapp-testing` | Testing Engineer |
-| `test-driven-development` | Testing Engineer |
-
-**Kein Announcement = Skill nicht geladen.**
 
 ## Decision Authority
 

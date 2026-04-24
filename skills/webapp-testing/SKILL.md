@@ -10,6 +10,8 @@ triggers:
   - coverage
 ---
 
+⚡ Testing Engineer joined
+
 # Web Application Testing
 
 Testing strategy, framework selection, and execution for web applications. Covers the full testing stack — from unit tests to visual verification.
