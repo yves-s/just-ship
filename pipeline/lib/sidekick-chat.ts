@@ -2,6 +2,10 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 import { randomUUID } from "node:crypto";
 import { logger } from "./logger.ts";
 import { Sentry } from "./sentry.ts";
+import {
+  SIDEKICK_PROMPT_VERSION,
+  buildSidekickSystemPrompt,
+} from "./sidekick-system-prompt.ts";
 
 /**
  * Sidekick Chat Mode — T-922.
@@ -319,55 +323,36 @@ export function _getChatThreadForTests(id: string): ChatMessage[] | null {
 }
 
 // ---------------------------------------------------------------------------
-// System prompt
-// ---------------------------------------------------------------------------
-
-const SYSTEM_PROMPT = `You are the Just Ship Sidekick — a calm, senior peer embedded in the product.
-
-You help the user move from idea to a concrete next step. You can draft tickets,
-explain codebase context, and answer questions about the active project.
-
-## Style
-
-- Short, specific, honest. No PM jargon, no filler.
-- German by default; mirror the user's language if they switch.
-- When you don't know something, say so. Do not invent file paths or APIs.
-
-## Hard rules
-
-- Never ask implementation questions (stack, framework, component library,
-  visual layout, API shape, hosting). Those belong to the engineering team.
-- Business questions are fine: audience, timing, scope, success criteria,
-  replaces-vs-augments.
-- If a tool is available that would answer the user's question more
-  authoritatively than your own guess (e.g. fetching a ticket, querying the
-  board), prefer the tool.`;
-
-// ---------------------------------------------------------------------------
 // Prompt assembly
 // ---------------------------------------------------------------------------
 
 function buildPrompt(thread: ThreadState, newUserText: string, ctx: ChatContext | undefined, attachments: ChatAttachment[] | undefined): string {
-  const ctxLines: string[] = [];
-  if (ctx?.page_url) ctxLines.push(`Page URL: ${ctx.page_url}`);
-  if (ctx?.page_title) ctxLines.push(`Page title: ${ctx.page_title}`);
-  if (attachments && attachments.length > 0) {
-    // Attachments pass through as URL hints until Child #4 lands multimodal.
-    // The model can reference the URL in its reply but cannot inspect the
-    // asset content — this is documented behaviour, not a bug.
-    ctxLines.push(`Attachments: ${attachments.map(a => a.url).join(", ")}`);
-  }
-  const contextBlock = ctxLines.length > 0 ? `\n\n## Context\n${ctxLines.join("\n")}` : "";
+  // The base prompt — including the seven-tool roster, role-address heuristics,
+  // and the few-shot corpus — comes from `sidekick-system-prompt.ts`. We append
+  // per-turn context (page URL, attachments) and the running transcript here;
+  // the prompt module's `buildSidekickSystemPrompt` handles the project/page
+  // context block so the snapshot-tested base prompt stays untouched.
+  const baseWithContext = buildSidekickSystemPrompt({
+    ...(ctx?.page_url ? { pageUrl: ctx.page_url } : {}),
+    ...(ctx?.page_title ? { pageTitle: ctx.page_title } : {}),
+  });
+
+  // Attachments pass through as URL hints until proper multimodal lands.
+  // The model can reference the URL in its reply but cannot inspect the
+  // asset content — this is documented behaviour, not a bug.
+  const attachmentBlock = attachments && attachments.length > 0
+    ? `\n\n# Attachments\n${attachments.map(a => a.url).join("\n")}`
+    : "";
 
   const historyBlock = thread.messages.length === 0
     ? ""
-    : `\n\n## Conversation so far\n${thread.messages
+    : `\n\n# Conversation so far\n${thread.messages
         .map(m => `${m.role === "user" ? "USER" : "ASSISTANT"}: ${m.text}`)
         .join("\n")}`;
 
-  return `${SYSTEM_PROMPT}${contextBlock}${historyBlock}
+  return `${baseWithContext}${attachmentBlock}${historyBlock}
 
-## New user turn
+# New user turn
 USER: ${newUserText}
 
 Respond directly. Use tools if helpful.`;
@@ -611,7 +596,10 @@ export async function processChat(
       { err: msg, threadId: thread.id, projectId: req.project_id },
       "chat: unexpected error in stream loop",
     );
-    Sentry.captureException(err, { extra: { threadId: thread.id, projectId: req.project_id } });
+    Sentry.captureException(err, {
+      tags: { prompt_version: SIDEKICK_PROMPT_VERSION, area: "sidekick-chat" },
+      extra: { threadId: thread.id, projectId: req.project_id },
+    });
     if (sink.isOpen()) {
       sink.send({ type: "error", message: "internal_error" });
     }
@@ -631,6 +619,7 @@ export async function processChat(
         threadId: thread.id,
         projectId: req.project_id,
         userId: req.user_id,
+        promptVersion: SIDEKICK_PROMPT_VERSION,
         durationMs: Date.now() - startedAt,
         clientOpen: sink.isOpen(),
         sawError,
