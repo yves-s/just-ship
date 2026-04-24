@@ -268,6 +268,17 @@ Frame escalations as recommendations: "I recommend X because Y. Alternative Z tr
 
 Dieses Repo ist die **Engine** des Just Ship Produkts. Für den vollständigen Überblick über alle Repos (Board, Bot, Web), Features und wie sie zusammenhängen, lies `PRODUCT.md` im Root dieses Repos.
 
+### Self-Install-Topologie (WICHTIG)
+
+Dieses Repo ist Just Ship, das sich selbst installiert. Das heißt:
+
+- **Framework-Source:** `pipeline/`, `commands/`, `skills/`, `agents/` — das was wir entwickeln und was `setup.sh` in Kunden-Projekte verteilt.
+- **Installierte Kopie:** `.pipeline/`, `.claude/.pipeline-version`, `.claude/.template-hash` — Installer-Output, damit wir IM Repo mit `/ticket`, `/develop`, `/ship` arbeiten können.
+
+**Niemals in `.pipeline/`, `.claude/.pipeline-version` oder `.claude/.template-hash` schreiben.** Alle anderen `.claude/`-Unterordner (`rules/`, `scripts/`, `hooks/`, `agents/`, `commands/`, `skills/`) haben Source- und Installationspfad identisch — dort editierst du normal.
+
+Ein Pre-Commit-Hook (`.githooks/pre-commit`) blockt Commits, die gegen diese Regel verstoßen. `setup.sh` setzt `core.hooksPath .githooks` beim Install. Details und Anti-Patterns in `.claude/rules/self-install-topology.md`. Incident-Referenz: T-989 (2026-04 Stash-Pop-Konflikt, der `git pull` tagelang blockierte — genau wegen Edits in `.pipeline/`).
+
 ---
 
 ## Konventionen

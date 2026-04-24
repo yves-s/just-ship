@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# pre-commit — block edits to installed-copy paths in the self-installed
+# just-ship repo. See .claude/rules/self-install-topology.md for the why.
+#
+# This hook arms ONLY when the self-install signature is present:
+#   - ./pipeline/package.json exists (framework source is in this repo)
+#   - AND ./.pipeline/package.json exists (framework is also installed here)
+#
+# Customer projects have only .pipeline/ (no pipeline/ source), so the hook
+# is a no-op there — no false positives. Framework-development projects
+# without the installed copy (e.g. a fresh clone before running setup.sh)
+# also skip the check; there is nothing to protect.
+
+set -euo pipefail
+
+# Emergency override — set this env var to bypass the check for a single
+# commit. Used for the rare case where the installed copy itself legitimately
+# needs a manual patch (e.g. resolving a stash-pop mess like T-989).
+if [ "${GIT_ALLOW_INSTALLED_EDIT:-0}" = "1" ]; then
+  exit 0
+fi
+
+# Resolve repo root so the hook works regardless of where git was invoked.
+REPO_ROOT=$(git rev-parse --show-toplevel)
+
+# Self-install signature check — both paths must exist for the hook to arm.
+if [ ! -f "$REPO_ROOT/pipeline/package.json" ] || [ ! -f "$REPO_ROOT/.pipeline/package.json" ]; then
+  exit 0
+fi
+
+# Installed-copy paths. These are written by setup.sh; their source either
+# lives at a different path (pipeline/ → .pipeline/) or has no source at all
+# (the version/hash stamps). Editing them directly silently diverges the
+# install from the framework.
+#
+# Other .claude/ subtrees (rules/, scripts/, hooks/, agents/, commands/,
+# skills/) share the SAME path for source and install, so there is no
+# wrong-copy trap there — those stay editable.
+BLOCKED_PREFIXES=(
+  ".pipeline/"
+  ".claude/.pipeline-version"
+  ".claude/.template-hash"
+)
+
+# Collect staged files (additions, modifications, renames — NOT deletions,
+# which are the one legitimate edit: removing an obsolete installed file
+# before regenerating with setup.sh).
+#
+# Use `-z` to get NUL-separated raw filenames. The default newline-separated
+# output applies C-style quoting for non-ASCII or special characters (e.g.
+# `.pipeline/weird"name.ts` becomes `".pipeline/weird\"name.ts"`), which
+# would prevent the prefix `case` match from firing — that is a bypass:
+# a file under `.pipeline/` with a quote in its name would slip through.
+# `-z` returns raw bytes with NUL terminators, so the prefix match works
+# unconditionally.
+VIOLATIONS=()
+while IFS= read -r -d '' file; do
+  for prefix in "${BLOCKED_PREFIXES[@]}"; do
+    case "$file" in
+      "$prefix"*)
+        VIOLATIONS+=("$file")
+        break
+        ;;
+    esac
+  done
+done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+
+if [ ${#VIOLATIONS[@]} -eq 0 ]; then
+  exit 0
+fi
+
+# Walk through each violation with a pointer to the canonical source path.
+# The message names the specific file, not a generic category — a future
+# editor sees exactly what to do.
+{
+  echo ""
+  echo "✗ Commit blocked — installed-copy paths were modified."
+  echo ""
+  echo "This repo is Just Ship bootstrapping itself. The paths below are"
+  echo "installed copies written by setup.sh. Editing them diverges the"
+  echo "installation from the framework source and causes incidents like"
+  echo "the T-989 stash-pop conflict."
+  echo ""
+  echo "Violations:"
+  for file in "${VIOLATIONS[@]}"; do
+    case "$file" in
+      .pipeline/*)
+        source_path="${file#.}"
+        echo "  ${file}"
+        echo "    → edit ${source_path} instead; setup.sh will regenerate ${file}"
+        ;;
+      .claude/.pipeline-version)
+        echo "  ${file}"
+        echo "    → this is a version stamp written by setup.sh; do not hand-edit"
+        ;;
+      .claude/.template-hash)
+        echo "  ${file}"
+        echo "    → this is a template-hash stamp written by setup.sh; do not hand-edit"
+        ;;
+      *)
+        echo "  ${file}"
+        echo "    → installed copy; edit the framework source instead"
+        ;;
+    esac
+  done
+  echo ""
+  echo "Override (emergency only):"
+  echo "  GIT_ALLOW_INSTALLED_EDIT=1 git commit ..."
+  echo ""
+  echo "See .claude/rules/self-install-topology.md for the full explanation."
+} >&2
+
+exit 1
