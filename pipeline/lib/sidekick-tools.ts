@@ -1,6 +1,5 @@
 import { logger } from "./logger.ts";
 import { Sentry } from "./sentry.ts";
-import { classify, type ClassificationInput, type ClassificationResult } from "./sidekick-classifier.ts";
 import { createFromClassification, BoardApiError, ValidationError, type CreateRequest, type CreateResult, type BoardClientConfig } from "./sidekick-create.ts";
 
 /**
@@ -14,16 +13,9 @@ import { createFromClassification, BoardApiError, ValidationError, type CreateRe
  *
  * The 6 ticket/thread/status tool SHAPES (name + field set) match the Board's
  * previous definitions so the model's expectations and the browser client's
- * glue code carry over with minimal change. Two deliberate deviations:
+ * glue code carry over with minimal change. One deliberate deviation:
  *   - `create_ticket` makes `tags` and `priority` optional (the Board's schema
  *     declared them required but the runtime always tolerated omission).
- *   - `classify_input` replaces the Board's heuristic T-shirt sizer with the
- *     engine's four-category Sidekick classifier (T-875). This is the whole
- *     point of the port — Browser widget and Terminal sidekick now share the
- *     same classifier via this tool. Existing Board callers that passed
- *     `{input, affected_areas, has_dependencies, clarity}` and expected
- *     `{classification: xs|s|m|l|xl}` must be updated when they migrate to
- *     the engine registry.
  *
  * The EXECUTION moved from direct Supabase calls to Board API HTTP calls
  * because the engine has no Supabase SDK in its dependency graph — it talks
@@ -240,10 +232,6 @@ const SCHEMAS = {
       properties: {
         title: { type: "string", description: "Short thread title." },
         first_message: { type: "string", description: "The CEO's opening message." },
-        classification: {
-          type: "string",
-          description: "Optional category from the Sidekick classifier (ticket|epic|conversation|project).",
-        },
       },
       required: ["title", "first_message"],
       additionalProperties: false,
@@ -253,13 +241,12 @@ const SCHEMAS = {
   update_thread: {
     name: "update_thread",
     description:
-      "Patch an existing thread — change status, add a message, record classification or pending questions.",
+      "Patch an existing thread — change status, add a message, record pending questions.",
     input_schema: {
       type: "object" as const,
       properties: {
         thread_id: { type: "string" },
         status: { type: "string" },
-        classification: { type: "string" },
         pending_questions: { type: "array", items: {} },
         message: { type: "string", description: "Optional — appended as a new message." },
         message_role: {
@@ -268,34 +255,6 @@ const SCHEMAS = {
         },
       },
       required: ["thread_id"],
-      additionalProperties: false,
-    },
-  },
-
-  classify_input: {
-    name: "classify_input",
-    description:
-      "Classify a user input into one of four Sidekick categories (ticket|epic|conversation|project). Returns category + confidence + reasoning.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        text: { type: "string", description: "The user's raw message to classify." },
-        affected_areas: {
-          type: "array",
-          items: { type: "string" },
-          description: "Optional hint — domains this touches (auth, board, ...).",
-        },
-        has_dependencies: {
-          type: "boolean",
-          description: "Optional hint — does this depend on other unshipped work?",
-        },
-        clarity: {
-          type: "string",
-          enum: ["clear", "mostly_clear", "vague", "very_vague"],
-          description: "Optional hint — how concrete the request is.",
-        },
-      },
-      required: ["text"],
       additionalProperties: false,
     },
   },
@@ -664,7 +623,7 @@ async function execListMyTickets(ctx: ToolContext, rawArgs: unknown): Promise<To
 // Tool: create_thread
 // ---------------------------------------------------------------------------
 
-interface CreateThreadArgs { title: string; first_message: string; classification?: string }
+interface CreateThreadArgs { title: string; first_message: string }
 
 function isCreateThreadArgs(x: unknown): x is CreateThreadArgs {
   if (typeof x !== "object" || x === null) return false;
@@ -687,7 +646,6 @@ async function execCreateThread(ctx: ToolContext, rawArgs: unknown): Promise<Too
         project_id: ctx.projectId,
         user_id: ctx.userId,
         title: args.title,
-        classification: args.classification ?? null,
         first_message: args.first_message,
       },
     }) as { data?: ThreadRow | null };
@@ -708,7 +666,6 @@ async function execCreateThread(ctx: ToolContext, rawArgs: unknown): Promise<Too
 interface UpdateThreadArgs {
   thread_id: string;
   status?: string;
-  classification?: string;
   pending_questions?: unknown[];
   message?: string;
   message_role?: string;
@@ -732,7 +689,6 @@ async function execUpdateThread(ctx: ToolContext, rawArgs: unknown): Promise<Too
       path: `/api/threads/${encodeURIComponent(args.thread_id)}`,
       body: {
         ...(args.status !== undefined ? { status: args.status } : {}),
-        ...(args.classification !== undefined ? { classification: args.classification } : {}),
         ...(args.pending_questions !== undefined ? { pending_questions: args.pending_questions } : {}),
         ...(args.message !== undefined
           ? { message: args.message, message_role: args.message_role ?? "pm" }
@@ -746,47 +702,6 @@ async function execUpdateThread(ctx: ToolContext, rawArgs: unknown): Promise<Too
     return { ok: true, result: json.data };
   } catch (err) {
     return handleToolError("update_thread", err, ctx);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Tool: classify_input
-// ---------------------------------------------------------------------------
-
-interface ClassifyInputArgs {
-  text: string;
-  affected_areas?: string[];
-  has_dependencies?: boolean;
-  clarity?: "clear" | "mostly_clear" | "vague" | "very_vague";
-}
-
-function isClassifyArgs(x: unknown): x is ClassifyInputArgs {
-  if (typeof x !== "object" || x === null) return false;
-  const o = x as Record<string, unknown>;
-  return typeof o.text === "string" && o.text.length > 0;
-}
-
-async function execClassifyInput(ctx: ToolContext, rawArgs: unknown): Promise<ToolResult<ClassificationResult>> {
-  if (!isClassifyArgs(rawArgs)) {
-    return { ok: false, error: "text is required and must be a non-empty string", code: "invalid_args" };
-  }
-
-  const input: ClassificationInput = {
-    text: rawArgs.text,
-    // project context is pulled from the active ctx — we don't let the model
-    // override workspace/project scope via tool args, because classification
-    // results shape the next user-visible action.
-  };
-
-  try {
-    // In-process call — the classifier lives in the same process as the chat
-    // endpoint, so an HTTP hop would just add latency and a failure surface.
-    // Mirrors how `sidekick-create.ts` dispatches `createFromClassification`
-    // directly without a self-HTTP-hop.
-    const result = await classify(input);
-    return { ok: true, result };
-  } catch (err) {
-    return handleToolError("classify_input", err, ctx);
   }
 }
 
@@ -878,10 +793,6 @@ export const SIDEKICK_TOOLS: Record<string, ToolDefinition> = {
   update_thread: {
     schema: SCHEMAS.update_thread,
     execute: (ctx, args) => execUpdateThread(ctx, args),
-  },
-  classify_input: {
-    schema: SCHEMAS.classify_input,
-    execute: (ctx, args) => execClassifyInput(ctx, args),
   },
   get_project_status: {
     schema: SCHEMAS.get_project_status,

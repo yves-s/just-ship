@@ -12,10 +12,11 @@
  * - `ALLOWED_QUESTION_TOPICS`   — business-level topics the Sidekick may ask.
  * - `detectImplementationLeak(text)` — runtime check used for logging/metrics.
  *
- * Both the intake classifier (T-875) and the converse flow (T-878) import
- * from here. The corpus test (`sidekick-policy.test.ts`) iterates the same
- * list, so every new forbidden pattern becomes part of the enforcement surface
- * without touching the classifier or converse implementations.
+ * The reasoning-first Sidekick (converse flow, chat endpoint, assistant-turn
+ * telemetry) imports from here to classify assistant turns for
+ * implementation-leak detection. The corpus test (`sidekick-policy.test.ts`)
+ * iterates the same list, so every new forbidden pattern becomes part of the
+ * enforcement surface without touching the call sites.
  */
 
 // ---------------------------------------------------------------------------

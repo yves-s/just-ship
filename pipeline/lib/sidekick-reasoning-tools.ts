@@ -20,9 +20,8 @@ import { runAuditAsTool } from "./audit-runtime.ts";
  * Sidekick reasoning-first tool layer — T-983 (child of T-978).
  *
  * Defines the seven tools the reasoning-first Sidekick orchestrator exposes
- * to Claude via tool-use. Replaces the classifier-first model in
- * `sidekick-tools.ts` (that module stays in place until T-979 kills the
- * classifier; both coexist during the migration).
+ * to Claude via tool-use. Replaces the classifier-first model that lived in
+ * `sidekick-tools.ts` — the old classifier path was removed in T-979.
  *
  * Four artifact tools produce persistent board state; three expert tools
  * spawn read-only specialist agents. Each tool has a Zod schema for runtime

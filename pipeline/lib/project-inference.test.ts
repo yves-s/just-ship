@@ -18,8 +18,8 @@ const PROJECTS: ProjectSignals[] = [
 describe("inferChildProject", () => {
   it("routes an engine-signal body to the engine project", () => {
     const result = inferChildProject({
-      title: "Wire classifier into terminal intent routing",
-      body: "Update the classifier in pipeline/lib/sidekick-classifier.ts so the /api/sidekick endpoint handles the new category.",
+      title: "Wire reasoning tools into terminal intent routing",
+      body: "Update the reasoning tools in pipeline/lib/sidekick-reasoning-tools.ts so the /api/sidekick endpoint handles the new scenario.",
       projects: PROJECTS,
       defaultProjectId: null,
     });
