@@ -2,25 +2,45 @@ This repo is Just Ship bootstrapping itself: the framework **source** lives here
 
 ## The topology
 
-| Pfad (Source) | Pfad (Installiert) | Unterschied? |
-|---|---|---|
-| `pipeline/` | `.pipeline/` | **Ja** — Source mit, Install ohne führendem Punkt |
-| `.claude/.pipeline-version` | — | **Nur Install** — Version-Stempel von `setup.sh`, keine Source-Datei |
-| `.claude/.template-hash` | — | **Nur Install** — Template-Hash-Stempel von `setup.sh`, keine Source-Datei |
-| `agents/*.md` | `.claude/agents/*.md` | Unterschiedlich, aber setup.sh installiert aus der Source — der Install-Pfad ist allein für Claude Code |
-| `commands/*.md` | `.claude/commands/*.md` | Wie oben |
-| `skills/*/SKILL.md` | `.claude/skills/*.md` | Wie oben |
-| `.claude/rules/*.md` | `.claude/rules/*.md` | **Pfad identisch** — hier ist Editieren OK, weil Source und Install denselben Pfad teilen |
-| `.claude/scripts/*` | `.claude/scripts/*` | Wie rules — identische Pfade, Source-Editierung ist der normale Weg |
-| `.claude/hooks/*.sh` | `.claude/hooks/*.sh` | Wie rules |
+| Pfad (Source) | Pfad (Installiert) | Falle? | Hook-blockiert? |
+|---|---|---|---|
+| `pipeline/` | `.pipeline/` | **Ja** — andere Pfade, Edit auf Install wird vom nächsten `setup.sh --update` überschrieben | **Ja** |
+| `.claude/.pipeline-version` | — | **Ja** — nur Install, von `setup.sh` geschriebener Stempel | **Ja** |
+| `.claude/.template-hash` | — | **Ja** — nur Install, von `setup.sh` geschriebener Stempel | **Ja** |
+| `agents/*.md` | `.claude/agents/*.md` | **Ja** — `setup.sh` kopiert aus `agents/`, Edit auf `.claude/agents/` wird beim Update überschrieben | **Nein** (siehe Hook-Scope unten) |
+| `commands/*.md` | `.claude/commands/*.md` | **Ja** — wie agents | **Nein** |
+| `skills/*/SKILL.md` | `.claude/skills/*.md` | **Ja** — wie agents (Pfade unterscheiden sich zusätzlich strukturell: Subdir mit SKILL.md → flache `.md` mit Skill-Namen) | **Nein** |
+| `.claude/rules/*.md` | `.claude/rules/*.md` | **Nein** — Pfad identisch, Source-Edit IST der Install-Edit | n/a |
+| `.claude/scripts/*` | `.claude/scripts/*` | **Nein** — Pfad identisch | n/a |
+| `.claude/hooks/*.sh` | `.claude/hooks/*.sh` | **Nein** — Pfad identisch | n/a |
 
-Die drei problematischen Pfade sind genau die, bei denen Source und Install **unterschiedliche Dateisystem-Pfade** haben (`pipeline/` vs `.pipeline/`) oder bei denen **keine Source existiert** (die Stempel-Dateien). Dort — und nur dort — gibt es die Falle "editiere die falsche Kopie".
+Die Falle "editiere die falsche Kopie" existiert überall, wo Source- und Install-Pfade differieren — also bei `pipeline/`, den Stempel-Dateien, **und** bei `agents/`, `commands/`, `skills/`. Konsequenz dort ist gleich: `.claude/agents/orchestrator.md` direkt ändern → Änderung beim nächsten `setup.sh --update` weg, Source-Pfad `agents/orchestrator.md` ist der einzige stabile Edit-Punkt.
+
+### Hook-Scope (was der Hook blockt vs. was er bewusst nicht blockt)
+
+Der Hook blockt nur die drei oberen Zeilen (`.pipeline/**`, `.claude/.pipeline-version`, `.claude/.template-hash`). Die `.claude/{agents,commands,skills}/`-Pfade sind **nicht** blockiert — bewusst, weil:
+
+1. T-988 schließt zuerst die Tür, die T-989 ausgelöst hat (`.pipeline/`-Edit + Stash-Pop → tagelang blockierter `git pull`).
+2. `.claude/{agents,commands,skills}/`-Edits haben dieses Konflikt-Profil bisher nicht produziert; ein präventiver Block dort wäre Scope-Creep.
+3. Eine spätere Iteration kann den Hook ausweiten (BLOCKED_PREFIXES erweitern), wenn die Falle in der Praxis Schaden anrichtet.
+
+Bis dahin: **wenn du `.claude/agents/`, `.claude/commands/` oder `.claude/skills/` editierst und die Änderung soll überleben — editiere stattdessen die Source unter `agents/`, `commands/`, `skills/`** und lass `setup.sh --update` (oder den nächsten Pipeline-Run, der setup.sh implizit triggert) den Install-Pfad regenerieren. Der Hook warnt dich nicht — die Disziplin liegt bei dir.
 
 ## Kern-Regel
 
-**Niemals in `.pipeline/`, `.claude/.pipeline-version` oder `.claude/.template-hash` schreiben.** Diese Pfade sind Installer-Output. Wenn eine Änderung an Pipeline-Logik nötig ist, editiere `pipeline/` (die Source). `setup.sh --update` regeneriert `.pipeline/` daraus.
+**Editier Sources, nicht Installs.** Für jede Datei mit unterschiedlichem Source- und Install-Pfad ist die Source der einzige Edit-Punkt:
 
-Alle anderen `.claude/`-Unterordner (`rules/`, `scripts/`, `hooks/`, `agents/`, `commands/`, `skills/`) haben in diesem Repo die Source **unter demselben Pfad** wie die Installation — da gibt's nichts zu verwechseln, da editierst du normal.
+- Pipeline-Logik → `pipeline/…`, nicht `.pipeline/…`.
+- Agent-Definitionen → `agents/…`, nicht `.claude/agents/…`.
+- Commands → `commands/…`, nicht `.claude/commands/…`.
+- Skills → `skills/<name>/SKILL.md`, nicht `.claude/skills/<name>.md`.
+- Stempel-Dateien (`.claude/.pipeline-version`, `.claude/.template-hash`) → nie hand-editieren, sie werden von `setup.sh` geschrieben.
+
+`setup.sh --update` regeneriert alle Install-Pfade aus den Sources.
+
+**Shared-path-Verzeichnisse** (`.claude/rules/`, `.claude/scripts/`, `.claude/hooks/`) haben in diesem Repo Source- und Install-Pfad identisch — da gibt's nichts zu verwechseln.
+
+Der Hook enforced aktuell nur die Top-3 (`.pipeline/`, `.claude/.pipeline-version`, `.claude/.template-hash`) — das ist der T-988-Scope. `.claude/{agents,commands,skills}/`-Edits sind nicht blockiert, aber die Regel gilt trotzdem (s. Hook-Scope-Sektion oben).
 
 ## Die Leitplanke
 
@@ -44,9 +64,13 @@ Das Flag ist eine bewusste Entscheidung, nicht ein Default. Wer es setzt, weiß 
 
 ❌ `.claude/.template-hash` löschen oder setzen, weil `setup.sh` sonst "template geändert" meldet. Den Hash setzt `setup.sh` nach erfolgreichem Update — hand-setzen heißt setup.sh zu umgehen.
 
+❌ `.claude/agents/orchestrator.md` (oder `.claude/commands/develop.md`, `.claude/skills/frontend-design.md`) direkt editieren. Der Hook warnt hier nicht, aber der nächste `setup.sh --update` kopiert die Source drüber und dein Edit ist weg. Edit-Punkt ist `agents/orchestrator.md` bzw. `commands/develop.md` bzw. `skills/frontend-design/SKILL.md`.
+
 ✅ Änderung an der Pipeline-Logik: `pipeline/run.ts` editieren, committen, `setup.sh --update` laufen lassen, den regenerierten `.pipeline/run.ts` im selben Repo verifizieren (Diff prüfen), dann pushen.
 
-✅ Änderung an einer Rule oder einem Skill: `.claude/rules/<rule>.md` oder `skills/<skill>/SKILL.md` editieren — das ist gleichzeitig Source UND Install-Ziel, also kein Verwechslungspfad.
+✅ Änderung an einer Rule / einem Script / einem Hook: `.claude/rules/<rule>.md`, `.claude/scripts/<script>`, `.claude/hooks/<hook>.sh` editieren — diese drei Verzeichnisse haben Source-Pfad = Install-Pfad, also kein Verwechslungspfad.
+
+✅ Änderung an einem Agent / Command / Skill: `agents/<agent>.md`, `commands/<command>.md`, `skills/<skill>/SKILL.md` editieren. `setup.sh --update` regeneriert den Install unter `.claude/…`.
 
 ## Historischer Kontext — T-989
 
@@ -54,9 +78,9 @@ Am 2026-04 hat jemand in `.pipeline/lib/load-skills.ts` editiert, die Änderung 
 
 ## Self-Check vor dem ersten Edit
 
-1. Liegt die Datei unter `.pipeline/`, `.claude/.pipeline-version` oder `.claude/.template-hash`?
-2. Falls ja: **STOP.** Was ist der Source-Pfad? Vermutlich derselbe ohne führenden Punkt (`pipeline/...`) oder gar nicht — dann ist die Änderung ein `setup.sh`-Job, kein manueller Edit.
-3. Falls nein: freie Fahrt. Die Rule schützt exakt die drei genannten Pfade, nichts anderes.
+1. Liegt die Datei unter einem der **drei Hook-blockierten Pfade** (`.pipeline/`, `.claude/.pipeline-version`, `.claude/.template-hash`)? Falls ja: **STOP.** Source-Pfad ist `pipeline/…` (ohne Punkt), bzw. bei den Stempel-Dateien gar keiner — dann ist die Änderung ein `setup.sh`-Job, kein manueller Edit.
+2. Liegt die Datei unter `.claude/agents/`, `.claude/commands/`, oder `.claude/skills/`? Falls ja: **STOP.** Der Hook warnt hier nicht, aber der Edit wird beim nächsten Update überschrieben. Edit-Punkt ist `agents/`, `commands/` oder `skills/<name>/SKILL.md`.
+3. Falls keines von beidem: freie Fahrt (`.claude/rules/`, `.claude/scripts/`, `.claude/hooks/`, oder direkt in den Source-Verzeichnissen).
 
 ## Verwandte Regeln
 

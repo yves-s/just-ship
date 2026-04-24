@@ -33,9 +33,15 @@ fi
 # (the version/hash stamps). Editing them directly silently diverges the
 # install from the framework.
 #
-# Other .claude/ subtrees (rules/, scripts/, hooks/, agents/, commands/,
-# skills/) share the SAME path for source and install, so there is no
-# wrong-copy trap there — those stay editable.
+# `.claude/{rules,scripts,hooks}/` share the SAME path for source and install,
+# so they stay editable with no wrong-copy trap.
+#
+# `.claude/{agents,commands,skills}/` are ALSO installed copies (source lives
+# at `agents/`, `commands/`, `skills/<name>/SKILL.md`), but they are
+# intentionally NOT blocked by this hook — the T-989 incident was specifically
+# a `.pipeline/` stash-pop. Blocking the other three is deferred to a later
+# iteration if the trap bites there too. See .claude/rules/self-install-topology.md
+# for the full topology and rationale.
 BLOCKED_PREFIXES=(
   ".pipeline/"
   ".claude/.pipeline-version"
