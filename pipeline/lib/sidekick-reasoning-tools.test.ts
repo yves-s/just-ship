@@ -553,28 +553,38 @@ describe("start_conversation_thread", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Expert tools — runtime arrives in T-980. Every handler must return a stable
-// not_implemented failure so the orchestrator sees a clean error path.
+// Expert tools
+//
+// - `run_expert_audit` is wired to the real runtime as of T-985. Its
+//   happy-path + runtime behavior lives in `audit-runtime.test.ts`
+//   (with SDK injection via `queryFn`). Here we only verify the tool
+//   registry's validation surface — the bits that must reject bad input
+//   BEFORE any runtime call happens.
+// - `consult_expert` and `start_sparring` still return a stable
+//   `expert_runtime_not_implemented` failure (they land in follow-up
+//   tickets). We keep their stub coverage here until their runtimes ship.
 // ---------------------------------------------------------------------------
 
-describe("expert tools (T-980 runtime not yet implemented)", () => {
-  it("run_expert_audit returns expert_runtime_not_implemented (happy path — stub)", async () => {
-    const ctx = makeCtx({ fetchFn: makeMockFetch([]).fn });
-    const res = await executeSidekickReasoningTool("run_expert_audit", ctx, {
-      scope: "Mobile Experience",
-      expert_skill: "design-lead",
-      project_id: "proj-1",
-    });
-    expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.code).toBe("expert_runtime_not_implemented");
-  });
-
-  it("run_expert_audit rejects invalid_args for a bad scope (error path)", async () => {
+describe("expert tools — tool-layer validation", () => {
+  it("run_expert_audit rejects invalid_args for an empty scope", async () => {
     const { fn, calls } = makeMockFetch([]);
     const ctx = makeCtx({ fetchFn: fn });
     const res = await executeSidekickReasoningTool("run_expert_audit", ctx, {
       scope: "",
       expert_skill: "design-lead",
+      project_id: "proj-1",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.code).toBe("invalid_args");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("run_expert_audit rejects invalid_args for an unknown expert_skill", async () => {
+    const { fn, calls } = makeMockFetch([]);
+    const ctx = makeCtx({ fetchFn: fn });
+    const res = await executeSidekickReasoningTool("run_expert_audit", ctx, {
+      scope: "Mobile Experience",
+      expert_skill: "cto-principal",
       project_id: "proj-1",
     });
     expect(res.ok).toBe(false);
