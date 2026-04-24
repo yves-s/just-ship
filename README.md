@@ -211,6 +211,7 @@ Shipped with the pipeline:
 | **data-engineer** | Database migration and RLS patterns |
 | **sparring** | Strategic discussion partner with automatic domain expert triage |
 | **webapp-testing** | Testing strategy (test pyramid, framework selection, mocking) + Playwright visual testing |
+| **reporter** | Single source of truth for pipeline output voice — voice rules + 5 core templates (develop-complete, ship-complete, ticket-created, epic-created, phase-progress) |
 | **plugin-security-gate** | Scans third-party plugins for prompt injection, credential harvesting, and supply chain risks |
 
 ### Shopify AI Toolkit
