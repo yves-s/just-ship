@@ -35,7 +35,7 @@ Just Ship is a portable multi-agent framework that turns Claude Code into an aut
 The framework operates in two modes:
 
 1. **Interactive** -- A developer works in Claude Code, using slash commands (`/ticket`, `/develop`, `/ship`) to drive the workflow.
-2. **Autonomous** -- A VPS worker polls a Supabase ticket queue, picks up tickets, and executes the full pipeline without human intervention.
+2. **Autonomous** -- A VPS HTTP server accepts Board-initiated triggers (`POST /api/launch`) and executes the full pipeline without further human intervention. The Engine does nothing unbidden — every autonomous run is the result of an explicit Play-button click on the Board.
 
 Both modes use the same agents, the same orchestrator logic, and the same shipping flow. The only difference is the entry point. The Just Ship Board provides real-time visibility into both modes through a Kanban dashboard and event streaming.
 
@@ -145,9 +145,9 @@ just-ship/                         # Framework repository
 |   +-- webapp-testing.md          # Testing strategy (pyramid, frameworks, mocking) + Playwright
 |   +-- plugin-security-gate/      # Plugin security scanning (prompt injection, supply chain)
 +-- pipeline/                      # SDK pipeline runner (TypeScript)
-|   +-- run.ts                     # Single execution (CLI or imported by worker)
+|   +-- run.ts                     # Single execution (CLI or imported by server.ts)
 |   +-- run.sh                     # Bash wrapper for run.ts
-|   +-- worker.ts                  # Supabase polling worker (VPS)
+|   +-- server.ts                  # HTTP server (Board-triggered /api/launch, /api/answer, /api/ship)
 |   +-- package.json               # Dependencies (claude-agent-sdk, tsx)
 |   +-- lib/
 |       +-- config.ts              # Project config loader
@@ -200,8 +200,7 @@ your-project/
 |   +-- .template-hash             # Template change detection
 +-- .pipeline/
     +-- run.sh                     # Pipeline runner wrapper
-    +-- run.ts                     # SDK pipeline execution
-    +-- worker.ts                  # Polling worker
+    +-- run.ts                     # SDK pipeline execution (invoked by /develop or the VPS HTTP server)
     +-- package.json               # Pipeline dependencies
     +-- lib/                       # Config, agent loader, model router, event hooks
 ```
@@ -434,7 +433,7 @@ The pipeline runner is a TypeScript application built on the [Claude Agent SDK](
 
 ### `run.ts` -- Single Execution
 
-Used for CLI invocation or called by the worker:
+Used for CLI invocation or called by the HTTP server after a Board-initiated trigger:
 
 ```bash
 npx tsx run.ts <TICKET_ID> <TITLE> [DESCRIPTION] [LABELS]
@@ -467,27 +466,29 @@ for await (const message of query({
 })) { ... }
 ```
 
-### `worker.ts` -- Polling Worker
+### `server.ts` -- Board-Triggered HTTP Server
 
-Runs as a systemd service on a VPS, polling Supabase for tickets:
+Runs as the `pipeline-server` container on a VPS (or the `just-ship-server@` systemd unit for bare-metal installs). It is **not** a polling loop — every autonomous run starts with an explicit HTTP call from the Board when a user clicks the Play button on a ticket.
 
 ```
-Loop:
-  1. Check Supabase connectivity
-  2. Query: tickets WHERE status='ready_to_develop' AND pipeline_status IS NULL
-  3. Atomic claim: SET pipeline_status='running' WHERE pipeline_status IS NULL
-  4. Call executePipeline() from run.ts (includes push + PR creation)
-  5. On success: SET pipeline_status='done', status='in_review', review_url=PR_URL
-  6. On failure: SET pipeline_status='failed', wait 5 min cooldown
-  7. Sleep POLL_INTERVAL (default 60s)
+Request lifecycle:
+  1. Board sends POST /api/launch { ticket_number, project_id }
+     Auth: X-Pipeline-Key header (per-server secret)
+  2. Server validates the key, rate-limits, and fetches the ticket via the Board API
+  3. Atomic claim: PATCH tickets/:num { pipeline_status: "running", status: "in_progress" }
+  4. Spawns executePipeline() from run.ts for this ticket (runs async, returns 202 immediately)
+  5. On success: PATCH tickets/:num { pipeline_status: "done", status: "in_review", review_url }
+  6. On failure: PATCH tickets/:num { pipeline_status: "failed" } + agent_failed event
 ```
 
-**Safety features:**
+**Guarantees:**
 
-- Atomic claim prevents duplicate processing by multiple workers.
-- Graceful shutdown on SIGINT/SIGTERM (cancels running pipeline via AbortController).
-- Max consecutive failures limit (default 5) before worker stops.
-- 5-minute cooldown after failure.
+- **No polling.** The Engine does nothing unbidden. A ticket with `status='ready_to_develop'` stays untouched until the Play button fires `/api/launch`. This is the explicit contract from the Operating Model (see `docs/just-ship-operating-model.md`).
+- Atomic claim via `pipeline_status` prevents double-processing when two trigger requests arrive for the same ticket.
+- Graceful drain on SIGTERM: refuses new launches, lets active runs complete, then exits.
+- Lifecycle recovery (stuck-running / paused / failed ticket reset) runs on server startup — not on a timer.
+
+Other routes the server exposes: `POST /api/events` (Board event handler that forwards to launch), `POST /api/answer` (resume a paused pipeline), `POST /api/ship` (merge a PR for a ticket), `GET /api/status/:ticket` (current pipeline status).
 
 ### JSON Output
 
@@ -1151,15 +1152,15 @@ The framework can run fully autonomously on a VPS. A systemd service polls for t
 ```
 VPS (Ubuntu 22.04)
 +-- claude-dev user
-+-- ~/just-ship/                     # Framework (git cloned)
-+-- ~/my-project/                    # Project clone
-|   +-- .pipeline/worker.ts          # Polling worker
-|   +-- .env.my-project              # Env vars (API keys)
-+-- systemd
-    +-- just-ship-pipeline@my-project.service
++-- Docker: pipeline-server container (runs pipeline/server.ts)
++-- ~/projects/my-project/           # Project clone (mounted into container)
++-- ~/.just-ship/server-config.json  # Per-project config (project_id, api_key, repo_url)
++-- ~/.env                           # Global keys (ANTHROPIC_API_KEY, GH_*)
 ```
 
-### Worker Environment Variables
+For bare-metal installs (without Docker), the `just-ship-server@{slug}` systemd template unit runs the same `pipeline/server.ts` process. Either way, the Engine only executes when the Board sends `POST /api/launch`.
+
+### Server Environment Variables
 
 | Variable | Purpose |
 |----------|---------|
@@ -1169,12 +1170,13 @@ VPS (Ubuntu 22.04)
 | `GITHUB_APP_PRIVATE_KEY_PATH` | Path to GitHub App private key PEM file |
 | `GITHUB_APP_PRIVATE_KEY` | GitHub App private key PEM content (alternative to path) |
 | `GITHUB_APP_INSTALLATION_ID` | Default GitHub App installation ID for token generation |
-| `SUPABASE_URL` | Ticket queue endpoint |
+| `SUPABASE_URL` | Supabase REST endpoint (for ticket status updates) |
 | `SUPABASE_SERVICE_KEY` | Supabase service role key |
 | `SUPABASE_PROJECT_ID` | Filter tickets by project |
 | `PROJECT_DIR` | Absolute path to project clone |
-| `POLL_INTERVAL` | Polling interval in seconds (default: 60) |
-| `MAX_FAILURES` | Consecutive failures before worker stops (default: 5) |
+| `PIPELINE_SERVER_KEY` | HMAC secret for Board `/api/launch` auth (`X-Pipeline-Key` header) |
+| `PORT` | HTTP server port (default: 3001) |
+| `MAX_FAILURES` | Consecutive failures before the server refuses new launches (default: 5) |
 | `LOG_DIR` | Log directory (default: `~/pipeline-logs`) |
 | `LOG_LEVEL` | Pino log level: `debug`, `info`, `warn`, `error` (default: `debug` in dev, `info` in production) |
 | `BUGSINK_DSN` | Bugsink error tracking DSN (auto-configured in Docker) |
@@ -1191,31 +1193,27 @@ Log level is controlled via `LOG_LEVEL` env var (defaults to `debug` in developm
 
 VPS deployments include built-in monitoring via two lightweight containers (~286 MB total):
 
-- **Bugsink** (`/errors/`) — Error tracking with stack traces. The pipeline-server and worker use `@sentry/node` SDK pointed at the Bugsink DSN. Sentry-compatible, so switching to GlitchTip or Sentry Cloud later only requires changing the DSN.
+- **Bugsink** (`/errors/`) — Error tracking with stack traces. The pipeline-server uses `@sentry/node` SDK pointed at the Bugsink DSN. Sentry-compatible, so switching to GlitchTip or Sentry Cloud later only requires changing the DSN.
 - **Dozzle** (`/logs/`) — Live Docker container log viewer. Reads the Docker socket (read-only), zero code changes required. With structured JSON logging, Dozzle can parse and filter log fields directly.
 
 Both UIs are protected by Caddy basicauth and only accessible through the reverse proxy.
 
 ### Multi-Project Support
 
-One VPS can run multiple project workers. Each gets its own:
-
-- `.env.{slug}` file with project-specific configuration.
-- systemd service instance (`just-ship-pipeline@{slug}`).
-- Project clone directory.
-
-Workers poll independently and only process tickets for their configured `SUPABASE_PROJECT_ID`.
+One VPS can host multiple projects side by side. In the Docker setup, a single `pipeline-server` container multiplexes projects via `server-config.json` (keyed by project slug). On bare-metal installs, one `just-ship-server@{slug}` systemd unit runs per project. Either way, launches are routed by the `project_id` in the incoming `/api/launch` request — there is no polling.
 
 ### systemd Configuration
 
-The template unit (`just-ship-pipeline@.service`) provides:
+For bare-metal installs, the template unit (`just-ship-server@.service`) provides:
 
-- Automatic restart on failure with 30-second delay.
+- Automatic restart on failure with 10-second delay.
 - Rate limiting (5 restarts per 300 seconds).
 - Security hardening (`NoNewPrivileges`, `PrivateTmp`).
 - Resource limits (4 GB memory, 200% CPU quota, 65536 file descriptors).
-- Graceful shutdown with 120-second timeout (pipelines can run 30-60 minutes).
+- Fast graceful shutdown (30 seconds) — the HTTP server drains quickly; in-flight pipeline runs are tracked independently.
 - Dual environment files: global keys (`.env`) + project-specific overrides (`.env.{slug}`).
+
+The legacy polling worker unit (`just-ship-pipeline@.service`) has been removed. Older VPS installs are cleaned up automatically by `vps/setup-vps.sh` on next run.
 
 ---
 

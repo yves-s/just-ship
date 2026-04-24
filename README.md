@@ -40,7 +40,7 @@ You review the PR --> "passt" --> squash merge --> done
 Two modes of operation:
 
 - **Interactive** — Drive the workflow with slash commands in Claude Code
-- **Autonomous** — A VPS worker polls a Supabase ticket queue and runs the pipeline 24/7
+- **Autonomous** — A VPS HTTP server runs the pipeline on demand when the Board triggers `/api/launch`
 
 ---
 
@@ -273,8 +273,7 @@ just-ship/
 ├── skills/                     # Framework skills
 ├── pipeline/                   # SDK pipeline runner (TypeScript)
 │   ├── run.ts                  # Single execution + session resume
-│   ├── worker.ts               # Supabase polling worker (VPS)
-│   ├── server.ts               # HTTP server (webhooks, /api/answer)
+│   ├── server.ts               # HTTP server (Board-triggered /api/launch, /api/answer, /api/ship)
 │   ├── run.sh                  # Bash wrapper
 │   └── lib/                    # Config, agent loader, skill loader, event hooks, cost tracking
 ├── templates/                  # CLAUDE.md + project.json templates
@@ -309,7 +308,7 @@ your-project/
 │   ├── settings.json           # Permissions + hook config
 │   └── .pipeline-version       # Installed framework version
 └── .pipeline/                  # Pipeline runner (auto-updated)
-    ├── run.ts, worker.ts       # SDK pipeline
+    ├── run.ts                  # SDK pipeline (invoked by /develop and the VPS HTTP server)
     └── lib/                    # Config, agent loader, events
 ```
 
@@ -518,11 +517,11 @@ Both post to `POST /api/events` with `X-Pipeline-Key` authentication.
 
 ## Autonomous VPS Deployment
 
-Run the pipeline 24/7 on a VPS — no local machine required. A worker process polls for tickets, claims them, runs the full orchestrator flow, and creates pull requests autonomously.
+Run the pipeline 24/7 on a VPS — no local machine required. An HTTP server waits for Board-initiated triggers, runs the full orchestrator flow, and creates pull requests autonomously. The Engine does nothing unbidden — every autonomous run is the result of an explicit user action on the Board (the Play button).
 
 ```
-Ticket queue --> Worker claims ticket --> Orchestrator runs agents --> PR created
-                  (polls every 60s)        (plan, implement, review)
+Board Play button --> POST /api/launch --> Orchestrator runs agents --> PR created
+                      (on demand)           (plan, implement, review)
 ```
 
 ### Why a VPS?

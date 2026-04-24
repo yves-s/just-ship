@@ -7,12 +7,15 @@
 # Runs LOCALLY, connects to VPS via SSH for log verification.
 #
 # Usage:
-#   bash scripts/pipeline-vps-test.sh --host <vps-host> [--project <slug>] [--timeout <min>]
+#   bash scripts/pipeline-vps-test.sh --host <vps-host> --launch-url <url> --pipeline-key <key> [--project <slug>] [--timeout <min>]
 #
 # Options:
-#   --host <host>       VPS hostname or IP (required)
-#   --project <slug>    Project slug on VPS (default: auto-detect from project.json name)
-#   --timeout <min>     Max wait time in minutes (default: 15)
+#   --host <host>          VPS hostname or IP (required — for log verification via SSH)
+#   --launch-url <url>     Full POST /api/launch URL (required — e.g. https://pipeline.my.domain/api/launch)
+#   --pipeline-key <key>   Pipeline server auth key (required — X-Pipeline-Key header value)
+#                           Env fallback: PIPELINE_SERVER_KEY
+#   --project <slug>       Project slug on VPS (default: auto-detect from project.json name)
+#   --timeout <min>        Max wait time in minutes (default: 15)
 #
 # Exit codes:
 #   0 — All checks passed
@@ -36,20 +39,31 @@ BOARD_API="$REPO_ROOT/.claude/scripts/board-api.sh"
 VPS_HOST=""
 PROJECT_SLUG=""
 TIMEOUT_MIN=15
+LAUNCH_URL=""
+PIPELINE_KEY=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --host)     VPS_HOST="$2"; shift 2 ;;
-    --project)  PROJECT_SLUG="$2"; shift 2 ;;
-    --timeout)  TIMEOUT_MIN="$2"; shift 2 ;;
+    --host)          VPS_HOST="$2"; shift 2 ;;
+    --project)       PROJECT_SLUG="$2"; shift 2 ;;
+    --timeout)       TIMEOUT_MIN="$2"; shift 2 ;;
+    --launch-url)    LAUNCH_URL="$2"; shift 2 ;;
+    --pipeline-key)  PIPELINE_KEY="$2"; shift 2 ;;
     -h|--help)
       echo ""
-      echo "Usage: bash scripts/pipeline-vps-test.sh --host <vps-host> [--project <slug>] [--timeout <min>]"
+      echo "Usage: bash scripts/pipeline-vps-test.sh --host <vps-host> --launch-url <url> --pipeline-key <key> [--project <slug>] [--timeout <min>]"
       echo ""
       echo "Options:"
-      echo "  --host <host>       VPS hostname or IP (required)"
-      echo "  --project <slug>    Project slug on VPS (default: from project.json name)"
-      echo "  --timeout <min>     Max wait time in minutes (default: 15)"
+      echo "  --host <host>          VPS hostname or IP (required — for log verification via SSH)"
+      echo "  --launch-url <url>     Full POST /api/launch URL (required — e.g. https://pipeline.my.domain/api/launch)"
+      echo "  --pipeline-key <key>   Pipeline server auth key (required — X-Pipeline-Key header value)"
+      echo "                          Env fallback: PIPELINE_SERVER_KEY"
+      echo "  --project <slug>       Project slug on VPS (default: from project.json name)"
+      echo "  --timeout <min>        Max wait time in minutes (default: 15)"
+      echo ""
+      echo "Verifies Board-triggered pipeline flow: creates a ticket, checks that it is NOT"
+      echo "auto-picked up (no polling), explicitly launches it via /api/launch, waits for"
+      echo "the pipeline to complete, and verifies status + PR + logs."
       echo ""
       exit 0
       ;;
@@ -57,10 +71,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Env fallback for the pipeline key so CI can keep the secret out of argv
+if [ -z "$PIPELINE_KEY" ] && [ -n "${PIPELINE_SERVER_KEY:-}" ]; then
+  PIPELINE_KEY="$PIPELINE_SERVER_KEY"
+fi
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 PASS_COUNT=0
 FAIL_COUNT=0
-TOTAL=5
+TOTAL=7
 TICKET_NUM=""
 PR_URL=""
 START_TS=$(date +%s)
@@ -180,6 +199,22 @@ if ! [[ "$TIMEOUT_MIN" =~ ^[0-9]+$ ]] || [[ "$TIMEOUT_MIN" -lt 1 ]]; then
   exit 2
 fi
 
+if [ -z "$LAUNCH_URL" ]; then
+  echo -e "${RED}ERROR:${NC} --launch-url is required. The pipeline is Board-triggered — tests must explicitly POST /api/launch." >&2
+  echo "Run: bash scripts/pipeline-vps-test.sh --help" >&2
+  exit 2
+fi
+
+if ! [[ "$LAUNCH_URL" =~ ^https?:// ]]; then
+  echo -e "${RED}ERROR:${NC} --launch-url must be an http(s) URL (got: $LAUNCH_URL)" >&2
+  exit 2
+fi
+
+if [ -z "$PIPELINE_KEY" ]; then
+  echo -e "${RED}ERROR:${NC} --pipeline-key (or PIPELINE_SERVER_KEY env) is required for /api/launch auth." >&2
+  exit 2
+fi
+
 # ─── board-api.sh check ───────────────────────────────────────────────────────
 if [ ! -f "$BOARD_API" ]; then
   echo -e "${RED}ERROR:${NC} board-api.sh not found at $BOARD_API" >&2
@@ -271,77 +306,142 @@ fi
 echo -e "  Created T-$TICKET_NUM"
 echo ""
 
-# ─── Wait for pipeline processing ─────────────────────────────────────────────
-TIMEOUT_SECS=$(( TIMEOUT_MIN * 60 ))
-POLL_INTERVAL=30
-WAIT_START=$(date +%s)
+# ─── No-polling check ─────────────────────────────────────────────────────────
+# The Engine does nothing unbidden. A ticket in ready_to_develop must stay
+# untouched until /api/launch fires. Wait 45s and confirm pipeline_status is
+# still null. Short enough to keep the test responsive, long enough that a
+# polling worker (old behavior: 60s default) would have claimed the ticket.
+echo -e "${YELLOW}Verifying no auto-pickup without /api/launch trigger...${NC}"
+QUIET_WAIT_SECS=45
+sleep "$QUIET_WAIT_SECS"
 
-echo -e "${YELLOW}Waiting for pipeline to process T-$TICKET_NUM (max ${TIMEOUT_MIN}m)...${NC}"
+QUIET_RESPONSE=$(bash "$BOARD_API" get "tickets/$TICKET_NUM" 2>/dev/null) || QUIET_RESPONSE=""
+QUIET_STATUS=$(extract_ticket_field "$QUIET_RESPONSE" "status")
+QUIET_PIPELINE=$(extract_ticket_field "$QUIET_RESPONSE" "pipeline_status")
+echo "  After ${QUIET_WAIT_SECS}s: status=$QUIET_STATUS pipeline_status=${QUIET_PIPELINE:-null}"
 echo ""
 
+# ─── Trigger: POST /api/launch ────────────────────────────────────────────────
+echo -e "${YELLOW}Triggering pipeline via POST /api/launch...${NC}"
+
+# Write the auth header to a mode-600 temp file so the key does not appear in
+# argv / ps-aux. curl --header @<file> reads headers at runtime — the secret
+# never reaches the process argument list.
+_LAUNCH_HDR_FILE=$(mktemp /tmp/vps-test-hdr-XXXXXX)
+chmod 600 "$_LAUNCH_HDR_FILE"
+printf 'X-Pipeline-Key: %s\n' "$PIPELINE_KEY" > "$_LAUNCH_HDR_FILE"
+
+LAUNCH_HTTP_CODE=$(curl -sS -o /tmp/vps-test-launch-$$.json -w "%{http_code}" \
+  -X POST "$LAUNCH_URL" \
+  -H "Content-Type: application/json" \
+  --header "@${_LAUNCH_HDR_FILE}" \
+  --max-time 30 \
+  --data "{\"ticket_number\":$TICKET_NUM,\"project_id\":\"$PROJECT_ID\"}" \
+  2>/dev/null) || LAUNCH_HTTP_CODE="000"
+
+LAUNCH_BODY=$(cat /tmp/vps-test-launch-$$.json 2>/dev/null || true)
+rm -f /tmp/vps-test-launch-$$.json "$_LAUNCH_HDR_FILE"
+
+echo "  /api/launch → HTTP $LAUNCH_HTTP_CODE"
+echo ""
+
+LAUNCH_OK=false
+if [[ "$LAUNCH_HTTP_CODE" =~ ^(200|202)$ ]]; then
+  LAUNCH_OK=true
+else
+  echo -e "${RED}ERROR:${NC} /api/launch returned HTTP $LAUNCH_HTTP_CODE — pipeline will not start." >&2
+  echo "       body: $LAUNCH_BODY" >&2
+fi
+
+# ─── Wait for pipeline processing ─────────────────────────────────────────────
 FINAL_STATUS=""
 PIPELINE_STATUS=""
 
-while true; do
-  NOW=$(date +%s)
-  ELAPSED=$(( NOW - WAIT_START ))
+if $LAUNCH_OK; then
+  TIMEOUT_SECS=$(( TIMEOUT_MIN * 60 ))
+  POLL_INTERVAL=30
+  WAIT_START=$(date +%s)
 
-  if [ "$ELAPSED" -ge "$TIMEOUT_SECS" ]; then
-    echo ""
-    echo -e "${RED}  Timeout after ${TIMEOUT_MIN}m — pipeline did not complete.${NC}"
-    break
-  fi
+  echo -e "${YELLOW}Waiting for pipeline to process T-$TICKET_NUM (max ${TIMEOUT_MIN}m)...${NC}"
+  echo ""
 
-  # Format progress
-  ELAPSED_M=$(( ELAPSED / 60 ))
-  ELAPSED_S=$(( ELAPSED % 60 ))
-  ELAPSED_FMT=$(printf "%d:%02d" "$ELAPSED_M" "$ELAPSED_S")
-  REMAIN_SECS=$(( TIMEOUT_SECS - ELAPSED ))
-  REMAIN_M=$(( REMAIN_SECS / 60 ))
-  REMAIN_S=$(( REMAIN_SECS % 60 ))
-  REMAIN_FMT=$(printf "%d:%02d" "$REMAIN_M" "$REMAIN_S")
+  while true; do
+    NOW=$(date +%s)
+    ELAPSED=$(( NOW - WAIT_START ))
 
-  GET_RESPONSE=$(bash "$BOARD_API" get "tickets/$TICKET_NUM" 2>/dev/null) || GET_RESPONSE=""
-  CURRENT_STATUS=$(extract_ticket_field "$GET_RESPONSE" "status")
-  CURRENT_PIPELINE=$(extract_ticket_field "$GET_RESPONSE" "pipeline_status")
+    if [ "$ELAPSED" -ge "$TIMEOUT_SECS" ]; then
+      echo ""
+      echo -e "${RED}  Timeout after ${TIMEOUT_MIN}m — pipeline did not complete.${NC}"
+      break
+    fi
 
-  printf "\r  [%s/%sm] Status: %-12s Pipeline: %-12s" \
-    "$ELAPSED_FMT" "$TIMEOUT_MIN" "${CURRENT_STATUS:-unknown}" "${CURRENT_PIPELINE:-null}"
+    # Format progress
+    ELAPSED_M=$(( ELAPSED / 60 ))
+    ELAPSED_S=$(( ELAPSED % 60 ))
+    ELAPSED_FMT=$(printf "%d:%02d" "$ELAPSED_M" "$ELAPSED_S")
 
-  # Terminal states
-  if [[ "$CURRENT_STATUS" == "in_review" || "$CURRENT_STATUS" == "done" ]]; then
-    echo ""
-    FINAL_STATUS="$CURRENT_STATUS"
-    PIPELINE_STATUS="$CURRENT_PIPELINE"
-    break
-  fi
+    GET_RESPONSE=$(bash "$BOARD_API" get "tickets/$TICKET_NUM" 2>/dev/null) || GET_RESPONSE=""
+    CURRENT_STATUS=$(extract_ticket_field "$GET_RESPONSE" "status")
+    CURRENT_PIPELINE=$(extract_ticket_field "$GET_RESPONSE" "pipeline_status")
 
-  # Pipeline failed
-  if [[ "$CURRENT_PIPELINE" == "failed" ]]; then
-    echo ""
-    FINAL_STATUS="$CURRENT_STATUS"
-    PIPELINE_STATUS="failed"
-    break
-  fi
+    printf "\r  [%s/%sm] Status: %-12s Pipeline: %-12s" \
+      "$ELAPSED_FMT" "$TIMEOUT_MIN" "${CURRENT_STATUS:-unknown}" "${CURRENT_PIPELINE:-null}"
 
-  sleep "$POLL_INTERVAL"
-done
+    # Terminal states
+    if [[ "$CURRENT_STATUS" == "in_review" || "$CURRENT_STATUS" == "done" ]]; then
+      echo ""
+      FINAL_STATUS="$CURRENT_STATUS"
+      PIPELINE_STATUS="$CURRENT_PIPELINE"
+      break
+    fi
+
+    # Pipeline failed
+    if [[ "$CURRENT_PIPELINE" == "failed" ]]; then
+      echo ""
+      FINAL_STATUS="$CURRENT_STATUS"
+      PIPELINE_STATUS="failed"
+      break
+    fi
+
+    sleep "$POLL_INTERVAL"
+  done
+else
+  echo -e "${YELLOW}Skipping wait — launch was rejected, pipeline not started.${NC}"
+fi
 
 echo ""
 
 # ─── Verification checks ──────────────────────────────────────────────────────
 TOTAL_SECS=$(elapsed_seconds)
 
-# Check 1: Pipeline completed
-print_step 1 "Pipeline completed"
+# Check 1: No auto-pickup before /api/launch
+# The ticket should have been untouched after the quiet wait — no polling worker,
+# no pipeline_status, still ready_to_develop.
+print_step 1 "No auto-pickup before launch"
+if [ "$QUIET_STATUS" = "ready_to_develop" ] && { [ -z "$QUIET_PIPELINE" ] || [ "$QUIET_PIPELINE" = "None" ] || [ "$QUIET_PIPELINE" = "null" ]; }; then
+  pass "ticket idle after ${QUIET_WAIT_SECS}s"
+else
+  fail "ticket was picked up without /api/launch (status: $QUIET_STATUS, pipeline_status: ${QUIET_PIPELINE:-null})"
+fi
+
+# Check 2: /api/launch accepted the trigger
+print_step 2 "Launch accepted"
+if [[ "$LAUNCH_HTTP_CODE" =~ ^(200|202)$ ]]; then
+  pass "HTTP $LAUNCH_HTTP_CODE"
+else
+  fail "/api/launch returned HTTP $LAUNCH_HTTP_CODE"
+fi
+
+# Check 3: Pipeline completed
+print_step 3 "Pipeline completed"
 if [[ "$FINAL_STATUS" == "in_review" || "$FINAL_STATUS" == "done" ]]; then
   pass "status: $FINAL_STATUS, $(format_duration "$TOTAL_SECS")"
 else
   fail "ticket did not reach in_review (status: ${FINAL_STATUS:-timeout}, pipeline: ${PIPELINE_STATUS:-unknown})"
 fi
 
-# Check 2: Agents ran
-print_step 2 "Agents executed"
+# Check 4: Agents ran
+print_step 4 "Agents executed"
 AGENT_LOGS=$(ssh "root@$VPS_HOST" \
   "docker logs \$(docker ps -q --filter name=pipeline) 2>&1 | grep 'T-$TICKET_NUM' | grep -iE 'agent|orchestrat' | tail -5" \
   2>/dev/null || true)
@@ -353,8 +453,8 @@ else
   fail "no agent invocation found in Docker logs for T-$TICKET_NUM"
 fi
 
-# Check 3: PR exists
-print_step 3 "PR created"
+# Check 5: PR exists
+print_step 5 "PR created"
 # Try board API first for pr_url field
 TICKET_RESPONSE=$(bash "$BOARD_API" get "tickets/$TICKET_NUM" 2>/dev/null) || TICKET_RESPONSE=""
 PR_URL=$(extract_ticket_field "$TICKET_RESPONSE" "pr_url")
@@ -381,8 +481,8 @@ else
   fail "no PR found for T-$TICKET_NUM (checked pr_url field and gh pr list)"
 fi
 
-# Check 4: Ticket status is in_review
-print_step 4 "Ticket status: in_review"
+# Check 6: Ticket status is in_review
+print_step 6 "Ticket status: in_review"
 VERIFY_RESPONSE=$(bash "$BOARD_API" get "tickets/$TICKET_NUM" 2>/dev/null) || VERIFY_RESPONSE=""
 VERIFY_STATUS=$(extract_ticket_field "$VERIFY_RESPONSE" "status")
 if [ "$VERIFY_STATUS" = "in_review" ]; then
@@ -391,8 +491,8 @@ else
   fail "expected in_review, got: ${VERIFY_STATUS:-empty}"
 fi
 
-# Check 5: No fatal errors in pipeline logs for this ticket
-print_step 5 "No pipeline errors"
+# Check 7: No fatal errors in pipeline logs for this ticket
+print_step 7 "No pipeline errors"
 ERROR_LOGS=$(ssh "root@$VPS_HOST" \
   "docker logs \$(docker ps -q --filter name=pipeline) 2>&1 | grep 'T-$TICKET_NUM' | grep -iE 'FATAL|unhandled' | tail -5" \
   2>/dev/null || true)

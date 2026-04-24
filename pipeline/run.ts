@@ -23,7 +23,7 @@ import { resolveVerifyCommands, runVerifyCommands } from "./lib/verify-commands.
 import { detectScopeReduction } from "./lib/scope-guard.ts";
 import { createModelRouter } from "./lib/model-router.ts";
 
-// --- Exported pipeline function (used by worker.ts) ---
+// --- Exported pipeline function (called by server.ts after a Board trigger) ---
 export interface PipelineOptions {
   projectDir: string;
   workDir?: string;      // Worktree directory — if set, skip git checkout and use this as cwd
@@ -1335,7 +1335,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
 }
 
 // --- CLI entry point (only runs when executed directly) ---
-// Wrapped in async IIFE to avoid top-level await (breaks CJS imports from worker.ts)
+// Wrapped in async IIFE to avoid top-level await (breaks CJS imports from server.ts)
 const isMain = process.argv[1]?.endsWith("run.ts");
 if (isMain) {
   (async () => {

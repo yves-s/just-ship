@@ -23,8 +23,7 @@ The core framework. Gets installed into target projects via `setup.sh`. Contains
 
 **Pipeline:**
 - **Runner** — Single ticket-to-PR execution with human-in-the-loop resume
-- **Worker** — Supabase polling for queued tasks, multi-worker concurrency
-- **Server** — HTTP endpoints for Board integration (`/api/launch`, `/api/events`, `/api/answer`, `/api/ship`)
+- **Server** — HTTP endpoints for Board integration (`/api/launch`, `/api/events`, `/api/answer`, `/api/ship`); spawns a pipeline run per Board-initiated trigger
 
 **Slash Commands:** `/develop`, `/ship`, `/ticket`, `/just-ship-review`, `/just-ship-status`, `/connect-board`, `/disconnect-board`, `/setup-just-ship`, `/just-ship-update`, `/just-ship-vps`, `/add-project`
 

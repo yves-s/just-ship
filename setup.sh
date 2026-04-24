@@ -760,7 +760,6 @@ if [ "$MODE" = "update" ]; then
   # Pipeline
   diff_file "$FRAMEWORK_DIR/pipeline/run.sh" "$PROJECT_DIR/.pipeline/run.sh" ".pipeline/run.sh"
   diff_file "$FRAMEWORK_DIR/pipeline/run.ts" "$PROJECT_DIR/.pipeline/run.ts" ".pipeline/run.ts"
-  diff_file "$FRAMEWORK_DIR/pipeline/worker.ts" "$PROJECT_DIR/.pipeline/worker.ts" ".pipeline/worker.ts"
   diff_file "$FRAMEWORK_DIR/pipeline/package.json" "$PROJECT_DIR/.pipeline/package.json" ".pipeline/package.json"
   for f in "$FRAMEWORK_DIR/pipeline/lib/"*.ts; do
     fname=$(basename "$f")
@@ -777,6 +776,10 @@ if [ "$MODE" = "update" ]; then
   fi
   if [ -f "$PROJECT_DIR/.pipeline/lib/mcp-tools.ts" ]; then
     echo "  - .pipeline/lib/mcp-tools.ts (removed — non-functional in SDK mode)"
+    CHANGES=$((CHANGES + 1))
+  fi
+  if [ -f "$PROJECT_DIR/.pipeline/worker.ts" ]; then
+    echo "  - .pipeline/worker.ts (removed — polling replaced by Board-triggered /api/launch)"
     CHANGES=$((CHANGES + 1))
   fi
 
@@ -966,7 +969,6 @@ if [ "$MODE" = "update" ]; then
   # Copy all pipeline files
   cp "$FRAMEWORK_DIR/pipeline/run.sh" "$PROJECT_DIR/.pipeline/run.sh"
   cp "$FRAMEWORK_DIR/pipeline/run.ts" "$PROJECT_DIR/.pipeline/run.ts"
-  cp "$FRAMEWORK_DIR/pipeline/worker.ts" "$PROJECT_DIR/.pipeline/worker.ts"
   cp "$FRAMEWORK_DIR/pipeline/package.json" "$PROJECT_DIR/.pipeline/package.json"
   cp "$FRAMEWORK_DIR/pipeline/tsconfig.json" "$PROJECT_DIR/.pipeline/tsconfig.json"
   mkdir -p "$PROJECT_DIR/.pipeline/lib"
@@ -975,6 +977,7 @@ if [ "$MODE" = "update" ]; then
   # Cleanup removed files
   rm -f "$PROJECT_DIR/.pipeline/send-event.sh"
   rm -f "$PROJECT_DIR/.pipeline/lib/mcp-tools.ts"
+  rm -f "$PROJECT_DIR/.pipeline/worker.ts"
   rm -f "$PROJECT_DIR/.claude/scripts/devboard-hook.sh"
   # Install dependencies
   if [ -f "$PROJECT_DIR/.pipeline/package.json" ]; then
@@ -1234,7 +1237,6 @@ echo "Installing pipeline..."
 mkdir -p "$PROJECT_DIR/.pipeline/lib"
 cp "$FRAMEWORK_DIR/pipeline/run.sh" "$PROJECT_DIR/.pipeline/run.sh"
 cp "$FRAMEWORK_DIR/pipeline/run.ts" "$PROJECT_DIR/.pipeline/run.ts"
-cp "$FRAMEWORK_DIR/pipeline/worker.ts" "$PROJECT_DIR/.pipeline/worker.ts"
 cp "$FRAMEWORK_DIR/pipeline/package.json" "$PROJECT_DIR/.pipeline/package.json"
 cp "$FRAMEWORK_DIR/pipeline/tsconfig.json" "$PROJECT_DIR/.pipeline/tsconfig.json"
 cp "$FRAMEWORK_DIR/pipeline/lib/"*.ts "$PROJECT_DIR/.pipeline/lib/"
