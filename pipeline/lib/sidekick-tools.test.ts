@@ -8,23 +8,7 @@ import {
   type ToolResult,
 } from "./sidekick-tools.ts";
 
-// We stub the classifier module so classify_input tests don't hit the
-// Claude Agent SDK. The same seam is already used in sidekick-classifier's
-// own tests.
-vi.mock("./sidekick-classifier.ts", async (orig) => {
-  const actual = await orig<typeof import("./sidekick-classifier.ts")>();
-  return {
-    ...actual,
-    classify: vi.fn(async (_input: unknown) => ({
-      category: "ticket",
-      confidence: 0.95,
-      reasoning: "stub",
-      fallback_applied: false,
-    })),
-  };
-});
-
-// And the create primitive so create_ticket tests don't reach the board.
+// The create primitive is stubbed so create_ticket tests don't reach the board.
 vi.mock("./sidekick-create.ts", async (orig) => {
   const actual = await orig<typeof import("./sidekick-create.ts")>();
   return {
@@ -47,7 +31,6 @@ vi.mock("./sidekick-create.ts", async (orig) => {
 });
 
 import * as createModule from "./sidekick-create.ts";
-import * as classifierModule from "./sidekick-classifier.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -90,11 +73,10 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("SIDEKICK_TOOLS registry", () => {
-  it("exports exactly the 7 expected tools with the board-parity names", () => {
+  it("exports exactly the 6 expected tools with the board-parity names", () => {
     const names = Object.keys(SIDEKICK_TOOLS).sort();
     expect(names).toEqual(
       [
-        "classify_input",
         "create_ticket",
         "create_thread",
         "get_project_status",
@@ -107,7 +89,7 @@ describe("SIDEKICK_TOOLS registry", () => {
 
   it("listSidekickToolSchemas returns one schema per tool, all with object input_schema", () => {
     const schemas = listSidekickToolSchemas();
-    expect(schemas).toHaveLength(7);
+    expect(schemas).toHaveLength(6);
     for (const s of schemas) {
       expect(typeof s.name).toBe("string");
       expect(typeof s.description).toBe("string");
@@ -343,45 +325,6 @@ describe("update_thread", () => {
 
   it("returns invalid_args when thread_id missing", async () => {
     const result = await executeSidekickTool("update_thread", baseCtx(), { status: "resolved" });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.code).toBe("invalid_args");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// classify_input
-// ---------------------------------------------------------------------------
-
-describe("classify_input", () => {
-  it("calls the local classifier and returns its result", async () => {
-    const result = await executeSidekickTool(
-      "classify_input",
-      baseCtx(),
-      { text: "Build a notifications system" },
-    );
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    const c = result.result as { category: string; confidence: number };
-    expect(c.category).toBe("ticket");
-    expect(classifierModule.classify).toHaveBeenCalledOnce();
-  });
-
-  it("surfaces classifier errors as tool failures", async () => {
-    vi.mocked(classifierModule.classify).mockRejectedValueOnce(new Error("classifier crashed"));
-    const result = await executeSidekickTool(
-      "classify_input",
-      baseCtx(),
-      { text: "x" },
-    );
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.code).toBe("tool_error");
-    expect(result.error).toContain("classifier crashed");
-  });
-
-  it("returns invalid_args when text is missing", async () => {
-    const result = await executeSidekickTool("classify_input", baseCtx(), {});
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.code).toBe("invalid_args");

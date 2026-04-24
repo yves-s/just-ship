@@ -5,8 +5,9 @@ import { SIDEKICK_REASONING_TOOLS, type SidekickReasoningToolName } from "./side
  *
  * Teaches the orchestrator LLM how to reason about user intent and pick the
  * right one of the seven tools defined in `sidekick-reasoning-tools.ts`. This
- * replaces the classifier-first prompt (`skills/sidekick-intake/SKILL.md`) and
- * the legacy generic chat prompt that lived inline in `sidekick-chat.ts`.
+ * replaces the legacy generic chat prompt that lived inline in
+ * `sidekick-chat.ts` (and the classifier-first intake skill that was removed
+ * in T-979).
  *
  * Plan: docs/superpowers/plans/2026-04-23-sidekick-reasoning-architecture.md
  * — section 3.4 ("System-prompt heuristics") and section 3.5 ("Expert-run UX").
