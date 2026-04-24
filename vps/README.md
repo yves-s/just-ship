@@ -79,10 +79,11 @@ After VPS setup (or instance provisioning), connect individual projects. The com
 | `pipeline-container-monitor.sh` | Health monitoring for pipeline containers: cron-based checks, Telegram alerts, auto-restart |
 | `install-monitor.sh` | Install pipeline container monitor on VPS via SSH (copies script, installs cron + logrotate) |
 | `pipeline-containers.example.json` | Example config for container monitor (name, domain, health_url per container) |
-| `setup-vps.sh` | **DEPRECATED** — legacy bare-metal setup script |
-| `just-ship-pipeline@.service` | **DEPRECATED** — legacy systemd unit for polling worker |
-| `just-ship-server@.service` | **DEPRECATED** — legacy systemd unit for HTTP server |
+| `setup-vps.sh` | **DEPRECATED** — legacy bare-metal setup script (Docker is the supported path) |
+| `just-ship-server@.service` | **DEPRECATED** — legacy systemd unit for HTTP server (bare-metal installs only) |
 | `just-ship-bot.service` | Telegram bot systemd unit (separate service) |
+
+> **Removed:** `just-ship-pipeline@.service` (polling worker) and `pipeline/worker.ts` were deleted in T-993. All autonomous runs are now Board-triggered via `POST /api/launch`. Older VPS installs are cleaned up by `setup-vps.sh` on next run.
 
 ## Server Endpoints
 

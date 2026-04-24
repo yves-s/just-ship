@@ -211,12 +211,24 @@ h "systemd Services installieren"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Service-Template installieren
-install -m 644 "$SCRIPT_DIR/just-ship-pipeline@.service" \
-  /etc/systemd/system/just-ship-pipeline@.service
+# Legacy HTTP-server template (kept for bare-metal installs without Docker).
+# The polling worker service has been removed — runs are Board-triggered only.
+if [ -f "$SCRIPT_DIR/just-ship-server@.service" ]; then
+  install -m 644 "$SCRIPT_DIR/just-ship-server@.service" \
+    /etc/systemd/system/just-ship-server@.service
+  systemctl daemon-reload
+  ok "systemd server template installiert"
+fi
 
-systemctl daemon-reload
-ok "systemd service template installiert"
+# Entferne veraltete Worker-Unit, falls auf älterem Setup installiert
+if [ -f /etc/systemd/system/just-ship-pipeline@.service ]; then
+  systemctl list-units --all --no-legend 'just-ship-pipeline@*.service' \
+    | awk '{print $1}' \
+    | xargs -r -n1 systemctl disable --now 2>/dev/null || true
+  rm -f /etc/systemd/system/just-ship-pipeline@.service
+  systemctl daemon-reload
+  warn "Veraltete worker-unit entfernt — Runs sind jetzt Board-triggered"
+fi
 
 # ── Zusammenfassung ───────────────────────────────────────────────────────────
 
@@ -238,12 +250,13 @@ echo "     SUPABASE_URL=https://xxx.supabase.co"
 echo "     SUPABASE_SERVICE_KEY=eyJ..."
 echo "     SUPABASE_PROJECT_ID=dc2b647e-...  # UUID aus tickets.project_id"
 echo "     PROJECT_DIR=/home/claude-dev/mein-projekt"
-echo "     POLL_INTERVAL=60"
+echo "     PIPELINE_SERVER_KEY=adp_..."
+echo "     PORT=3001"
 echo "     EOF"
 echo ""
-echo "  3. Worker starten:"
-echo "     systemctl enable --now just-ship-pipeline@mein-projekt"
-echo "     journalctl -fu just-ship-pipeline@mein-projekt"
+echo "  3. HTTP-Server starten (Runs werden vom Board per /api/launch getriggert):"
+echo "     systemctl enable --now just-ship-server@mein-projekt"
+echo "     journalctl -fu just-ship-server@mein-projekt"
 echo ""
 echo "  Pipeline-Secret für Webhook:"
 echo "  PIPELINE_SECRET=$(cat $ENV_FILE | grep PIPELINE_SECRET | cut -d= -f2)"

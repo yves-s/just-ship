@@ -1,6 +1,5 @@
 /**
  * Shared server-side Supabase REST helper for pipeline/server.ts and new store modules.
- * Does NOT replace the private helpers in worker.ts (out of scope — see ticket T-924).
  *
  * Config: SUPABASE_URL + SUPABASE_SERVICE_KEY from env. Timeout 10s.
  * Retry: POST/PATCH retry 3x on 5xx/network. No retry on 4xx. GET/DELETE no retry.
