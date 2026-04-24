@@ -268,6 +268,17 @@ Frame escalations as recommendations: "I recommend X because Y. Alternative Z tr
 
 Dieses Repo ist die **Engine** des Just Ship Produkts. Für den vollständigen Überblick über alle Repos (Board, Bot, Web), Features und wie sie zusammenhängen, lies `PRODUCT.md` im Root dieses Repos.
 
+### Self-Install-Topologie (WICHTIG)
+
+Dieses Repo ist Just Ship, das sich selbst installiert. Das heißt:
+
+- **Framework-Source:** `pipeline/`, `commands/`, `skills/`, `agents/` — das was wir entwickeln und was `setup.sh` in Kunden-Projekte verteilt.
+- **Installierte Kopie:** `.pipeline/`, `.claude/agents/`, `.claude/commands/`, `.claude/skills/`, `.claude/.pipeline-version`, `.claude/.template-hash` — Installer-Output, damit wir IM Repo mit `/ticket`, `/develop`, `/ship` arbeiten können.
+
+**Niemals auf Install-Pfade schreiben.** Source-Pfade sind: `pipeline/…` statt `.pipeline/…`, `agents/…` statt `.claude/agents/…`, `commands/…` statt `.claude/commands/…`, `skills/<name>/SKILL.md` statt `.claude/skills/<name>.md`. Shared-Path-Verzeichnisse (`.claude/rules/`, `.claude/scripts/`, `.claude/hooks/`) haben Source = Install — dort editierst du normal.
+
+Ein Pre-Commit-Hook (`.githooks/pre-commit`) blockt Commits auf die drei kritischsten Install-Pfade (`.pipeline/`, `.claude/.pipeline-version`, `.claude/.template-hash`) — das sind die, die T-989 ausgelöst hat. `.claude/{agents,commands,skills}/` sind nicht hook-blockiert, aber dieselbe Regel gilt: Edit am Install-Pfad ist beim nächsten `setup.sh --update` weg. Details und Anti-Patterns in `.claude/rules/self-install-topology.md`. Incident-Referenz: T-989.
+
 ---
 
 ## Konventionen

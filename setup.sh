@@ -535,6 +535,55 @@ enable_agent_teams() {
   esac
 }
 
+# --- Helper: install .githooks/ as core.hooksPath for the self-installed ---
+# --- just-ship repo (the repo that has both `pipeline/` source AND        ---
+# --- `.pipeline/` installation). No-op elsewhere.                         ---
+#
+# The pre-commit hook in .githooks/ blocks edits to installed-copy paths
+# (.pipeline/**, .claude/.pipeline-version, .claude/.template-hash) so a
+# future `git stash pop` mess like T-989 cannot recur. In customer projects
+# (only .pipeline/, no pipeline/ source), the hook is a no-op — so we don't
+# install it there. The self-install signature is both files existing.
+install_self_install_githook() {
+  local project_dir="$1"
+
+  # Only arm in the framework repo itself. Customer projects get the install
+  # but not the hook — there's nothing to protect there.
+  if [ ! -f "$project_dir/pipeline/package.json" ]; then
+    return 0
+  fi
+  if [ ! -f "$project_dir/.githooks/pre-commit" ]; then
+    return 0
+  fi
+
+  # Only touch git config if this is a git repo.
+  if ! (cd "$project_dir" && git rev-parse --git-dir >/dev/null 2>&1); then
+    return 0
+  fi
+
+  local current_path
+  current_path=$(cd "$project_dir" && git config --get core.hooksPath 2>/dev/null || echo "")
+  if [ "$current_path" = ".githooks" ]; then
+    # Already configured — idempotent, report and continue.
+    echo "  ✓ git hooks (core.hooksPath=.githooks, already set)"
+    return 0
+  fi
+  if [ -n "$current_path" ] && [ "$current_path" != ".githooks" ]; then
+    # Respect a user's explicit hook path override (husky, git-hooks-manager,
+    # etc.) — warn but do not clobber. The user can run
+    # `git config core.hooksPath .githooks` manually if they want us to own
+    # the hook path.
+    echo "  ⚠ git hooks: core.hooksPath is set to '$current_path', leaving it alone."
+    echo "    To enable just-ship's installed-copy protection:"
+    echo "      cd $project_dir && git config core.hooksPath .githooks"
+    return 0
+  fi
+
+  (cd "$project_dir" && git config core.hooksPath .githooks)
+  chmod +x "$project_dir/.githooks/"* 2>/dev/null || true
+  echo "  ✓ git hooks (core.hooksPath=.githooks — blocks edits to .pipeline/)"
+}
+
 # --- Helper: add Shopify AI Toolkit MCP server to a settings.json file ---
 # Usage: add_shopify_mcp_server <settings_file_path>
 add_shopify_mcp_server() {
@@ -943,6 +992,9 @@ if [ "$MODE" = "update" ]; then
   echo "Enabling Agent Teams..."
   enable_agent_teams
 
+  echo "Configuring git hooks..."
+  install_self_install_githook "$PROJECT_DIR"
+
   # --- Add Shopify AI Toolkit MCP server for Shopify projects ---
   IS_SHOPIFY=$(node -e "
     try {
@@ -1292,6 +1344,10 @@ fi
 # --- Enable Agent Teams feature flag ---
 echo "Enabling Agent Teams..."
 enable_agent_teams
+
+# --- Configure git hooks for the self-installed framework repo ---
+echo "Configuring git hooks..."
+install_self_install_githook "$PROJECT_DIR"
 
 # --- Generate CLAUDE.md ---
 if [ ! -f "$PROJECT_DIR/CLAUDE.md" ]; then
