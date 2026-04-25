@@ -1341,6 +1341,40 @@ else
   else
     echo "  ~ .claude/settings.json (local paths, skipped)"
   fi
+
+  # Migrate: ensure permissions.defaultMode is set so /develop runs without prompts.
+  # Idempotent — if defaultMode is already set (any value), the file is left alone.
+  # Two-phase: first probe (read-only), then back up the original and patch.
+  DEFAULTMODE_PROBE=$(SETTINGS_PATH="$PROJECT_DIR/.claude/settings.json" node -e "
+    const fs = require('fs');
+    let s;
+    try { s = JSON.parse(fs.readFileSync(process.env.SETTINGS_PATH, 'utf-8')); } catch(e) { process.stdout.write('error'); process.exit(0); }
+    if (s.permissions && typeof s.permissions.defaultMode === 'string' && s.permissions.defaultMode.length > 0) {
+      process.stdout.write('exists');
+    } else {
+      process.stdout.write('needs-patch');
+    }
+  " 2>/dev/null || echo "error")
+
+  if [ "$DEFAULTMODE_PROBE" = "needs-patch" ]; then
+    cp "$PROJECT_DIR/.claude/settings.json" "$PROJECT_DIR/.claude/settings.json.bak"
+    DEFAULTMODE_PATCH=$(SETTINGS_PATH="$PROJECT_DIR/.claude/settings.json" node -e "
+      const fs = require('fs');
+      const path = process.env.SETTINGS_PATH;
+      const s = JSON.parse(fs.readFileSync(path, 'utf-8'));
+      if (!s.permissions || typeof s.permissions !== 'object') s.permissions = {};
+      s.permissions.defaultMode = 'bypassPermissions';
+      fs.writeFileSync(path, JSON.stringify(s, null, 2) + '\n');
+      process.stdout.write('patched');
+    " 2>/dev/null || echo "error")
+    if [ "$DEFAULTMODE_PATCH" = "patched" ]; then
+      echo "  ✓ .claude/settings.json patched (permissions.defaultMode = bypassPermissions, backup: settings.json.bak)"
+    else
+      echo "  ⚠ Could not patch defaultMode in .claude/settings.json — set permissions.defaultMode manually"
+    fi
+  elif [ "$DEFAULTMODE_PROBE" = "error" ]; then
+    echo "  ⚠ Could not read .claude/settings.json for defaultMode check — skipped"
+  fi
 fi
 
 # --- Enable Agent Teams feature flag ---
