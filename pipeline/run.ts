@@ -75,6 +75,32 @@ function formatEnrichmentComment(triage: TriageResult): string {
   return lines.join("\n");
 }
 
+// Pre-Develop step: persist the loaded team to .claude/.reporter-team-roster.json
+// so the Reporter (develop-summary.sh, /just-ship-status, etc.) can render the
+// Team block in develop-complete.md without re-discovering which agents ran.
+// AC for T-999: Reporter reads the roster, never invents rows.
+function writeTeamRoster(
+  workDir: string,
+  agentNames: string[],
+  agentModelMap: Record<string, string>,
+): void {
+  const team = agentNames.map(role => ({
+    icon: "▸",
+    role,
+    tokens: 0,
+    model: agentModelMap[role] ?? null,
+  }));
+  const roster = { team, written_at: new Date().toISOString() };
+  const claudeDir = join(workDir, ".claude");
+  try {
+    mkdirSync(claudeDir, { recursive: true });
+    writeFileSync(join(claudeDir, ".reporter-team-roster.json"), JSON.stringify(roster, null, 2));
+  } catch (err) {
+    // Best-effort: roster is decorative — pipeline must not fail if it can't be written.
+    logger.warn({ err }, "Could not write reporter team roster");
+  }
+}
+
 async function runTriage(
   workDir: string,
   ticket: TicketArgs,
@@ -281,6 +307,10 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
   for (const [name, def] of Object.entries(filteredAgents)) {
     if (def.model) agentModelMap[name] = def.model;
   }
+
+  // Pre-Develop: write team roster for the Reporter (T-999 AC).
+  writeTeamRoster(workDir, Object.keys(filteredAgents), agentModelMap);
+
   const eventHooks = hasPipeline ? createEventHooks(eventConfig, {
     onPause: (reason, questionText) => {
       pauseReason = reason;
@@ -1033,6 +1063,10 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
   for (const [name, def] of Object.entries(filteredAgents)) {
     if (def.model) resumeAgentModelMap[name] = def.model;
   }
+
+  // Pre-Develop (resume): refresh the Reporter team roster (T-999 AC).
+  writeTeamRoster(workDir, Object.keys(filteredAgents), resumeAgentModelMap);
+
   const eventHooks = hasPipeline ? createEventHooks(eventConfig, {
     onPause: (reason, questionText) => {
       pauseReason = reason;

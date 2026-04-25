@@ -24,7 +24,7 @@ Load the Reporter and render the matching template at exactly these five trigger
 
 | Trigger | Template | Rendered by |
 |---|---|---|
-| End of `/develop` — after QA, docs-check, PR creation, summary | `templates/develop-complete.md` | `skills/develop/SKILL.md` step 11 |
+| End of `/develop` — after QA, docs-check, PR creation, summary | `templates/develop-complete.md` | `commands/develop.md` step 11 via `.claude/scripts/develop-summary.sh` |
 | End of `/ship` — after merge, branch delete, worktree cleanup | `templates/ship-complete.md` | `commands/ship.md` step 7 via `.claude/scripts/ship-summary.sh` |
 | Sidekick classification → Category 1 (single ticket) | `templates/ticket-created.md` | `.claude/rules/sidekick-terminal-routing.md` Category 1 row |
 | Sidekick classification → Category 2 (epic + children) | `templates/epic-created.md` | `.claude/rules/sidekick-terminal-routing.md` Category 2 row |
@@ -98,7 +98,7 @@ A template is rendered by substituting `{variable}` placeholders with string val
 
 ## Relationship to other skills
 
-- **`skills/develop/SKILL.md`** calls `develop-complete` at step 11 via `.claude/scripts/session-summary.sh`. The script and the template evolve together.
+- **`commands/develop.md`** calls `develop-complete` at step 11 via `.claude/scripts/develop-summary.sh`. The script and the template evolve together; `pipeline/run.ts` writes `.claude/.reporter-team-roster.json` in its Pre-Develop step so the renderer can fill the Team block without inventing rows.
 - **`commands/ship.md`** calls `ship-complete` at step 7 via `.claude/scripts/ship-summary.sh` (the "EINZIGE Ausgabe an den User" block). Pre-Merge (build / tests / conflict-check), Merge (commit / push / merge), and Post-Merge phases also render `phase-progress` lines.
 - **`.claude/rules/sidekick-terminal-routing.md`** references `ticket-created` and `epic-created` in the Category 1 / Category 2 rows.
 - **`skills/just-ship-status/SKILL.md`** composes status screens out of `phase-progress` and the relevant completion template.
