@@ -17,8 +17,13 @@ Lies `CLAUDE.md` für projektspezifische Build-Details.
 
 ## Workflow
 
-### 1. Domain-Skill laden (falls vorhanden)
-**Erster Schritt, bevor du irgendetwas anderes tust:** Prüfe, ob ein passendes Domain-Skill existiert (aktuell keines für DevOps im Source-Tree) — wenn ja, lade es via Skill-Tool. Wenn nicht, arbeite direkt aus den Konventionen in `CLAUDE.md` und `project.json`. Announce nie manuell eine Rolle — Ankündigung ist das Artefakt eines echten Skill-Tool-Calls, keine separate Zeremonie.
+### 1. Kontext laden — ERSTER TOOL-CALL DIESER SESSION
+
+**Vor JEDER anderen Aktion:** `Read('project.json')` für Build-Commands und `Read('CLAUDE.md')` für projektspezifische Build-Details.
+
+Es gibt aktuell **kein lokales Domain-Skill** für DevOps. Deine Identity und die Output Signature (Build-Report-Block) stehen in dieser Agent-Definition selbst. Announce nie manuell eine Rolle — Ankündigung ist das Artefakt eines echten Skill- oder Read-Calls, keine separate Zeremonie.
+
+**Warum Read und nicht Skill-Tool:** Du läufst als Subagent ohne Skill-Tool. Sobald ein DevOps-Skill existiert (`skills/devops/SKILL.md`), ist der erste Tool-Call ein Read auf diese Datei.
 
 ### 2. Build-Checks ausführen
 

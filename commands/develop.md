@@ -317,7 +317,33 @@ Spawne Agents via Agent-Tool mit konkreten Instruktionen:
 | `backend` | `sonnet` | Bei API/Hook-Änderungen |
 | `frontend` | `sonnet` | Bei UI-Änderungen |
 
-**Prompt-Muster:** Exakte Dateiliste + Code-Snippets, NICHT "lies die Spec".
+**Prompt-Muster:** Jeder Spawn-Prompt MUSS als allererste Zeile die Skill-Read-Instruktion enthalten — sonst arbeitet der Subagent ohne sein Domain-Skill (Anti-Patterns, Output-Signature ungelesen). Format:
+
+```
+ERSTER TOOL-CALL DIESER SESSION (vor allem anderen):
+Read('skills/{role}/SKILL.md')
+
+Diese Datei enthält deine Identity, Anti-Patterns und Output Signature.
+Befolge sie wörtlich. Ohne diesen Read ist deine Antwort ungültig.
+
+Skill-Pfad-Mapping:
+- backend       → skills/backend/SKILL.md
+- data-engineer → skills/data-engineer/SKILL.md
+- frontend      → skills/frontend-design/SKILL.md
+                  (+ skills/creative-design/SKILL.md bei Greenfield)
+
+DANACH: Lies .claude/agents/{name}.md für deine Workflow-Schritte.
+
+## Aufgabe
+{1-2 Sätze}
+
+## Datei 1: ...
+{exakter Code oder Instruktion}
+```
+
+**Warum diese Zeile zwingend ist:** Subagents haben kein `Skill`-Tool. Ohne den expliziten Read auf den Skill-Pfad arbeiten sie nur aus ihrer Identity in `.claude/agents/{name}.md` — alle Domain-Patterns aus dem Skill bleiben ungelesen, und die im Skill definierte Output-Signature (z.B. Endpoint-Spec für backend) wird nicht produziert.
+
+Exakte Dateiliste + Code-Snippets im Prompt-Body, NICHT "lies die Spec".
 
 ### 6. Build-Check (Bash, kein Agent)
 
@@ -349,16 +375,20 @@ Ein Code-Review-Agent mit `model: "sonnet"` und `subagent_type: "code-reviewer"`
 
 Prompt-Muster:
 ```
-Du bist der Code Review Agent. Lies agents/code-review.md für deine Rolle.
+ERSTER TOOL-CALL DIESER SESSION (vor allem anderen):
+Read('CLAUDE.md') und Read('project.json')
+
+Diese Dateien enthalten deine Projekt-Konventionen, Stack und Build-Commands. Befolge sie wörtlich.
+
+(Es gibt aktuell kein lokales Domain-Skill für Code Review — Identity und Review-Kriterien stehen in agents/code-review.md, die du als nächstes liest.)
+
+DANACH: Lies agents/code-review.md für Review-Kriterien und Workflow.
 
 Arbeitsverzeichnis: {WORKTREE_DIR oder CWD}
 Branch: {aktueller Branch}
 Ticket: T-$TICKET_NUMBER
 
-Reviewe den Diff auf diesem Branch gegen main. Lies agents/code-review.md für Review-Kriterien und Workflow.
-Lies CLAUDE.md für Projekt-Konventionen.
-Lies project.json für Stack und Build-Commands.
-
+Reviewe den Diff auf diesem Branch gegen main.
 Fixe gefundene Issues direkt. Jeder Fix als eigener Commit: chore(code-review): {beschreibung}
 ```
 
@@ -388,6 +418,26 @@ Ein QA-Agent mit `model: "haiku"`:
 - Acceptance Criteria gegen Code prüfen
 - Security-Quick-Check (Secrets, RLS, Auth, Input Validation)
 - Bei Problemen: direkt fixen
+
+**Prompt-Muster:**
+
+```
+ERSTER TOOL-CALL DIESER SESSION (vor allem anderen):
+Read('skills/webapp-testing/SKILL.md')
+
+Bei Bugfix-Tickets zusätzlich Read('skills/test-driven-development/SKILL.md').
+
+Diese Dateien enthalten deine Test-Strategie, Mocking-Regeln und Output-Signatur (AC-Pass/Fail-Tabelle, Testing-Block, Security-Block, Autonomy-Block). Befolge sie wörtlich.
+
+DANACH: Lies agents/qa.md für deine Workflow-Schritte.
+
+Ticket: T-$TICKET_NUMBER
+Acceptance Criteria:
+1. {AC1} — prüfe in {datei}
+2. {AC2} — prüfe in {datei}
+
+Bei Problemen: direkt fixen.
+```
 
 ```bash
 bash .claude/scripts/send-event.sh $TICKET_NUMBER qa completed
