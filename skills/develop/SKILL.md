@@ -173,10 +173,34 @@ BRANCH="{abgeleiteter-prefix}/{ticket-nummer}-{kurzbeschreibung}"
 WORKTREE_DIR=".worktrees/T-$TICKET_NUMBER"
 git worktree add "$WORKTREE_DIR" -b "$BRANCH" origin/main
 
-# Symlink .env.local from repo root into worktree (credentials for board-api.sh etc.)
+# Bootstrap: Pipeline-Tools aus Parent-.claude/ in den Worktree kopieren.
+# Konsumer-Repos (z.B. just-ship-board) haben .claude/ in .gitignore — ohne
+# diesen Schritt fehlen send-event.sh, board-api.sh, Skills, Agents, Rules,
+# Hooks und settings.json im Worktree. cp -RnL ist idempotent (no-overwrite)
+# und dereferenziert Symlinks (Engine-Repo hat .claude/agents → ../agents als
+# Symlink; Konsumer-Repos haben reale Dirs — beides funktioniert mit -L).
+# User-Edits im Worktree werden durch -n nicht überschrieben.
 REPO_ROOT=$(git rev-parse --show-toplevel)
+if [ ! -d "$REPO_ROOT/.claude" ]; then
+  echo "✗ worktree-bootstrap — Parent-.claude/ unter $REPO_ROOT nicht gefunden" >&2
+  exit 1
+fi
+mkdir -p "$WORKTREE_DIR/.claude"
+for sub in scripts skills agents rules hooks; do
+  if [ -d "$REPO_ROOT/.claude/$sub" ]; then
+    cp -RnL "$REPO_ROOT/.claude/$sub" "$WORKTREE_DIR/.claude/" 2>/dev/null || true
+  fi
+done
+if [ -f "$REPO_ROOT/.claude/settings.json" ] && [ ! -f "$WORKTREE_DIR/.claude/settings.json" ]; then
+  cp "$REPO_ROOT/.claude/settings.json" "$WORKTREE_DIR/.claude/settings.json"
+fi
+echo "▶ worktree-bootstrap — .claude/ tools synchronisiert"
+
+# Symlink .env.local from repo root into worktree (credentials for board-api.sh etc.)
 ln -sf "$REPO_ROOT/.env.local" "$WORKTREE_DIR/.env.local" 2>/dev/null || true
 ```
+
+**Was der Bootstrap NICHT kopiert:** Session-/Local-State-Files unter `.claude/` (`settings.local.json`, `.agent-map/`, `.active-ticket`, `.token-snapshot-*.json`, `.quality-gate-cache`, `.pipeline-version`, `.template-hash`). Die liegen direkt unter `.claude/` (nicht in den 5 Subdirs), werden also automatisch nicht mit-kopiert. Die `.token-snapshot-T-*.json`-Files leben im Main-Repo-Root unter `.claude/` und gehören dort hin — nicht ins Worktree.
 
 Danach: **Alle weiteren Schritte (4-11) im Worktree-Verzeichnis ausführen.** Nutze `$WORKTREE_DIR` als Arbeitsverzeichnis für alle Bash-Befehle (`cwd`), Read, Edit, Glob, Grep.
 
