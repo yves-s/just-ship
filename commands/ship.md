@@ -13,6 +13,15 @@ Vom uncommitted Code bis zum gemergten PR auf main. **Ein Befehl, keine Unterbre
 
 Falls du den Drang hast eine Frage zu stellen: **UNTERDRÜCKE IHN** und mach einfach den nächsten Schritt.
 
+## Output-Voice
+
+Alle User-sichtbaren Output-Zeilen dieses Flows folgen dem Reporter-Skill (`skills/reporter/SKILL.md`):
+
+- **Pre-Merge-Phase, Merge-Phase, Post-Merge-Phase** rendern Phasen-Zeilen nach `templates/phase-progress.md` (Icons `▶` / `✓` / `↻` / `✗`, Format `{icon} {role} · {task}`).
+- **Merge-Bestätigung** rendert `templates/ship-complete.md` über `.claude/scripts/ship-summary.sh` — keine Inline-Strings.
+
+Eigene Prosa, eigene Icons (`✅`, `❌`, `🎉`), eigene Formate sind verboten. Wenn ein Format fehlt, gehört es ins Template, nicht in diesen Flow.
+
 ## NICHT verwenden
 
 - NICHT den Skill `finishing-a-development-branch` aufrufen
@@ -75,6 +84,38 @@ echo "TICKET_NUMBER=$TICKET_NUMBER"
 
 **ALLE folgenden Bash-Blöcke MÜSSEN `$TICKET_NUMBER` verwenden.** Niemals `{N}` als Platzhalter in board-api.sh Calls — das wird nicht aufgelöst und erzeugt einen 404.
 
+SOFORT WEITER ZU SCHRITT 0a.
+
+### 0a. Pre-Merge — Build-Check, Tests-Re-Run, Conflict-Check
+
+Drei Verification-Phasen auf dem Feature-Branch, bevor irgendetwas gemerged wird. Jede Phase rendert exakt eine `▶` / `✓`-Zeile nach `phase-progress.md` (Format `{icon} {role} · {task}`).
+
+**Build-Check:** Lies `build.web` aus `project.json` und führe es aus.
+```
+▶ build · running build-check
+```
+Bei Erfolg → `✓ build · passed`. Bei Fehler → `✗ build · failed` plus dem Fehler-Detail; STOP, dem User zeigen — Build-Failures sind ein berechtigter Stop-Grund (siehe Fehlerbehandlung unten).
+
+**Tests-Re-Run:** Lies `build.test` aus `project.json`. Falls leer (`""` oder `echo 'No tests'`) — Phase elidieren, keine Zeile ausgeben.
+```
+▶ tests · re-running test suite
+```
+Bei Erfolg → `✓ tests · passed · {n}/{n}`. Bei Fehler → `✗ tests · failed`; STOP.
+
+**Conflict-Check:** Prüfe ob der Feature-Branch sauber gegen `origin/main` rebasen kann.
+```bash
+git fetch origin main
+if ! git merge-tree "$(git merge-base HEAD origin/main)" HEAD origin/main | grep -q "^<<<<<<<"; then
+  echo "▶ conflict-check · checking against origin/main"
+  echo "✓ conflict-check · clean"
+else
+  echo "✗ conflict-check · conflicts detected — resolve before /ship"
+  exit 1
+fi
+```
+
+Erst wenn alle drei Pre-Merge-Phasen `✓` sind, weiter zu Schritt 1.
+
 SOFORT WEITER ZU SCHRITT 1.
 
 ### 1. Commit (falls nötig)
@@ -83,20 +124,32 @@ SOFORT WEITER ZU SCHRITT 1.
 git status
 ```
 
-Falls uncommitted changes:
+Falls uncommitted changes — eine `▶`-Zeile vor dem Commit, eine `✓`-Zeile danach:
 ```bash
+echo "▶ commit · staging changes"
 git add <betroffene-dateien>
 git commit -m "feat(T-{ticket}): {englische Beschreibung}
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
+echo "✓ commit · created"
 ```
+
+Falls nichts zu committen ist: keine Zeile ausgeben (Phase elidiert).
 
 SOFORT WEITER ZU SCHRITT 2.
 
 ### 2. Push
 
 ```bash
-git push -u origin $(git branch --show-current)
+echo "▶ ship · pushing"
+if git push -u origin "$(git branch --show-current)"; then
+  echo "✓ ship · pushed"
+else
+  echo "↻ ship · push rejected, rebasing"
+  git pull --rebase origin "$(git branch --show-current)"
+  git push -u origin "$(git branch --show-current)"
+  echo "✓ ship · pushed (after rebase)"
+fi
 ```
 
 SOFORT WEITER ZU SCHRITT 3.
@@ -224,7 +277,9 @@ SOFORT WEITER ZU SCHRITT 4.
 ### 4. Merge
 
 ```bash
+echo "▶ merge · squashing PR"
 gh pr merge --squash --delete-branch
+echo "✓ merge · merged · branch deleted"
 ```
 
 SOFORT WEITER ZU SCHRITT 5.
@@ -361,34 +416,76 @@ SOFORT WEITER ZU SCHRITT 7.
 
 ### 7. Bestätigung (EINZIGE Ausgabe an den User)
 
-```
-✓ Shipped: feat(T-{ticket}): {Beschreibung}
-  PR: {url}
-  Branch: {branch} → deleted
-  Worktree: .worktrees/T-$TICKET_NUMBER → aufgeräumt (falls vorhanden)
-  Board: done (falls konfiguriert)
+Rendere `templates/ship-complete.md` über `.claude/scripts/ship-summary.sh` — keine Inline-Strings, keine eigene Formatierung. Das Script erwartet exakt die Variablen, die im Template deklariert sind.
+
+**Daten sammeln:**
+
+```bash
+# Commit-Subject = erste Zeile der Merge-Commit-Message (vom letzten Commit auf main)
+COMMIT_SUBJECT=$(git log -1 --pretty=%s main 2>/dev/null || echo "")
+
+# PR-URL — aus dem PR, der gerade gemerged wurde. gh pr view zeigt nach Merge weiterhin den State an.
+PR_URL=$(gh pr view --json url -q .url 2>/dev/null || echo "")
+
+# Branch-Name — den haben wir noch in $BRANCH oder ableitbar aus dem Worktree-Namen
+BRANCH=$(echo "$BRANCH" || git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+
+# Worktree-Status — `cleaned up` falls 5b einen Worktree entfernt hat, sonst `none`
+if [ -d ".worktrees/T-$TICKET_NUMBER" ]; then
+  WORKTREE_STATUS="cleaned up"
+else
+  WORKTREE_STATUS="none"
+fi
+# (Schritt 5b räumt vor dem Rendern auf, also ist `none` der erwartete Wert nach Cleanup —
+# `cleaned up` schreibt der Caller, wenn Schritt 5b den Worktree gerade entfernt hat. Defaultwert
+# ist `cleaned up` wenn der Cleanup-Pfad lief, sonst `none`. Setze ihn entsprechend dem
+# tatsächlichen Cleanup-Resultat aus Schritt 5b.)
+
+# Board-Status — `done` wenn Pipeline konfiguriert und Update erfolgreich, sonst `—`
+WORKSPACE_ID=$(node -e "process.stdout.write(require('./project.json').pipeline?.workspace_id || '')" 2>/dev/null)
+if [ -n "$WORKSPACE_ID" ] && [ "$SHIP_STATUS_OK" = "true" ]; then
+  BOARD_STATUS="done"
+else
+  BOARD_STATUS="—"
+fi
 ```
 
-Prüfe ob andere Branches aufgeräumt werden sollten:
+**Stale-Branches-Block bauen** (optional — leer falls nichts zu meckern ist):
+
 ```bash
-git fetch --prune
-STALE=$(git branch -v | grep '\[gone\]' | awk '{print $1}')
-BEHIND=$(git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads | grep -v 'main' | while read branch track; do
+git fetch --prune 2>/dev/null || true
+STALE_LINES=""
+while IFS= read -r br; do
+  [ -z "$br" ] && continue
+  STALE_LINES="${STALE_LINES}${br} — Remote gelöscht"$'\n'
+done < <(git branch -v | grep '\[gone\]' | awk '{print $1}')
+while IFS= read -r line; do
+  [ -z "$line" ] && continue
+  STALE_LINES="${STALE_LINES}${line}"$'\n'
+done < <(git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads | grep -v '^main' | while read branch track; do
   COUNT=$(git rev-list --count "$branch..main" 2>/dev/null || echo 0)
   if [ "$COUNT" -gt 50 ]; then
     echo "$branch — $COUNT Commits hinter main"
   fi
 done)
+# Trailing newline trimmen
+STALE_BRANCHES_BLOCK=$(printf "%s" "$STALE_LINES")
 ```
 
-Falls stale oder weit hinter main (>50 Commits):
-```
-Hinweis: Folgende Branches könnten aufgeräumt werden:
-  {branch-name} — Remote gelöscht
-  {branch-name} — 73 Commits hinter main
+**Render aufrufen:**
+
+```bash
+bash .claude/scripts/ship-summary.sh \
+  "$TICKET_NUMBER" \
+  "$COMMIT_SUBJECT" \
+  "$PR_URL" \
+  "$BRANCH" \
+  "$WORKTREE_STATUS" \
+  "$BOARD_STATUS" \
+  "$STALE_BRANCHES_BLOCK"
 ```
 
-Nur als Hinweis — nicht automatisch löschen.
+Das Script rendert das `ship-complete.md` Template — Output exakt nach Vorgabe (`✓ Shipped: …` Header, vier Rows PR/Branch/Worktree/Board, optional `Hinweis — folgende Branches…`-Block). Keine zusätzliche Prosa darunter, kein zweiter Confirmation-Block, keine Trailing-Sätze.
 
 ## Fehlerbehandlung
 
