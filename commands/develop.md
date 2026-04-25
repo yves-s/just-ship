@@ -34,6 +34,19 @@ Lies `project.json` für Konventionen.
 
 **STOPPE NICHT ZWISCHEN DEN SCHRITTEN.** Nach Build-Check (Schritt 6) kommt Code Review (Schritt 6.5), dann QA Review (Schritt 7), dann Docs-Check (Schritt 8), dann Ship (Schritt 9). Du darfst NICHT nach dem Build dem User die Ergebnisse zeigen und auf Antwort warten. ALLES durchlaufen bis Schritt 9 fertig ist.
 
+## Reporter — die einzige User-sichtbare Stimme
+
+Alle User-Output-Stellen dieses Commands gehen durch den **Reporter-Skill** (`skills/reporter/SKILL.md`). Inline-Strings sind verboten; jede Zeile, die der CEO im Terminal liest, folgt einem Template:
+
+| Stelle | Template | Renderer |
+|---|---|---|
+| Phasen-Zeilen während aller Schritte (`▶ {role} · {task}`, `✓ {role} abgeschlossen`, `⚠ …`, `↻ …`, `✗ …`) | `skills/reporter/templates/phase-progress.md` | inline gerendert nach den Voice-Regeln des Skills (sechs Icons, kurze active Sätze, keine Adjektive) |
+| Abschluss-Block (Schritt 11) | `skills/reporter/templates/develop-complete.md` | `.claude/scripts/develop-summary.sh` |
+
+Wenn die formulierte Ausgabe nicht zu einem dieser Shapes passt, ist sie off-voice — kürze sie auf eine `phase-progress`-Zeile oder lasse sie weg. Niemals freie Prosa, niemals neue Status-Icons (`✅`, `❌`, `🎉`), niemals "Let me…"/"I'll…".
+
+Pre-Develop schreibt die geladene Team-Liste nach `.claude/.reporter-team-roster.json` (siehe `pipeline/run.ts → writeTeamRoster`). `develop-summary.sh` liest die Datei beim Render und füllt damit den Team-Block der `develop-complete`-Vorlage. Existiert die Datei nicht, eliodiert der Team-Block — niemals erfinden.
+
 ## Ausführung
 
 ### 1. Ticket finden
@@ -719,41 +732,44 @@ bash .claude/scripts/send-event.sh $TICKET_NUMBER qa-auto completed '{"tier": "{
 ```
 Ausgabe: `✓ qa-auto — {qa_tier} tier {passed|needs-review|skipped}`
 
-### 11. Session Summary
+### 11. Session Summary — `develop-complete` rendern
 
-Zeige am Ende eine strukturierte Zusammenfassung der gesamten Session im Terminal.
+Renderer ist `.claude/scripts/develop-summary.sh`. Es füllt das `develop-complete`-Template (siehe `skills/reporter/templates/develop-complete.md`) — keine Inline-Strings, kein selbst gebautes Box-Format, keine zusätzlichen Zeilen davor oder danach.
 
 **Daten sammeln:**
 
 ```bash
-MERGE_BASE=$(git merge-base main HEAD)
 PR_URL=$(gh pr view --json url -q .url 2>/dev/null || echo "")
+BUILD_STATUS="passed"   # aus Schritt 6 / Schritt 10b — auf "failed" setzen, falls Build red
+TESTS_PASSED=0          # aus Schritt 10b — Vitest/Playwright-Ergebnis (passed-Anzahl)
+TESTS_TOTAL=0           # aus Schritt 10b — Gesamt-Anzahl. Bei "kein Test" beide auf 0.
 ```
 
 `$PREVIEW_URL` ist aus Schritt 9f verfügbar (leer wenn kein Hosting-Provider).
 `$QA_RESULT` ist aus Schritt 10e verfügbar (`passed`, `needs-review`, oder `skipped`).
 
-**Summary ausgeben:**
+**Summary rendern:**
 
 ```bash
-bash .claude/scripts/session-summary.sh \
-  "{N}" \
+bash .claude/scripts/develop-summary.sh \
+  "$TICKET_NUMBER" \
   "{ticket_title}" \
   "{1-2 Sätze Zusammenfassung was das Ticket adressiert}" \
-  "{qa_result}" \
+  "$BUILD_STATUS" \
+  "$TESTS_PASSED" \
+  "$TESTS_TOTAL" \
+  "$QA_RESULT" \
   "$PR_URL" \
   "$PREVIEW_URL"
 ```
 
-Das Script sammelt automatisch:
-- Git-Statistiken (geänderte Dateien, Diff-Stats, Commits, Branch)
-- Token-Verbrauch aus der aktuellen Session via `calculate-session-cost.sh`
-- Geschätzte Kosten mit erkanntem Model-Namen
+Das Script:
+- liest `.claude/.reporter-team-roster.json` (von `pipeline/run.ts` Pre-Develop geschrieben) und rendert den Team-Block; Block eliodiert, wenn die Datei fehlt oder leer ist
+- sammelt Git-Statistiken aus `git diff --shortstat main..HEAD`
+- erfasst Token-Verbrauch und geschätzte Kosten aus der aktuellen Claude-Session (Session-Row eliodiert, wenn keine Daten verfügbar)
+- mappt `build_status`/`qa_result` auf die Template-Icons (`✓`/`✗`/`⚠`/`—`)
 
-Falls Token-Daten nicht verfügbar sind, werden Token- und Cost-Blöcke automatisch weggelassen.
-Falls keine Preview-URL vorhanden ist, wird die Zeile automatisch weggelassen.
-
-**Keine Ausgabe außer dem Script-Output.** Das Script ersetzt die bisherige "fertig"-Meldung.
+**Keine Ausgabe außer dem Script-Output.** Das Script ist die einzige `develop-complete`-Stimme. Wenn etwas davor oder danach gesagt werden muss, wird es als zusätzliche `phase-progress`-Zeile vor Schritt 11 abgesetzt — nicht als Prosa-Zeile nach dem Block.
 
 ### Checkliste vor Abschluss
 
