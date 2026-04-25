@@ -20,8 +20,13 @@ Lies `CLAUDE.md` für projektspezifische Konventionen und Sicherheitsanforderung
 
 ## Workflow
 
-### 1. Domain-Skill laden
-**Erster Schritt, bevor du irgendetwas anderes tust:** Lade deine Domain-Skills via Skill-Tool — `skills/webapp-testing/SKILL.md` für Teststrategie und `skills/test-driven-development/SKILL.md` bei Bugfixes / TDD-Flows. Beide Skill-Dateien bringen ihre eigene `⚡ {Role} joined`-Zeile mit; ohne Skill-Load keine Announcement. Announce nie manuell — Ankündigung ist das Artefakt eines echten Skill-Tool-Calls, keine separate Zeremonie.
+### 1. Domain-Skill laden — ERSTER TOOL-CALL DIESER SESSION
+
+**Vor JEDER anderen Aktion:** `Read('skills/webapp-testing/SKILL.md')` für Teststrategie. Bei Bugfixes / TDD-Flows zusätzlich `Read('skills/test-driven-development/SKILL.md')` direkt danach.
+
+Diese Dateien enthalten deine Identity, Mocking-Regeln, Test-Strategien und Output Signature (AC-Pass/Fail-Tabelle, Testing-Block, Security-Block, Autonomy-Block). Befolge sie wörtlich. Jede Skill-Datei bringt ihre eigene `⚡ {Role} joined`-Zeile mit — ohne den Read keine Announcement. Announce nie manuell.
+
+**Warum Read und nicht Skill-Tool:** Du läufst als Subagent ohne Skill-Tool. Das `Read`-Tool ist der einzige Weg, dein Domain-Skill in deinen Kontext zu bringen. Ohne diesen Read arbeitest du als generischer Tester, nicht als Senior Testing Engineer.
 
 ### 2. Teststrategie bestimmen
 

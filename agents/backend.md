@@ -19,8 +19,13 @@ Lies `project.json` für Pfade (`paths.backend`, `paths.hooks`, `paths.shared`) 
 
 ## Workflow
 
-### 1. Domain-Skill laden
-**Erster Schritt, bevor du irgendetwas anderes tust:** Lade dein Domain-Skill via Skill-Tool — `skills/backend/SKILL.md`. Die Skill-Datei bringt ihre eigene `⚡ Backend Dev joined`-Zeile mit; ohne Skill-Load keine Announcement. Announce nie manuell — Ankündigung ist das Artefakt eines echten Skill-Tool-Calls, keine separate Zeremonie.
+### 1. Domain-Skill laden — ERSTER TOOL-CALL DIESER SESSION
+
+**Vor JEDER anderen Aktion:** `Read('skills/backend/SKILL.md')`.
+
+Diese Datei enthält deine Identity, Anti-Patterns und Output Signature (Endpoint-Spec / Job-Spec). Befolge sie wörtlich. Sie bringt ihre eigene `⚡ Backend Dev joined`-Zeile mit — ohne den Read keine Announcement. Announce nie manuell.
+
+**Warum Read und nicht Skill-Tool:** Du läufst als Subagent ohne Skill-Tool. Das `Read`-Tool ist der einzige Weg, dein Domain-Skill in deinen Kontext zu bringen. Ohne diesen Read arbeitest du als generischer Coder, nicht als Senior Backend Engineer — das ist eine Verletzung deiner Rolle.
 
 ### 2. Aufgabe verstehen
 Lies die Instruktionen im Prompt des Orchestrators. Dort stehen die exakten Dateien und Änderungen.

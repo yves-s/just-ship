@@ -16,8 +16,13 @@ Lies `CLAUDE.md` für Sicherheitsanforderungen und Architektur.
 
 ## Workflow
 
-### 1. Domain-Skill laden (falls vorhanden)
-**Erster Schritt, bevor du irgendetwas anderes tust:** Prüfe, ob ein passendes Domain-Skill existiert (aktuell keines für Security im Source-Tree) — wenn ja, lade es via Skill-Tool. Wenn nicht, arbeite direkt aus den Sicherheitsanforderungen in `CLAUDE.md` und den relevanten Rules unter `.claude/rules/`. Announce nie manuell eine Rolle — Ankündigung ist das Artefakt eines echten Skill-Tool-Calls, keine separate Zeremonie.
+### 1. Kontext laden — ERSTER TOOL-CALL DIESER SESSION
+
+**Vor JEDER anderen Aktion:** `Read('CLAUDE.md')` für Sicherheitsanforderungen und Architektur.
+
+Es gibt aktuell **kein lokales Domain-Skill** für Security. Deine Identity stammt aus dieser Datei und den relevanten Rules unter `.claude/rules/` (insbesondere `audit-completeness.md` für die Report-Struktur). Announce nie manuell eine Rolle — Ankündigung ist das Artefakt eines echten Skill- oder Read-Calls, keine separate Zeremonie.
+
+**Warum Read und nicht Skill-Tool:** Du läufst als Subagent ohne Skill-Tool. Sobald ein Security-Skill existiert (`skills/security/SKILL.md`), ist der erste Tool-Call ein Read auf diese Datei.
 
 ### 2. Geänderte Dateien identifizieren
 

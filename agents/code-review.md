@@ -17,7 +17,15 @@ Lies `project.json` für Stack, Pfade und Build-Commands.
 
 ## Workflow
 
-### 1. Diff analysieren
+### 1. Kontext laden — ERSTER TOOL-CALL DIESER SESSION
+
+**Vor JEDER anderen Aktion:** `Read('CLAUDE.md')` für Projekt-Konventionen und `Read('project.json')` für Stack/Build-Commands.
+
+Es gibt aktuell **kein lokales Domain-Skill** für Code Review. Deine Identity, Review-Kriterien, Severity-Bewertung und Ergebnis-Format stehen in dieser Agent-Definition selbst. Announce nie manuell eine Rolle — Ankündigung ist das Artefakt eines echten Skill- oder Read-Calls, keine separate Zeremonie.
+
+**Warum Read und nicht Skill-Tool:** Du läufst als Subagent ohne Skill-Tool.
+
+### 2. Diff analysieren
 
 Hole den Diff gegen main:
 ```bash

@@ -48,7 +48,25 @@ Spawne Agents via Agent-Tool mit **exakten Code-Änderungen** im Prompt — nich
 **Prompt-Muster für Agents:**
 
 ```
-Lies .claude/agents/{name}.md für deine Rolle.
+ERSTER TOOL-CALL DIESER SESSION (vor allem anderen):
+Read('skills/{role}/SKILL.md')
+
+Diese Datei enthält deine Identity, Anti-Patterns und Output Signature.
+Befolge sie wörtlich. Ohne diesen Read ist deine Antwort ungültig.
+
+Skill-Pfad-Mapping:
+- subagent_type=backend       → skills/backend/SKILL.md
+- subagent_type=data-engineer → skills/data-engineer/SKILL.md
+- subagent_type=frontend      → skills/frontend-design/SKILL.md
+                                 (+ skills/creative-design/SKILL.md bei Greenfield)
+- subagent_type=qa            → skills/webapp-testing/SKILL.md
+                                 (+ skills/test-driven-development/SKILL.md bei Bugfix/TDD)
+- subagent_type=security      → kein lokales Skill, Read('CLAUDE.md')
+- subagent_type=devops        → kein lokales Skill, Read('project.json') + Read('CLAUDE.md')
+- subagent_type=code-reviewer → kein lokales Skill, Read('CLAUDE.md') + Read('project.json')
+
+DANACH:
+Lies .claude/agents/{name}.md für deine Workflow-Schritte.
 Lies project.json für Pfade und Stack-Details.
 
 ## Aufgabe
@@ -60,9 +78,11 @@ Lies project.json für Pfade und Stack-Details.
 ## Datei 2: ...
 ```
 
+**Warum die Skill-Read-Zeile zwingend ist:** Subagents haben kein `Skill`-Tool. Das einzige Mittel, ihre Domain-Expertise (Anti-Patterns, Output-Signature, Best-Practice-Patterns) in den Subagent-Kontext zu bringen, ist ein expliziter `Read`-Tool-Call auf den Skill-Pfad. Ohne diesen Read arbeitet der Subagent nur aus seiner dünnen Identity-Beschreibung in `agents/{name}.md` und betreibt Pattern-Matching auf existierenden Files — alle Skill-Patterns bleiben ungelesen. Die Skill-Read-Zeile MUSS in jedem Subagent-Spawn-Prompt als allererste Instruktion stehen.
+
 **Bei Frontend-Agents** immer den Design-Modus UND Design-Kontext angeben:
 - Neue Seite/Feature ohne bestehendes Design System → `## Design-Modus: Greenfield` (creative-design Skill)
-- Bestehende Komponente erweitern → `## Design-Modus: Bestehend` (design + frontend-design Skills)
+- Bestehende Komponente erweitern → `## Design-Modus: Bestehend` (frontend-design Skill)
 
 Zusätzlich `## Design-Kontext` zwischen `## Aufgabe` und `## Datei 1` einfügen:
 
@@ -150,7 +170,9 @@ Standardmäßig übernimmt der QA-Agent den Security-Quick-Check. Für sicherhei
 
 ## Skill-Loading
 
-Wenn du Cross-Cutting-Expertise brauchst (Architektur → `skills/product-cto/SKILL.md`, UI/UX → `skills/frontend-design/SKILL.md` oder `skills/design-lead/SKILL.md`, UX-Flows → `skills/ux-planning/SKILL.md`, Autonomie-Fragen → `skills/autonomy-boundary/SKILL.md`), lade das Skill via Skill-Tool. Jede Skill-Datei bringt ihre eigene `⚡ {Role} joined`-Zeile mit; ohne Skill-Load keine Announcement. Announce nie manuell eine Rolle — Ankündigung ist das Artefakt eines echten Skill-Tool-Calls, keine separate Zeremonie.
+**Für dich selbst (Orchestrator hat Skill-Tool):** Wenn du Cross-Cutting-Expertise brauchst (Architektur → `skills/product-cto/SKILL.md`, UI/UX → `skills/frontend-design/SKILL.md` oder `skills/design-lead/SKILL.md`, UX-Flows → `skills/ux-planning/SKILL.md`, Autonomie-Fragen → `skills/autonomy-boundary/SKILL.md`), lade das Skill via Skill-Tool. Jede Skill-Datei bringt ihre eigene `⚡ {Role} joined`-Zeile mit; ohne Skill-Load keine Announcement. Announce nie manuell eine Rolle — Ankündigung ist das Artefakt eines echten Skill-Tool-Calls, keine separate Zeremonie.
+
+**Für gespawnte Subagents (kein Skill-Tool):** Subagents bekommen ihr Domain-Skill nur dann in den Kontext, wenn dein Spawn-Prompt eine explizite Read-Anweisung als ersten Tool-Call enthält. Siehe Prompt-Muster oben in Phase 2. Skill-Loading via Skill-Tool funktioniert für Subagents NICHT.
 
 ## Decision Authority — ZERO TOLERANCE
 
