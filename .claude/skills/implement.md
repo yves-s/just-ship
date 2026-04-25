@@ -12,7 +12,7 @@ Gleicher Prozess wie `/develop`, aber ohne Pipeline-Events, Triage und Ticket-St
 
 ## WICHTIGSTE REGEL
 
-**STOPPE NICHT ZWISCHEN DEN SCHRITTEN.** Alle Schritte 1–9 hintereinander ausführen.
+**STOPPE NICHT ZWISCHEN DEN SCHRITTEN.** Alle Schritte 0–9 hintereinander ausführen.
 Kein "Soll ich...?", kein "Möchtest du...?". ALLES DURCHLAUFEN.
 Schritt 8 endet mit einem offenen PR — **KEIN Merge**, nicht warten auf Bestätigung.
 
@@ -39,9 +39,101 @@ Pipeline-Config wird **ignoriert** — dieser Command läuft immer im Standalone
 
 ## Ausführung
 
+### 0. Skill-Selection — Domain-Skills in den Main-Context laden
+
+Bevor irgendeine Planungs- oder Implementierungsentscheidung getroffen wird, müssen die zur Spec passenden Domain-Skills im Main-Context geladen werden. Der Main-Assistant trifft in Schritt 1–3 die architektonischen, UI-, UX- und Routing-Entscheidungen — ohne geladene Skills passieren die aus dem Bauch, nicht aus Expertise. Das ist die Umsetzung von CLAUDE.md → **Skill Loading — Mandatory, not optional**.
+
+> **Guard-Precedence:** Der Guard aus Schritt 1 wird **vor** der Klassifikation ausgewertet. Wenn kein Argument übergeben wurde UND kein klares Implementierungsziel aus der Konversation ableitbar ist (leere Session, themenfremdes Gespräch, mehrere widersprüchliche Themen), springe direkt zu Schritt 1 und gib die STOP-Message aus — **ohne** Skill-Klassifikation, **ohne** Announcement. Der Guard hat Vorrang vor Step 0.
+
+#### 0a. Spec-Quelle identifizieren
+
+- **Mit Argument (`/implement Beschreibung`):** Nutze `$ARGUMENTS` als Klassifikations-Input.
+- **Ohne Argument (`/implement`):** Nutze den aus der Konversation destillierten Spec-Entwurf.
+
+Die volle Spec wird erst in Schritt 1 ausgegeben. Schritt 0 klassifiziert nur — basierend auf Schlüsselwörtern und betroffenen Bereichen.
+
+#### 0b. Domain-Mapping
+
+Scanne Spec-Input auf Signal-Wörter und betroffene Dateien. Jede zutreffende Zeile lädt den entsprechenden Skill:
+
+| Spec-Signal | Skill (aus `skills/`) | Rolle (Announcement) |
+|---|---|---|
+| UI-Komponenten, Layout, Visual Hierarchy, Buttons, Cards, Panels, Farben, Typo, Tokens, States | `frontend-design` | Frontend Dev |
+| User Flows, Screens, Information Architecture, Navigation, Onboarding, mehrschrittige Interaktionen, Empty/Loading/Error-States über mehrere Screens | `ux-planning` | UX Lead |
+| Produkt-Struktur, Interaction-Philosophie, Cross-Feature-Konsistenz, Design-System-Richtung, Pattern-Definition | `design-lead` | Design Lead |
+| APIs, Endpoints, Server-Logic, Hooks, Jobs, Webhooks, Auth, Caching, Queues, Rate-Limits | `backend` | Backend Dev |
+| Schema, Tabellen, RLS Policies, Migrations, Indexes, Queries, Views, Supabase-Funktionen | `data-engineer` | Data Engineer |
+| Greenfield-Ästhetik, neues Produkt/neue Page von Scratch, Anti-AI-Slop, Brand-Richtung | `creative-design` | Creative Director |
+| Architektur/Ops/Security-Strategie, system-weite Performance-Entscheidung, Security-Pattern | `product-cto` | CTO |
+
+Eine Spec kann **mehrere** Skills matchen — dann alle laden. Cross-Cutting-Specs (z.B. "Sidebar-Umbau mit neuem Query" → UI + UX + Daten) laden `frontend-design` + `ux-planning` + `data-engineer`.
+
+#### 0c. Skills laden und announcen
+
+Für jeden getroffenen Skill:
+
+1. Lies die Datei aus `skills/{skill-name}/SKILL.md` (primärer Pfad) oder `.claude/skills/{skill-name}.md` (Fallback).
+2. Gib **genau eine Zeile pro Skill** aus, im Format: `⚡ {Rolle} joined` — exakt diese Syntax, kein "using", kein "loading", kein "✓".
+
+Beispiel-Output bei Cross-Cutting-Spec:
+```
+⚡ Frontend Dev joined
+⚡ UX Lead joined
+⚡ Data Engineer joined
+```
+
+Die Announcements stehen **vor** dem Spec-Output aus Schritt 1.
+
+#### 0d. Kein Match — Skip mit Note
+
+Betrifft die Spec weder UI/UX noch Backend/Daten noch Creative/Architektur (z.B. reine Doku-Änderung, Changelog-Tweak, Tippfehler in README): gib genau eine Zeile aus und fahre fort:
+
+```
+Step 0 — no domain skills required
+```
+
+#### 0e. Worked Examples
+
+**Beispiel 1 — UI-only Spec**
+```
+Input: "Improve sidebar selection state"
+→ Signal: UI-Komponente + State → frontend-design
+Output:
+  ⚡ Frontend Dev joined
+```
+
+**Beispiel 2 — Backend-only Spec**
+```
+Input: "Add /api/v1/foo endpoint"
+→ Signal: Endpoint / API → backend
+Output:
+  ⚡ Backend Dev joined
+```
+
+**Beispiel 3 — Cross-cutting Spec**
+```
+Input: "Add cross-project epics to sidebar"
+→ Signale: Sidebar-UI + neuer Nav-Flow zwischen Projekten + neue Query über Projekte hinweg
+→ frontend-design + ux-planning + data-engineer
+Output:
+  ⚡ Frontend Dev joined
+  ⚡ UX Lead joined
+  ⚡ Data Engineer joined
+```
+
+**Beispiel 4 — Docs-only Spec**
+```
+Input: "Fix typo in README Commands table"
+→ Kein Domain-Signal
+Output:
+  Step 0 — no domain skills required
+```
+
+Nach Schritt 0 geht es ohne Bestätigung direkt zu Schritt 1 weiter.
+
 ### 1. Spec ableiten
 
-> **Guard:** Falls kein Argument übergeben wurde UND kein klares Implementierungsziel aus der Konversation ableitbar ist (leere Session, themenfremdes Gespräch, mehrere widersprüchliche Themen) → **STOP**: "Ich konnte kein klares Implementierungsziel aus dem Chat ableiten. Bitte beschreibe kurz, was gebaut werden soll."
+> **Guard:** Falls kein Argument übergeben wurde UND kein klares Implementierungsziel aus der Konversation ableitbar ist (leere Session, themenfremdes Gespräch, mehrere widersprüchliche Themen) → **STOP**: "Ich konnte kein klares Implementierungsziel aus dem Chat ableiten. Bitte beschreibe kurz, was gebaut werden soll." Der Guard wird konzeptionell **vor** Schritt 0 ausgewertet — wenn er greift, werden weder Skills klassifiziert noch geladen noch announced.
 
 **Mit Argument (`/implement Beschreibung`):**
 Nutze `$ARGUMENTS` direkt als Spec-Basis.
