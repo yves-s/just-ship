@@ -5,6 +5,7 @@ import { logger } from "./logger.ts";
 import {
   checkAppliesTo,
   detectRepoFlavour,
+  resolveMode,
   type RuntimeContext,
 } from "./applies-to.ts";
 
@@ -24,10 +25,45 @@ export type AgentRole =
   | "security"
   | "triage";
 
-/** Which skills each agent role receives */
+/**
+ * Which agent roles each skill is delivered to.
+ *
+ * Each entry maps a skill name to the list of agent roles that should
+ * receive its full content as part of their system prompt.
+ *
+ * Skills not listed here are treated as "custom" and delivered to ALL agents
+ * (see `loadSkills` below — `if (!allowedRoles || allowedRoles.includes(role))`).
+ *
+ * Shopify domain skills are NOT listed here — they are provided by the
+ * @shopify/dev-mcp MCP server.
+ *
+ * Adding a skill here is the load-bearing step that makes the corresponding
+ * agent actually receive its domain expertise. Without an entry (or without
+ * the skill being listed in `project.json` → `skills.domain`), the agent
+ * falls back to its agent definition (`agents/<role>.md`) only — no
+ * Anti-Pattern catalog, no Output Signature, no `⚡ Role joined` announcement.
+ */
 const SKILL_AGENT_MAP: Record<string, AgentRole[]> = {
-  // Shopify domain skills are provided by the @shopify/dev-mcp MCP server,
-  // not by local skill files. No entries needed here for Shopify skills.
+  // Domain skills: each role gets its own primary skill
+  "backend": ["backend"],
+  "data-engineer": ["data-engineer"],
+  "frontend-design": ["frontend"],
+  "creative-design": ["frontend"],
+
+  // QA + Security share testing/verification skills
+  "webapp-testing": ["qa", "security"],
+  "test-driven-development": ["qa", "security"],
+  "verification-before-completion": ["qa", "security", "backend", "frontend", "data-engineer"],
+
+  // Triage gets the ticket-writer skill so it can structure ambiguous input
+  "ticket-writer": ["triage"],
+
+  // Orchestrator gets workflow-shaping skills so it can plan and dispatch
+  "dispatching-parallel-agents": ["orchestrator"],
+  "subagent-driven-development": ["orchestrator"],
+  "writing-plans": ["orchestrator"],
+  "systematic-debugging": ["orchestrator", "backend", "frontend", "qa"],
+  "find-skills": ["orchestrator"],
 };
 
 /** Parsed frontmatter from a skill file */
@@ -355,5 +391,61 @@ export function loadSkillsValidated(
     }
   }
 
-  return loadSkills(projectDir, config);
+  const loaded = loadSkills(projectDir, config);
+
+  // T-1023: every agent role that has a defined agent file MUST receive at
+  // least one skill, otherwise subagents work as generic coders without their
+  // domain skill. Silent skip is exactly the bug that ate the last two weeks.
+  // Engine-repo defaults to fail; customer repos warn (until they configure
+  // their own skill mapping). Override via JS_APPLIES_TO_MODE.
+  const mode = resolveMode(context.repo);
+  if (mode !== "off") {
+    const missing = expectedAgentRolesForRepo(projectDir).filter(
+      (role) => !loaded.byRole.has(role)
+    );
+    if (missing.length > 0) {
+      const message = `loadSkillsValidated: agents have no domain skill assigned — ${missing.join(", ")}. Check SKILL_AGENT_MAP in pipeline/lib/load-skills.ts and skills.domain in project.json.`;
+      if (mode === "fail") {
+        throw new Error(message);
+      } else {
+        logger.warn({ missing, mode }, message);
+      }
+    }
+  }
+
+  return loaded;
+}
+
+/**
+ * Roles for which an agent definition exists in the repo, excluding
+ * orchestrator and triage (which are spawned via separate paths and their
+ * skill content is added directly to their prompts in run.ts).
+ *
+ * Mirrors the filter in loadAgents() (load-agents.ts) so the hard-fail check
+ * stays consistent with what actually gets spawned as a subagent.
+ */
+function expectedAgentRolesForRepo(projectDir: string): AgentRole[] {
+  const agentsDir = resolve(projectDir, ".claude", "agents");
+  if (!existsSync(agentsDir)) return [];
+  const knownRoles: AgentRole[] = [
+    "frontend",
+    "backend",
+    "data-engineer",
+    "qa",
+    "devops",
+    "security",
+  ];
+  // Only require roles whose agent definition file actually exists. A repo
+  // that doesn't define agents/security.md shouldn't be required to map
+  // skills to a security role that won't spawn.
+  return knownRoles.filter((role) =>
+    existsSync(resolve(agentsDir, `${role}.md`))
+  );
+}
+
+/**
+ * Exposed for tests: read-only view of which roles each skill is delivered to.
+ */
+export function getSkillAgentMap(): Readonly<Record<string, readonly AgentRole[]>> {
+  return SKILL_AGENT_MAP;
 }
