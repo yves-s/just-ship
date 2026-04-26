@@ -618,10 +618,24 @@ add_shopify_mcp_server() {
 # --- Self-install guard ---
 # The framework repo itself uses symlinks (.claude/commands → ../commands etc.)
 # Running setup.sh on itself would try to copy files onto themselves.
+#
+# Bypass: set JUSTSHIP_BYPASS_SELF_INSTALL_GUARD=1 — used by the CI drift-check
+# workflow (.github/workflows/setup-drift-check.yml) to run `--update` against
+# the framework repo and verify install paths match the source. The symlinks
+# (.claude/agents → ../agents, .claude/commands → ../commands) make those
+# copies no-ops; .claude/skills/*.md are real files that get rewritten from
+# skills/<name>/SKILL.md and are the actual drift signal.
+_SELF_INSTALL=0
 if [ "$(cd "$FRAMEWORK_DIR" && pwd -P)" = "$(cd "$PROJECT_DIR" && pwd -P)" ]; then
-  echo "Error: Cannot install framework into itself."
-  echo "The framework repo uses symlinks — see .claude/commands, .claude/skills, .claude/agents."
-  exit 1
+  if [ "${JUSTSHIP_BYPASS_SELF_INSTALL_GUARD:-0}" != "1" ]; then
+    echo "Error: Cannot install framework into itself."
+    echo "The framework repo uses symlinks — see .claude/commands, .claude/skills, .claude/agents."
+    echo ""
+    echo "If you are the CI drift-check, set JUSTSHIP_BYPASS_SELF_INSTALL_GUARD=1."
+    exit 1
+  fi
+  _SELF_INSTALL=1
+  echo "  ⚠ Self-install bypass active (CI drift-check)"
 fi
 
 # --- Header ---
@@ -893,7 +907,13 @@ if [ "$MODE" = "update" ]; then
       fi
     done
   fi
-  cp "$FRAMEWORK_DIR/agents/"*.md "$PROJECT_DIR/.claude/agents/"
+  # In self-install mode, .claude/agents is a symlink to ../agents — cp would
+  # hit "same file" errors. The symlink already keeps source and install in sync.
+  if [ "$_SELF_INSTALL" = "1" ]; then
+    cp "$FRAMEWORK_DIR/agents/"*.md "$PROJECT_DIR/.claude/agents/" 2>/dev/null || true
+  else
+    cp "$FRAMEWORK_DIR/agents/"*.md "$PROJECT_DIR/.claude/agents/"
+  fi
   echo "  ✓ $(ls "$FRAMEWORK_DIR/agents/"*.md | wc -l | tr -d ' ') agents"
 
   echo "Updating commands..."
@@ -907,7 +927,12 @@ if [ "$MODE" = "update" ]; then
       fi
     done
   fi
-  cp "$FRAMEWORK_DIR/commands/"*.md "$PROJECT_DIR/.claude/commands/"
+  # Same self-install consideration as agents above.
+  if [ "$_SELF_INSTALL" = "1" ]; then
+    cp "$FRAMEWORK_DIR/commands/"*.md "$PROJECT_DIR/.claude/commands/" 2>/dev/null || true
+  else
+    cp "$FRAMEWORK_DIR/commands/"*.md "$PROJECT_DIR/.claude/commands/"
+  fi
   echo "  ✓ $(ls "$FRAMEWORK_DIR/commands/"*.md | wc -l | tr -d ' ') commands"
 
   echo "Updating skills..."
