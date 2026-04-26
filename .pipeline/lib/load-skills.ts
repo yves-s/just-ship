@@ -2,6 +2,11 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { ProjectConfig } from "./config.js";
 import { logger } from "./logger.ts";
+import {
+  checkAppliesTo,
+  detectRepoFlavour,
+  type RuntimeContext,
+} from "./applies-to.ts";
 
 // SECURITY: Validate skill name to prevent path traversal
 function isValidSkillName(name: string): boolean {
@@ -283,14 +288,72 @@ function loadSkillFile(
   name: string,
   frameworkDir: string,
   installedDir: string,
+  validation?: { context: RuntimeContext },
 ): string | null {
   const frameworkPath = resolve(frameworkDir, `${name}.md`);
+  let filePath: string | null = null;
+  let content: string | null = null;
   if (existsSync(frameworkPath)) {
-    return readFileSync(frameworkPath, "utf-8");
+    filePath = frameworkPath;
+    content = readFileSync(frameworkPath, "utf-8");
+  } else {
+    const installedPath = resolve(installedDir, `${name}.md`);
+    if (existsSync(installedPath)) {
+      filePath = installedPath;
+      content = readFileSync(installedPath, "utf-8");
+    }
   }
-  const installedPath = resolve(installedDir, `${name}.md`);
-  if (existsSync(installedPath)) {
-    return readFileSync(installedPath, "utf-8");
+  if (!content || !filePath) return null;
+
+  if (validation) {
+    // Throws when mode is `fail` and applies_to is missing/mismatched.
+    checkAppliesTo({ filePath, content, context: validation.context });
   }
-  return null;
+  return content;
+}
+
+/**
+ * Load skills and validate `applies_to:` against a runtime context.
+ *
+ * Wraps `loadSkills` with a validation pass that detects the repo flavour
+ * from `projectDir` and rejects (or warns about, depending on `JS_APPLIES_TO_MODE`)
+ * any skill whose declared scope doesn't match the runtime asking for it.
+ *
+ * Use this from `pipeline/run.ts` (runtime: "pipeline") and
+ * `pipeline/lib/audit-runtime.ts` (runtime: "audit"). Subagent prompt
+ * injection happens server-side in run.ts; the subagent never re-validates
+ * the same skill file because it doesn't know its own runtime context with
+ * the same precision the loader does.
+ */
+export function loadSkillsValidated(
+  projectDir: string,
+  config: ProjectConfig,
+  runtime: RuntimeContext["runtime"],
+): LoadedSkills {
+  const context: RuntimeContext = {
+    runtime,
+    repo: detectRepoFlavour(projectDir),
+  };
+
+  const skillNames = resolveSkillNames(config);
+  const frameworkSkillsDir = resolve(projectDir, "skills");
+  const installedSkillsDir = resolve(projectDir, ".claude", "skills");
+
+  // Pre-validate every resolvable skill file. Throws on the first mismatch
+  // when in fail mode — the only way to surface a silent-skip bug is to
+  // refuse to start.
+  for (const name of skillNames) {
+    if (!isValidSkillName(name)) continue;
+    loadSkillFile(name, frameworkSkillsDir, installedSkillsDir, { context });
+  }
+  for (const name of config.skills?.custom ?? []) {
+    if (!isValidSkillName(name)) continue;
+    const customPath = resolve(projectDir, ".claude", "skills", `${name}.md`);
+    if (existsSync(customPath)) {
+      const content = readFileSync(customPath, "utf-8");
+      checkAppliesTo({ filePath: customPath, content, context });
+    }
+  }
+
+  return loadSkills(projectDir, config);
 }

@@ -315,6 +315,10 @@ your-project/
 
 For a comprehensive technical deep dive, see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
+### Setup Drift Check (engine repo)
+
+The engine repo is self-installing — source files (e.g. `skills/<name>/SKILL.md`) generate installed copies (`.claude/skills/<name>.md`) via `setup.sh --update`. The CI **Setup Drift Check** workflow (`.github/workflows/setup-drift-check.yml`) runs `setup.sh --update` on every PR and fails if any install path differs from the committed state. **Standard fix:** run `bash setup.sh --update`, commit the result, push. **Bypass:** include `[skip-drift-check]` in the head commit message. See [CONTRIBUTING.md](CONTRIBUTING.md#setup-drift-check-ci).
+
 ---
 
 ## Configuration

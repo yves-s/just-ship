@@ -11,6 +11,8 @@ triggers:
   - expertise
 ---
 
+⚡ Autonomy Coach joined
+
 # Autonomy Boundary
 
 ## The Problem This Solves

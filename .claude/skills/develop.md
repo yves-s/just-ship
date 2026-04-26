@@ -174,10 +174,34 @@ BRANCH="{abgeleiteter-prefix}/{ticket-nummer}-{kurzbeschreibung}"
 WORKTREE_DIR=".worktrees/T-$TICKET_NUMBER"
 git worktree add "$WORKTREE_DIR" -b "$BRANCH" origin/main
 
-# Symlink .env.local from repo root into worktree (credentials for board-api.sh etc.)
+# Bootstrap: Pipeline-Tools aus Parent-.claude/ in den Worktree kopieren.
+# Konsumer-Repos (z.B. just-ship-board) haben .claude/ in .gitignore — ohne
+# diesen Schritt fehlen send-event.sh, board-api.sh, Skills, Agents, Rules,
+# Hooks und settings.json im Worktree. cp -RnL ist idempotent (no-overwrite)
+# und dereferenziert Symlinks (Engine-Repo hat .claude/agents → ../agents als
+# Symlink; Konsumer-Repos haben reale Dirs — beides funktioniert mit -L).
+# User-Edits im Worktree werden durch -n nicht überschrieben.
 REPO_ROOT=$(git rev-parse --show-toplevel)
+if [ ! -d "$REPO_ROOT/.claude" ]; then
+  echo "✗ worktree-bootstrap — Parent-.claude/ unter $REPO_ROOT nicht gefunden" >&2
+  exit 1
+fi
+mkdir -p "$WORKTREE_DIR/.claude"
+for sub in scripts skills agents rules hooks; do
+  if [ -d "$REPO_ROOT/.claude/$sub" ]; then
+    cp -RnL "$REPO_ROOT/.claude/$sub" "$WORKTREE_DIR/.claude/" 2>/dev/null || true
+  fi
+done
+if [ -f "$REPO_ROOT/.claude/settings.json" ] && [ ! -f "$WORKTREE_DIR/.claude/settings.json" ]; then
+  cp "$REPO_ROOT/.claude/settings.json" "$WORKTREE_DIR/.claude/settings.json"
+fi
+echo "▶ worktree-bootstrap — .claude/ tools synchronisiert"
+
+# Symlink .env.local from repo root into worktree (credentials for board-api.sh etc.)
 ln -sf "$REPO_ROOT/.env.local" "$WORKTREE_DIR/.env.local" 2>/dev/null || true
 ```
+
+**Was der Bootstrap NICHT kopiert:** Session-/Local-State-Files unter `.claude/` (`settings.local.json`, `.agent-map/`, `.active-ticket`, `.token-snapshot-*.json`, `.quality-gate-cache`, `.pipeline-version`, `.template-hash`). Die liegen direkt unter `.claude/` (nicht in den 5 Subdirs), werden also automatisch nicht mit-kopiert. Die `.token-snapshot-T-*.json`-Files leben im Main-Repo-Root unter `.claude/` und gehören dort hin — nicht ins Worktree.
 
 Danach: **Alle weiteren Schritte (4-11) im Worktree-Verzeichnis ausführen.** Nutze `$WORKTREE_DIR` als Arbeitsverzeichnis für alle Bash-Befehle (`cwd`), Read, Edit, Glob, Grep.
 
@@ -259,6 +283,41 @@ Lies `CLAUDE.md` für Architektur und Konventionen.
 Lies `project.json` für Pfade und Stack-Details.
 
 **Dann: Instruktionen für Agents formulieren** — mit exakten Code-Änderungen und neuen Dateien direkt im Prompt.
+
+#### Routing — welcher Skill für welchen Ticket-Typ
+
+Die Skill-Auswahl folgt dem Inhalt des Tickets. Diese Tabelle ist Heuristik, kein Automat: mehrere Skills können parallel gelten, der Orchestrator entscheidet welche tatsächlich Mehrwert bringen.
+
+| Ticket-Typ | Skills |
+|---|---|
+| UI/Frontend-Änderung an bestehendem Design-System | `frontend-design` |
+| Neue Seite / neues Feature mit eigener UX | `design-lead` (frame first) + `ux-planning` + ggf. `creative-design` (Greenfield) |
+| Produkt-Struktur / Interaction-Philosophie / Design-System-Richtung | `design-lead` |
+| Cross-Feature-Konsistenz-Review | `design-lead` |
+| Architektur / Performance / Ops / Security-Strategie | `product-cto` |
+| API- oder Hook-Änderung | `backend` |
+| Schema- oder Migration-Arbeit | `data-engineer` |
+| Test-Strategie, neue Test-Suite | `webapp-testing` + `test-driven-development` → QA-Agent |
+
+**Peer-Regel:** `design-lead` und `product-cto` sind gleichberechtigt. Bei Cross-Cutting-Entscheidungen (Technik + UX) laufen beide. Bei reinen Design-/Produkt-Struktur-Fragen entscheidet `design-lead` allein. Bei reinen Architektur-/Ops-Fragen entscheidet `product-cto` allein.
+
+#### Definition of Done — Pipeline-Tickets
+
+Tickets, die `pipeline/`, `commands/develop.md`, `commands/ship.md` oder `.claude/scripts/` ändern, dürfen NICHT als done markiert werden ohne:
+
+1. **Lokaler Smoke-Test passed:** `bash scripts/pipeline-smoke-test.sh` — verifiziert Board-API-Round-Trip und Stuck-Recovery-Pfad. FAIL = Fix nicht verifiziert, nicht mergen.
+2. **VPS-Integration-Test passed:** `bash scripts/pipeline-vps-test.sh --host <vps-host>` — erstellt ein echtes Ticket, schickt es durch die VPS-Pipeline, verifiziert Agents liefen, PR erstellt, Status `in_review`. FAIL = Pipeline funktioniert nicht end-to-end auf VPS.
+
+Für spezifische Bereiche gilt zusätzlich manuelle Verifikation:
+
+| Änderung | VPS-Verifikation |
+|---|---|
+| Worker-Logik (lifecycle, recovery, retry) | Worker-Log zeigt erwartetes Verhalten; Ticket-State manuell manipulieren und Recovery beobachten |
+| Pipeline-Phase (triage, orchestrator, qa) | Ein echtes Ticket autonom durchlaufen lassen und Phasen-Output prüfen |
+| Status-Updates / Board-Events | Board-UI zeigt korrekten Status ohne Hänger nach Ticket-Durchlauf |
+| Scripts / Config | Script auf VPS ausführen, Output verifizieren |
+
+**Warum:** Code kann lokal korrekt aussehen und den Smoke-Test bestehen, aber auf der VPS trotzdem brechen — unterschiedliche Node-Version, fehlende Env-Vars, echte Supabase-Latenz, systemd-Eigenheiten.
 
 ### 5. Implementierung (parallel wo möglich)
 

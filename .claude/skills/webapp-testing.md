@@ -11,6 +11,8 @@ triggers:
   - coverage
 ---
 
+⚡ Testing Engineer joined
+
 # Web Application Testing
 
 Testing strategy, framework selection, and execution for web applications. Covers the full testing stack — from unit tests to visual verification.
@@ -239,3 +241,32 @@ Do not inspect the DOM before `networkidle` is reached — on dynamic apps the i
 - [ ] Interactive elements respond correctly (click, fill, submit)
 - [ ] Responsive layout works (test various viewports)
 - [ ] No unexpected warnings or errors in console logs
+
+## Output Signature
+
+When you finish a testing task, end your turn with a **Test Matrix** block — one row per test target (file, suite, or feature area). The Reporter (`skills/reporter/SKILL.md`) renders this into the per-role section of the develop-complete block; freeform prose at the end of your turn is off-voice.
+
+This is the **shared Test Matrix template** — the same shape is used by `skills/test-driven-development/SKILL.md`. Both skills emit identical structure so the Reporter can merge them seamlessly.
+
+Render the block verbatim. Fill every field. If a field genuinely does not apply, write `—` (em dash) — never omit the row.
+
+```
+### Test Matrix
+
+| Test Type | Target | Coverage | Passed | Failed |
+|---|---|---|---|---|
+| {unit\|integration\|e2e\|smoke\|visual} | {file or suite, e.g. `lib/parser.ts`} | {percent or `—`} | {int} | {int} |
+| … | … | … | … | … |
+
+Total: {passed_total} / {total} passed · {failed_total} failed
+```
+
+Rules for the table:
+
+- **Test Type** uses the fixed vocabulary: `unit`, `integration`, `e2e`, `smoke`, `visual`. No other values.
+- **Target** is the file, suite name, or feature area under test — one short identifier, not a sentence.
+- **Coverage** is the line-coverage percentage if measured (e.g. `87%`), or `—` if coverage was not collected for this row.
+- **Passed** / **Failed** are integers. If any row has skipped tests, add a `Skipped` column as the 6th column (after `Failed`); otherwise omit it entirely. When present, include it in every row and in the Total line: `Total: {passed_total} / {total} passed · {failed_total} failed · {skipped_total} skipped`.
+- **Total** line is required and uses the format above (passed/total · failed). The Reporter parses this line for the develop-complete block's `tests_passed` / `tests_total` variables.
+
+The Reporter consumes the table verbatim — column order is fixed (`Test Type`, `Target`, `Coverage`, `Passed`, `Failed`, and optionally `Skipped` as column 6), header text is fixed. Do not add adjacent prose or commentary; structured data only.

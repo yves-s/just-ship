@@ -1,0 +1,187 @@
+name: Setup Drift Check
+
+# Catches Source/Install drift in the just-ship engine repo.
+#
+# The repo is self-installing: source files live under skills/<name>/SKILL.md
+# (and the symlinked agents/, commands/) but the runtime reads them from
+# .claude/skills/<name>.md (and the agent/command symlinks). When source files
+# change without setup.sh --update being run, the .claude/ install paths drift
+# behind their sources — exactly the trap that left Reporter / Design Lead /
+# Sidekick Converse uninstalled for two weeks (T-1014/T-1015 incident).
+#
+# This workflow runs setup.sh --update on every PR and push to main, then
+# diffs the install paths against the committed state. Drift = red CI.
+#
+# Bypass: include "[skip-drift-check]" in the head commit message of the PR
+# (or the push). Bypasses are intentional escape hatches for documented
+# emergencies and leave a paper trail in git log.
+#
+# See:
+#   - .claude/rules/self-install-topology.md (why source/install differ)
+#   - docs/audits/2026-04-25-cto-deep-audit-v2.md §6 (Self-Install-Rot cluster)
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  drift-check:
+    name: setup.sh --update produces no diff
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Bypass check
+        id: bypass
+        run: |
+          # Read the head commit message of the PR (for pull_request) or the
+          # pushed commit (for push). github.event.head_commit.message is set
+          # for push; for PR we use the merge head commit.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            COMMIT_SHA="${{ github.event.pull_request.head.sha }}"
+          else
+            COMMIT_SHA="${{ github.sha }}"
+          fi
+          MSG=$(git log -1 --format=%B "$COMMIT_SHA" 2>/dev/null || echo "")
+          if echo "$MSG" | grep -qF "[skip-drift-check]"; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Drift check skipped via [skip-drift-check] in commit message"
+            echo "Bypass commit:"
+            echo "$MSG" | head -3
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js
+        if: steps.bypass.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Stub `claude` CLI for prerequisites check
+        if: steps.bypass.outputs.skip != 'true'
+        run: |
+          # setup.sh checks for the `claude` binary as a prerequisite. The drift
+          # check doesn't need a real claude install — only file-copy logic.
+          mkdir -p "$HOME/.local/bin"
+          cat > "$HOME/.local/bin/claude" <<'EOF'
+          #!/bin/bash
+          # Stub for setup.sh prerequisite check. Returns success for plugin
+          # marketplace/list calls so install_plugins_from_project does not block.
+          exit 0
+          EOF
+          chmod +x "$HOME/.local/bin/claude"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run setup.sh --update (self-install bypass)
+        if: steps.bypass.outputs.skip != 'true'
+        env:
+          JUSTSHIP_BYPASS_SELF_INSTALL_GUARD: "1"
+        run: |
+          bash setup.sh --update
+
+      - name: Restore non-deterministic project.json fields
+        if: steps.bypass.outputs.skip != 'true'
+        run: |
+          # setup.sh writes framework.updated_at = today's date into
+          # project.json. That is non-deterministic and would cause a daily
+          # false-positive on the gate. Restore project.json to HEAD state
+          # so the diff only reflects real install-path drift.
+          git checkout HEAD -- project.json
+
+      - name: Detect drift
+        if: steps.bypass.outputs.skip != 'true'
+        id: diff
+        run: |
+          # Drift = any change to install-path files that setup.sh regenerates.
+          # We diff against HEAD (the workspace state pre-setup), excluding
+          # paths that setup.sh cleans up but the script ignores in --update.
+          INSTALL_PATHS=(
+            ".claude/skills"
+            ".claude/scripts"
+            ".claude/hooks"
+            ".claude/rules"
+            ".claude/settings.json"
+            ".claude/.pipeline-version"
+            ".claude/.template-hash"
+            ".pipeline"
+          )
+
+          DRIFT_FILE=$(mktemp)
+          # --no-renames keeps file additions/deletions distinct from renames
+          # so the report shows exactly what setup.sh would change.
+          git diff --name-status --no-renames HEAD -- "${INSTALL_PATHS[@]}" > "$DRIFT_FILE"
+
+          if [ -s "$DRIFT_FILE" ]; then
+            COUNT=$(wc -l < "$DRIFT_FILE" | tr -d ' ')
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+            echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+            {
+              echo "## ❌ Source/Install drift detected"
+              echo ""
+              echo "**\`setup.sh --update\` would change $COUNT install file(s).**"
+              echo ""
+              echo "The framework source under \`agents/\`, \`commands/\`, \`skills/\`, \`pipeline/\`,"
+              echo "\`templates/\`, and \`.claude/{rules,scripts,hooks}/\` has moved ahead of the"
+              echo "installed copies under \`.claude/{skills,scripts,hooks,rules,settings.json}\`,"
+              echo "\`.claude/.pipeline-version\`, \`.claude/.template-hash\`, and \`.pipeline/\`."
+              echo ""
+              echo "### Fix"
+              echo ""
+              echo '```bash'
+              echo "bash setup.sh --update"
+              echo "git add -A"
+              echo "git commit -m 'chore: setup.sh --update'"
+              echo "git push"
+              echo '```'
+              echo ""
+              echo "### Files with drift"
+              echo ""
+              echo '```'
+              cat "$DRIFT_FILE"
+              echo '```'
+              echo ""
+              echo "### Bypass (documented emergencies only)"
+              echo ""
+              echo "Add \`[skip-drift-check]\` to the head commit message. Use sparingly —"
+              echo "the next PR will surface the drift again."
+            } > drift-report.md
+            cat drift-report.md
+          else
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+            echo "✓ No drift — install paths match source."
+          fi
+
+      - name: Comment on PR with drift report
+        if: |
+          steps.bypass.outputs.skip != 'true' &&
+          steps.diff.outputs.drift == 'true' &&
+          github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405  # v2
+        with:
+          header: setup-drift-check
+          path: drift-report.md
+
+      - name: Hide drift comment when resolved
+        if: |
+          steps.bypass.outputs.skip != 'true' &&
+          steps.diff.outputs.drift == 'false' &&
+          github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405  # v2
+        with:
+          header: setup-drift-check
+          message: "✓ Source/Install drift resolved."
+
+      - name: Fail if drift detected
+        if: steps.bypass.outputs.skip != 'true' && steps.diff.outputs.drift == 'true'
+        run: |
+          echo "::error title=Source/Install drift::setup.sh --update would change ${{ steps.diff.outputs.count }} install file(s). Run 'bash setup.sh --update' locally and commit the result."
+          exit 1

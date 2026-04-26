@@ -11,6 +11,8 @@ triggers:
   - backlog
 ---
 
+⚡ PM joined
+
 # Ticket Writer
 
 You write tickets like an experienced Product Manager. Your job is to document the **What** and **Why** — never the **How**.
@@ -271,11 +273,14 @@ When splitting, each resulting ticket must be independently shippable and testab
 #### When creating via Board API
 
 ```bash
-# 1. Create Epic first
+# 1. Create Epic first — ticket_type MUST be "epic" so the board applies the
+#    epic branch of the CHECK constraint (project_id may be null when the
+#    epic is cross-project, see T-903 below).
 bash .claude/scripts/board-api.sh post tickets '{
   "title": "[Epic] {epic_title}",
   "body": "{epic_body}",
   "status": "backlog",
+  "ticket_type": "epic",
   "project_id": "{pipeline.project_id}"
 }'
 # → Extract epic ticket ID from response
@@ -289,6 +294,48 @@ bash .claude/scripts/board-api.sh post tickets '{
   "project_id": "{pipeline.project_id}"
 }'
 ```
+
+#### Cross-project children — T-903
+
+When a split produces children that target more than one project in the workspace (e.g. some children build in the Engine repo, others in the Board UI repo), the epic becomes **workspace-scoped** and each child is stamped with the project it actually belongs to. The inference is deterministic — based on body signals, never asked of the user (Decision Authority / CLAUDE.md).
+
+**Signal mapping (Just Ship reference):**
+
+| Project | Signals in child title/body |
+|---|---|
+| `just-ship` (engine) | `engine`, `pipeline`, `orchestrator`, `worker`, `classifier`, `classify`, `develop`/`ship` command, `agent`, `skill`, `board-api.sh`, `server.ts`, `API endpoint`, `Engine API`, `/api/sidekick` |
+| `just-ship-board` (board UI) | `Board UI`, `Swimlane`, `Widget`, `kanban`, `ticket card`, `Epic-Detail`, `ticket detail`, `board page`, `sidebar`, `shadcn`, `TanStack`, `Next.js`, `React component`, `src/app`, `src/components` |
+
+**Rule:** score each child against every project's signals. The project with the highest score wins. On tie — or when no signal hits — fall back to the parent request's default project. If the default is also null (pure workspace-scoped pitch), the split stops and reports that a child needs clearer scope — do not guess when both signal and default are missing.
+
+The reference inference helper is `pipeline/lib/project-inference.ts` — prefer calling it over re-implementing the heuristic.
+
+**When children span ≥ 2 projects:**
+
+```bash
+# 1. Create workspace-scoped Epic (project_id = null, ticket_type = "epic")
+bash .claude/scripts/board-api.sh post tickets '{
+  "title": "[Epic] {epic_title}",
+  "body": "{epic_body}",
+  "status": "backlog",
+  "ticket_type": "epic",
+  "project_id": null
+}'
+# → Extract epic ticket ID
+
+# 2. Create each child with its own inferred project_id
+bash .claude/scripts/board-api.sh post tickets '{
+  "title": "{child_title}",
+  "body": "{child_body}",
+  "status": "backlog",
+  "parent_ticket_id": "{epic_ticket_id}",
+  "project_id": "{inferred_project_id}"
+}'
+```
+
+**Invariant:** when the epic's `project_id` is `null`, every child MUST carry its own `project_id`. The board's CHECK constraint (`ticket_type = 'epic' OR project_id IS NOT NULL`) rejects task rows without a project. The inference step must produce a concrete project for every child before any POST.
+
+**When children collapse to a single project:** the split stays project-bound — the epic keeps `project_id = {pipeline.project_id}`, each child inherits that project, and the behaviour is indistinguishable from pre-T-903.
 
 #### When pipeline is not configured
 
@@ -371,6 +418,19 @@ Set these for every ticket:
 - **Priority**: `high` / `medium` / `low` — see Priority Guide below
 - **Type**: User Story / Bug / Improvement / Spike / Tech Debt
 - **Size**: S / M / L / XL — **omit for Epics** (Epics are scope containers, not sized work items)
+- **Project**: every `POST tickets` body must carry the target `project_id` UUID — see Target Project resolution below.
+
+### Target Project resolution
+
+Every ticket lives in exactly one project. The Board API reads `project_id` from the request body — workspace-scoped keys do not pick a project on their own.
+
+Resolution order, highest priority first:
+
+1. **Explicit override.** `/ticket --project <slug-or-uuid> "..."` — the Slash-Command parses `--project` out of the input, resolves a slug to a UUID via `GET /api/projects` (match on `data.projects[].slug`), and passes the UUID through to every POST in this ticket creation (Single, Epic-Container, Children, Manual-Grouping). A bad slug aborts with an error — never silently fall back to the default.
+2. **Default hint from `project.json`.** When no override is passed, every POST sets `project_id` to `pipeline.project_id`. `board-api.sh` also auto-injects this default if a body is missing `project_id`, so the bash call is safe even when the skill forgets — but the skill should still set it explicitly so split-flows stay deterministic.
+3. **Cross-project Epic** (Auto-Epic on Split, T-903 mode). The Epic POST sends `project_id: null`; every child POST sends the inferred project UUID per child. The `--project` override does not apply here — cross-project splits explicitly opt out of single-project mode.
+
+The script `bash .claude/scripts/board-api.sh post tickets` accepts `project_id` in the JSON body and forwards it untouched. No CLI flags, no headers — the project is always part of the request payload.
 
 ### Priority Guide
 
