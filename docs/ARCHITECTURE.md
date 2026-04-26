@@ -948,10 +948,11 @@ Claude Code hooks are shell scripts triggered by lifecycle events. The framework
 | Hook | Script | Purpose |
 |------|--------|---------|
 | `SessionStart` | `detect-ticket.sh` | Extract ticket number from branch name, set `TICKET_NUMBER` env var |
+| `PreToolUse` (Edit/Write/NotebookEdit) | `main-context-edit-block.sh` | Block state-mutating tool calls from the main Claude Code context while a ticket is active. Forces edits through a subagent so the skill loader (`pipeline/lib/load-skills.ts`) injects the matching domain skill. Allow-list covers `.claude/{rules,scripts,hooks}/`, `.worktrees/T-*/`, and ephemeral session-state files. Read-only-defensive default: exits 0 on missing context |
 | `PostToolUse` (Bash) | `detect-ticket-post.sh` | Re-detect ticket number after Bash commands (catches mid-session branch changes) |
 | `PostToolUse` (Edit/Write) | `quality-gate.sh` | Run lint + format checks on the changed file. Format auto-fixes, lint errors block the agent |
-| `SubagentStart` | `on-agent-start.sh` | Send `agent_started` event to Just Ship Board |
-| `SubagentStop` | `on-agent-stop.sh` | Send `completed` event to Just Ship Board |
+| `SubagentStart` | `on-agent-start.sh` | Send `agent_started` event to Just Ship Board; also writes `.claude/.agent-map/<id>` marker consumed by `main-context-edit-block.sh` to detect live subagents |
+| `SubagentStop` | `on-agent-stop.sh` | Send `completed` event to Just Ship Board; removes the `.claude/.agent-map/<id>` marker |
 | `SessionEnd` | `on-session-end.sh` | Send session completion event |
 
 ### Ticket Detection Flow
