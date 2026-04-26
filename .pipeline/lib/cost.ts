@@ -1,5 +1,6 @@
-// Pricing last verified: 2026-04-10 — https://platform.claude.com/docs/en/about-claude/pricing
-// Per MTok (million tokens). Cache: 5min TTL auto-caching (read = 2% of input, create = 125% of input).
+// Pricing last verified: 2026-04-16 — https://platform.claude.com/docs/en/about-claude/pricing
+// Per MTok (million tokens). Cache: 5min write = 1.25x input, read/hit = 0.1x input.
+// Note: Opus 4.7 uses a new tokenizer that may consume up to 35% more tokens for the same text.
 interface ModelPricing {
   input: number;
   cacheRead: number;
@@ -8,15 +9,16 @@ interface ModelPricing {
 }
 
 const COST_PER_MTOK: Record<string, ModelPricing> = {
-  "claude-opus-4-6":              { input: 5, cacheRead: 0.10, cacheCreate: 6.25, output: 25 },
-  "claude-opus-4-20250514":       { input: 5, cacheRead: 0.10, cacheCreate: 6.25, output: 25 },
-  "claude-sonnet-4-6":            { input: 3, cacheRead: 0.06, cacheCreate: 3.75, output: 15 },
-  "claude-sonnet-4-20250514":     { input: 3, cacheRead: 0.06, cacheCreate: 3.75, output: 15 },
-  "claude-haiku-4-5-20251001":    { input: 1, cacheRead: 0.02, cacheCreate: 1.25, output: 5 },
+  "claude-opus-4-7":              { input: 5, cacheRead: 0.50, cacheCreate: 6.25, output: 25 },
+  "claude-opus-4-6":              { input: 5, cacheRead: 0.50, cacheCreate: 6.25, output: 25 },
+  "claude-opus-4-20250514":       { input: 5, cacheRead: 0.50, cacheCreate: 6.25, output: 25 },
+  "claude-sonnet-4-6":            { input: 3, cacheRead: 0.30, cacheCreate: 3.75, output: 15 },
+  "claude-sonnet-4-20250514":     { input: 3, cacheRead: 0.30, cacheCreate: 3.75, output: 15 },
+  "claude-haiku-4-5-20251001":    { input: 1, cacheRead: 0.10, cacheCreate: 1.25, output: 5 },
 };
 
 const MODEL_ALIASES: Record<string, string> = {
-  opus:   "claude-opus-4-6",
+  opus:   "claude-opus-4-7",
   sonnet: "claude-sonnet-4-6",
   haiku:  "claude-haiku-4-5-20251001",
 };

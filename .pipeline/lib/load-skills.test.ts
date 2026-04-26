@@ -1,166 +1,342 @@
-import { describe, it, expect } from "vitest";
-import { parseSkillFrontmatter } from "./load-skills.ts";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { loadSkills, parseSkillFrontmatter, loadSkillFrontmatters, loadSkillByName } from "./load-skills.js";
+import type { ProjectConfig } from "./config.js";
+
+const MOCK_SKILL_WITH_TRIGGERS = (name: string, description: string, triggers: string[]) =>
+  `---\nname: ${name}\ndescription: ${description}\ntriggers:\n${triggers.map((t) => `  - ${t}`).join("\n")}\n---\n\n# ${name} Body Content\n\nThis is the full body.`;
+
+// Mock fs to avoid actual file reads in tests
+vi.mock("node:fs", () => ({
+  readFileSync: vi.fn((path: string) => {
+    if (path.includes("custom-skill.md")) {
+      return MOCK_SKILL_WITH_TRIGGERS("custom-skill", "A custom project skill", ["custom", "project"]);
+    }
+    if (path.includes("another-skill.md")) {
+      return MOCK_SKILL_WITH_TRIGGERS("another-skill", "Another skill for testing", ["another", "test"]);
+    }
+    return "";
+  }),
+  existsSync: vi.fn((path: string) => path.includes("custom-skill.md") || path.includes("another-skill.md")),
+}));
+
+/**
+ * Test suite for load-skills.ts
+ *
+ * Shopify domain knowledge is now provided by the @shopify/dev-mcp MCP server.
+ * VARIANT_DEFAULTS were removed — Shopify variants no longer map to local skill files.
+ */
+
+const makeShopifyConfig = (variant: string): ProjectConfig => ({
+  name: "test-project",
+  stack: {
+    language: "Liquid/JSON",
+    framework: "",
+    backend: "",
+    package_manager: "npm",
+    platform: "shopify",
+    variant,
+  },
+  build: { dev: "", web: "", install: "", verify: "", test: "" },
+  hosting: { provider: "", project_id: "", team_id: "", coolify_url: "", coolify_app_uuid: "" },
+  shopify: { store: "test.myshopify.com" },
+  skills: { domain: [], custom: [] },
+  paths: { src: "src/", tests: "tests/" },
+  supabase: { project_id: "" },
+  pipeline: { workspace_id: "", project_id: "" },
+  conventions: { branch_prefix: "feature/", commit_format: "conventional", language: "en" },
+});
+
+describe("loadSkills — Shopify MCP migration", () => {
+  const mockProjectDir = "/mock/project";
+
+  describe("Shopify variants return no local skills (MCP provides domain knowledge)", () => {
+    it("returns empty skill names for liquid variant", () => {
+      const result = loadSkills(mockProjectDir, makeShopifyConfig("liquid"));
+      expect(result.skillNames.length).toBe(0);
+    });
+
+    it("returns empty skill names for remix variant", () => {
+      const result = loadSkills(mockProjectDir, makeShopifyConfig("remix"));
+      expect(result.skillNames.length).toBe(0);
+    });
+
+    it("returns empty skill names for hydrogen variant", () => {
+      const result = loadSkills(mockProjectDir, makeShopifyConfig("hydrogen"));
+      expect(result.skillNames.length).toBe(0);
+    });
+
+    it("returns empty byRole map for Shopify variants", () => {
+      const result = loadSkills(mockProjectDir, makeShopifyConfig("liquid"));
+      expect(result.byRole.size).toBe(0);
+    });
+  });
+
+  describe("Non-Shopify platform", () => {
+    it("returns empty skills for non-shopify platform without explicit domain", () => {
+      const config: ProjectConfig = {
+        ...makeShopifyConfig(""),
+        stack: {
+          language: "TypeScript",
+          framework: "Next.js",
+          backend: "Node.js",
+          package_manager: "npm",
+          platform: "vercel",
+          variant: "",
+        },
+      };
+
+      const result = loadSkills(mockProjectDir, config);
+      expect(result.skillNames.length).toBe(0);
+    });
+  });
+
+  describe("Unknown variant", () => {
+    it("returns empty skills for unknown Shopify variant", () => {
+      const result = loadSkills(mockProjectDir, makeShopifyConfig("unknown-variant"));
+      expect(result.skillNames.length).toBe(0);
+    });
+  });
+
+  describe("Progressive Disclosure — frontmatterIndex and token estimates", () => {
+    it("includes frontmatterIndex with name and description for loaded skills", () => {
+      const config: ProjectConfig = {
+        ...makeShopifyConfig(""),
+        stack: {
+          language: "TypeScript",
+          framework: "Next.js",
+          backend: "Node.js",
+          package_manager: "npm",
+          platform: "",
+          variant: "",
+        },
+        skills: { domain: ["custom-skill", "another-skill"], custom: [] },
+      };
+
+      const result = loadSkills(mockProjectDir, config);
+
+      expect(result.frontmatterIndex).toBeDefined();
+      expect(typeof result.frontmatterIndex).toBe("string");
+      expect(result.frontmatterIndex).toContain("custom-skill");
+      expect(result.frontmatterIndex).toContain("another-skill");
+      const lines = result.frontmatterIndex.split("\n").filter(Boolean);
+      expect(lines.length).toBeGreaterThan(0);
+      lines.forEach((line) => {
+        expect(line).toMatch(/^- \S+/);
+      });
+    });
+
+    it("includes non-zero token estimates for explicit skills", () => {
+      const config: ProjectConfig = {
+        ...makeShopifyConfig(""),
+        stack: {
+          language: "TypeScript",
+          framework: "Next.js",
+          backend: "Node.js",
+          package_manager: "npm",
+          platform: "",
+          variant: "",
+        },
+        skills: { domain: ["custom-skill"], custom: [] },
+      };
+
+      const result = loadSkills(mockProjectDir, config);
+
+      expect(result.totalFrontmatterTokens).toBeGreaterThan(0);
+      expect(result.totalFullTokens).toBeGreaterThan(0);
+      expect(result.totalFullTokens).toBeGreaterThanOrEqual(result.totalFrontmatterTokens);
+    });
+
+    it("returns zero token counts and empty frontmatterIndex when no skills are loaded", () => {
+      const config: ProjectConfig = {
+        ...makeShopifyConfig(""),
+        stack: {
+          language: "TypeScript",
+          framework: "Next.js",
+          backend: "Node.js",
+          package_manager: "npm",
+          platform: "vercel",
+          variant: "",
+        },
+      };
+
+      const result = loadSkills(mockProjectDir, config);
+
+      expect(result.totalFrontmatterTokens).toBe(0);
+      expect(result.totalFullTokens).toBe(0);
+      expect(result.frontmatterIndex).toBe("");
+    });
+  });
+
+  describe("Explicit skills.domain override", () => {
+    it("uses explicit skills.domain when provided for any platform", () => {
+      const config: ProjectConfig = {
+        ...makeShopifyConfig("liquid"),
+        skills: { domain: ["custom-skill"], custom: [] },
+      };
+
+      const result = loadSkills(mockProjectDir, config);
+      expect(result.skillNames).toContain("custom-skill");
+      expect(result.skillNames.length).toBe(1);
+    });
+
+    it("custom skills in skills.custom are loaded regardless of variant", () => {
+      const config: ProjectConfig = {
+        ...makeShopifyConfig("liquid"),
+        skills: { domain: [], custom: ["custom-skill"] },
+      };
+
+      const result = loadSkills(mockProjectDir, config);
+      expect(result.byRole.size).toBeGreaterThan(0);
+    });
+  });
+});
 
 describe("parseSkillFrontmatter", () => {
-  it("parses basic frontmatter", () => {
+  it("extracts name, description, and triggers from multi-line format", () => {
     const content = `---
-name: test-skill
-description: A test skill
+name: backend
+description: Use when implementing API endpoints or webhook handlers.
+triggers:
+  - api
+  - endpoint
+  - webhook
 ---
 
-# Test Skill`;
+# Backend Body`;
 
     const result = parseSkillFrontmatter(content);
+
     expect(result).not.toBeNull();
-    expect(result!.name).toBe("test-skill");
-    expect(result!.description).toBe("A test skill");
+    expect(result!.name).toBe("backend");
+    expect(result!.description).toBe("Use when implementing API endpoints or webhook handlers.");
+    expect(result!.triggers).toEqual(["api", "endpoint", "webhook"]);
+  });
+
+  it("extracts triggers from inline array format", () => {
+    const content = `---
+name: frontend-design
+description: Use when building UI components.
+triggers: [ui, component, layout]
+---
+
+# Frontend Body`;
+
+    const result = parseSkillFrontmatter(content);
+
+    expect(result).not.toBeNull();
+    expect(result!.triggers).toEqual(["ui", "component", "layout"]);
+  });
+
+  it("extracts description from YAML block scalar (> format)", () => {
+    const content = `---
+name: product-cto
+description: >
+  Your technical co-founder with obsessive product taste.
+  Use whenever building features or reviewing architecture.
+triggers:
+  - architecture
+  - product
+---
+
+# CTO Body`;
+
+    const result = parseSkillFrontmatter(content);
+
+    expect(result).not.toBeNull();
+    expect(result!.name).toBe("product-cto");
+    expect(result!.description).toContain("technical co-founder");
+    expect(result!.triggers).toContain("architecture");
+  });
+
+  it("returns empty triggers array when triggers field is missing", () => {
+    const content = `---
+name: simple-skill
+description: A simple skill without triggers.
+---
+
+# Simple Body`;
+
+    const result = parseSkillFrontmatter(content);
+
+    expect(result).not.toBeNull();
+    expect(result!.name).toBe("simple-skill");
     expect(result!.triggers).toEqual([]);
   });
 
-  it("parses inline triggers array", () => {
-    const content = `---
-name: test-skill
-description: A test skill
-triggers: [security, audit, review]
----
-
-# Test`;
+  it("returns null when no frontmatter delimiters are present", () => {
+    const content = `# Just a heading\n\nNo frontmatter here.`;
 
     const result = parseSkillFrontmatter(content);
-    expect(result!.triggers).toEqual(["security", "audit", "review"]);
-  });
 
-  it("parses multi-line triggers", () => {
-    const content = `---
-name: test-skill
-description: A test skill
-triggers:
-  - security
-  - audit
----
-
-# Test`;
-
-    const result = parseSkillFrontmatter(content);
-    expect(result!.triggers).toEqual(["security", "audit"]);
-  });
-
-  it("parses block scalar description", () => {
-    const content = `---
-name: test-skill
-description: >
-  This is a long
-  description that spans
-  multiple lines
----
-
-# Test`;
-
-    const result = parseSkillFrontmatter(content);
-    expect(result!.description).toBe("This is a long description that spans multiple lines");
-  });
-
-  it("returns null for content without frontmatter", () => {
-    const result = parseSkillFrontmatter("# Just a heading\nSome content");
     expect(result).toBeNull();
   });
 
-  it("returns null when name is missing", () => {
+  it("returns null when name field is missing", () => {
     const content = `---
-description: No name here
+description: A skill without a name.
+triggers:
+  - something
 ---
 
-# Test`;
+# Body`;
 
     const result = parseSkillFrontmatter(content);
+
     expect(result).toBeNull();
   });
 });
 
-describe("parseSkillFrontmatter - audit fields", () => {
-  it("parses category and audit_scope from frontmatter", () => {
-    const content = `---
-name: security-review
-description: OWASP security analysis
-category: audit
-audit_scope: full
----
+describe("loadSkillFrontmatters", () => {
+  it("returns frontmatter array for explicitly configured skills", () => {
+    const config: ProjectConfig = {
+      ...makeShopifyConfig(""),
+      stack: {
+        language: "TypeScript",
+        framework: "Next.js",
+        backend: "Node.js",
+        package_manager: "npm",
+        platform: "",
+        variant: "",
+      },
+      skills: { domain: ["custom-skill", "another-skill"], custom: [] },
+    };
 
-# Security Review
-Body content here.`;
+    const frontmatters = loadSkillFrontmatters("/mock/project", config);
 
-    const result = parseSkillFrontmatter(content);
-    expect(result).not.toBeNull();
-    expect(result!.category).toBe("audit");
-    expect(result!.auditScope).toBe("full");
+    expect(Array.isArray(frontmatters)).toBe(true);
+    expect(frontmatters.length).toBe(2);
+    const names = frontmatters.map((f) => f.name);
+    expect(names).toContain("custom-skill");
+    expect(names).toContain("another-skill");
+    frontmatters.forEach((fm) => {
+      expect(typeof fm.filePath).toBe("string");
+      expect(fm.filePath.length).toBeGreaterThan(0);
+      expect(fm.triggers.length).toBeGreaterThan(0);
+    });
+  });
+});
+
+describe("loadSkillByName", () => {
+  it("loads full content for a specific skill by name", () => {
+    const content = loadSkillByName("/mock/project", "custom-skill");
+
+    expect(content).not.toBeNull();
+    expect(content).toContain("custom-skill");
   });
 
-  it("defaults auditScope to 'both' when category is audit but audit_scope is missing", () => {
-    const content = `---
-name: find-bugs
-description: Find bugs
-category: audit
----
+  it("returns null for a skill name with path traversal characters", () => {
+    const content = loadSkillByName("/mock/project", "../etc/passwd");
 
-# Find Bugs`;
-
-    const result = parseSkillFrontmatter(content);
-    expect(result!.category).toBe("audit");
-    expect(result!.auditScope).toBe("both");
+    expect(content).toBeNull();
   });
 
-  it("returns undefined category and auditScope when not set", () => {
-    const content = `---
-name: frontend-design
-description: Design skill
----
+  it("returns null when the skill file does not exist", async () => {
+    const fs = await import("node:fs");
+    const { existsSync } = vi.mocked(fs);
+    existsSync.mockReturnValueOnce(false).mockReturnValueOnce(false);
 
-# Frontend Design`;
+    const content = loadSkillByName("/mock/project", "nonexistent-skill");
 
-    const result = parseSkillFrontmatter(content);
-    expect(result!.category).toBeUndefined();
-    expect(result!.auditScope).toBeUndefined();
-  });
-
-  it("parses audit_scope diff", () => {
-    const content = `---
-name: find-bugs
-description: Find bugs
-category: audit
-audit_scope: diff
----
-
-# Find Bugs`;
-
-    const result = parseSkillFrontmatter(content);
-    expect(result!.auditScope).toBe("diff");
-  });
-
-  it("parses audit_scope both explicitly", () => {
-    const content = `---
-name: code-review
-description: Code review
-category: audit
-audit_scope: both
----
-
-# Code Review`;
-
-    const result = parseSkillFrontmatter(content);
-    expect(result!.auditScope).toBe("both");
-  });
-
-  it("ignores audit_scope when category is not audit", () => {
-    const content = `---
-name: some-skill
-description: Not an audit skill
-audit_scope: full
----
-
-# Some Skill`;
-
-    const result = parseSkillFrontmatter(content);
-    expect(result!.category).toBeUndefined();
-    expect(result!.auditScope).toBeUndefined();
+    expect(content).toBeNull();
   });
 });

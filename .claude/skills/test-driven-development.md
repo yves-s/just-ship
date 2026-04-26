@@ -10,6 +10,8 @@ triggers:
   - bugfix
 ---
 
+⚡ TDD Engineer joined
+
 # Test-Driven Development (TDD)
 
 ## Overview
@@ -376,3 +378,32 @@ Otherwise → not TDD
 ```
 
 No exceptions without your human partner's permission.
+
+## Output Signature
+
+When you finish a TDD task, end your turn with a **Test Matrix** block — the same shape that `skills/webapp-testing/SKILL.md` defines. The Reporter (`skills/reporter/SKILL.md`) renders both into a single per-role section of the develop-complete block; emitting freeform prose at the end of your turn is off-voice.
+
+The canonical template lives in `skills/webapp-testing/SKILL.md` § Output Signature. Use it verbatim:
+
+```
+### Test Matrix
+
+| Test Type | Target | Coverage | Passed | Failed |
+|---|---|---|---|---|
+| {unit\|integration\|e2e\|smoke\|visual} | {file or suite} | {percent or `—`} | {int} | {int} |
+| … | … | … | … | … |
+
+Total: {passed_total} / {total} passed · {failed_total} failed
+```
+
+Rules — identical to webapp-testing:
+
+- **Test Type** vocabulary is fixed: `unit`, `integration`, `e2e`, `smoke`, `visual`.
+- **Target** is one short identifier (file, suite name, feature area).
+- **Coverage** is a percentage if measured (`87%`) or `—`.
+- **Passed** / **Failed** are integers. If any row has skipped tests, add a `Skipped` column as the 6th column (after `Failed`); otherwise omit it entirely. When present, include it in every row and in the Total line: `Total: {passed_total} / {total} passed · {failed_total} failed · {skipped_total} skipped`.
+- **Total** line is required; the Reporter parses it for `tests_passed` / `tests_total`.
+
+When this skill drives the work (TDD-first), it owns the row structure: typically a single row per file with `unit` test type, plus integration rows when the cycle crossed module boundaries. When `webapp-testing` and `test-driven-development` both contributed in the same `/develop` run, emit one merged block — not two separate blocks — so the Reporter renders a single Test Matrix section.
+
+The Reporter consumes the table verbatim — column order is fixed (`Test Type`, `Target`, `Coverage`, `Passed`, `Failed`, and optionally `Skipped` as column 6), header text is fixed. Do not add adjacent prose or commentary; structured data only.

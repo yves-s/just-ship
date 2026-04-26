@@ -10,7 +10,7 @@ import { createEventHooks, postPipelineEvent, postPipelineSummary, type EventCon
 import { runQaWithFixLoop } from "./lib/qa-fix-loop.ts";
 import type { QaContext } from "./lib/qa-runner.ts";
 import { generateChangeSummary } from "./lib/change-summary.ts";
-import { loadSkills, type AgentRole } from "./lib/load-skills.ts";
+import { loadSkills, loadSkillsValidated, type AgentRole } from "./lib/load-skills.ts";
 import { Sentry } from "./lib/sentry.ts";
 import { updateCheckpoint, clearCheckpoint, type PipelineCheckpoint } from "./lib/checkpoint.ts";
 import { sanitizeBranchName } from "./lib/sanitize.ts";
@@ -23,7 +23,7 @@ import { resolveVerifyCommands, runVerifyCommands } from "./lib/verify-commands.
 import { detectScopeReduction } from "./lib/scope-guard.ts";
 import { createModelRouter } from "./lib/model-router.ts";
 
-// --- Exported pipeline function (used by worker.ts) ---
+// --- Exported pipeline function (called by server.ts after a Board trigger) ---
 export interface PipelineOptions {
   projectDir: string;
   workDir?: string;      // Worktree directory — if set, skip git checkout and use this as cwd
@@ -75,6 +75,32 @@ function formatEnrichmentComment(triage: TriageResult): string {
   return lines.join("\n");
 }
 
+// Pre-Develop step: persist the loaded team to .claude/.reporter-team-roster.json
+// so the Reporter (develop-summary.sh, /just-ship-status, etc.) can render the
+// Team block in develop-complete.md without re-discovering which agents ran.
+// AC for T-999: Reporter reads the roster, never invents rows.
+function writeTeamRoster(
+  workDir: string,
+  agentNames: string[],
+  agentModelMap: Record<string, string>,
+): void {
+  const team = agentNames.map(role => ({
+    icon: "▸",
+    role,
+    tokens: 0,
+    model: agentModelMap[role] ?? null,
+  }));
+  const roster = { team, written_at: new Date().toISOString() };
+  const claudeDir = join(workDir, ".claude");
+  try {
+    mkdirSync(claudeDir, { recursive: true });
+    writeFileSync(join(claudeDir, ".reporter-team-roster.json"), JSON.stringify(roster, null, 2));
+  } catch (err) {
+    // Best-effort: roster is decorative — pipeline must not fail if it can't be written.
+    logger.warn({ err }, "Could not write reporter team roster");
+  }
+}
+
 async function runTriage(
   workDir: string,
   ticket: TicketArgs,
@@ -113,6 +139,8 @@ Labels: ${ticket.labels}`;
         cwd: workDir,
         model: "haiku",
         permissionMode: "default",
+        // CI-AUDIT-EXEMPT: triage agent is single-turn JSON-only — tools
+        // would only confuse the model and bloat the budget. See T-1020.
         allowedTools: [],
         maxTurns: 1,
         env: { ...process.env, ...(env ?? {}) },
@@ -228,7 +256,10 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
 
   // --- Load agents + orchestrator prompt ---
   const agents = loadAgents(projectDir);
-  const loadedSkills = loadSkills(projectDir, config);
+  // T-1021: validate applies_to: scope markers as the loader runs. Throws on
+  // missing/mismatched markers when JS_APPLIES_TO_MODE is fail (the engine-repo
+  // default), warns otherwise. Single source of truth for the runtime context.
+  const loadedSkills = loadSkillsValidated(projectDir, config, "pipeline");
   if (loadedSkills.skillNames.length > 0) {
     logger.info({
       skills: loadedSkills.skillNames,
@@ -281,6 +312,10 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
   for (const [name, def] of Object.entries(filteredAgents)) {
     if (def.model) agentModelMap[name] = def.model;
   }
+
+  // Pre-Develop: write team roster for the Reporter (T-999 AC).
+  writeTeamRoster(workDir, Object.keys(filteredAgents), agentModelMap);
+
   const eventHooks = hasPipeline ? createEventHooks(eventConfig, {
     onPause: (reason, questionText) => {
       pauseReason = reason;
@@ -857,25 +892,7 @@ WICHTIG: Push, PR-Erstellung und Status-Updates werden automatisch von der Pipel
           }
 
           // Patch ticket with preview_url if available from QA phase
-          // For Shopify projects: generate preview via shopify-preview.sh
-          let previewUrl = qaPreviewUrl;
-          if (!previewUrl && config.stack?.platform === "shopify") {
-            try {
-              const shopifyResult = execSync(
-                `bash .claude/scripts/shopify-preview.sh push "T-${ticket.ticketId}" "${ticket.title.replace(/"/g, '\\"')}"`,
-                { cwd: workDir, timeout: 120_000, encoding: "utf-8" }
-              );
-              const url = shopifyResult.trim();
-              if (url.startsWith("http")) {
-                previewUrl = url;
-                logger.info({ previewUrl }, "Shopify preview URL generated");
-              }
-            } catch (err) {
-              logger.warn({ err }, "Could not generate Shopify preview URL");
-            }
-          }
-
-          if (hasPipeline && previewUrl) {
+          if (hasPipeline && qaPreviewUrl) {
             try {
               await fetch(`${config.pipeline.apiUrl}/api/tickets/${ticket.ticketId}`, {
                 method: "PATCH",
@@ -883,10 +900,10 @@ WICHTIG: Push, PR-Erstellung und Status-Updates werden automatisch von der Pipel
                   "Content-Type": "application/json",
                   "X-Pipeline-Key": config.pipeline.apiKey,
                 },
-                body: JSON.stringify({ preview_url: previewUrl }),
+                body: JSON.stringify({ preview_url: qaPreviewUrl }),
                 signal: AbortSignal.timeout(8000),
               });
-              logger.info({ previewUrl }, "preview_url patched to ticket");
+              logger.info({ previewUrl: qaPreviewUrl }, "preview_url patched to ticket");
             } catch {
               // Best-effort: preview_url patch is non-critical
               logger.warn("Could not patch preview_url to ticket");
@@ -1006,7 +1023,10 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
   }
 
   const agents = loadAgents(projectDir);
-  const loadedSkills = loadSkills(projectDir, config);
+  // T-1021: validate applies_to: scope markers as the loader runs. Throws on
+  // missing/mismatched markers when JS_APPLIES_TO_MODE is fail (the engine-repo
+  // default), warns otherwise. Single source of truth for the runtime context.
+  const loadedSkills = loadSkillsValidated(projectDir, config, "pipeline");
   if (loadedSkills.skillNames.length > 0) {
     logger.info({
       skills: loadedSkills.skillNames,
@@ -1051,6 +1071,10 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
   for (const [name, def] of Object.entries(filteredAgents)) {
     if (def.model) resumeAgentModelMap[name] = def.model;
   }
+
+  // Pre-Develop (resume): refresh the Reporter team roster (T-999 AC).
+  writeTeamRoster(workDir, Object.keys(filteredAgents), resumeAgentModelMap);
+
   const eventHooks = hasPipeline ? createEventHooks(eventConfig, {
     onPause: (reason, questionText) => {
       pauseReason = reason;
@@ -1353,7 +1377,7 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
 }
 
 // --- CLI entry point (only runs when executed directly) ---
-// Wrapped in async IIFE to avoid top-level await (breaks CJS imports from worker.ts)
+// Wrapped in async IIFE to avoid top-level await (breaks CJS imports from server.ts)
 const isMain = process.argv[1]?.endsWith("run.ts");
 if (isMain) {
   (async () => {

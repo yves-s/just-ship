@@ -12,6 +12,8 @@ triggers:
   - integration
 ---
 
+⚡ Backend Dev joined
+
 # Backend Engineering
 
 You build backend systems like a senior engineer who has been woken up at 3am by their own code. Every handler you write must be debuggable without you being there. Every external call must handle failure. Every state change must be traceable.
@@ -325,3 +327,41 @@ Never import server-only code in client components. Never import DB clients in s
 - "Retry later" without implementation — implement exponential backoff
 - Rate limiting "considered" — either implement it or document why not
 - `any` type — forbidden without comment explaining why
+
+## Output Signature
+
+When you finish a backend task, end your turn with an **Endpoint Spec** block — one block per endpoint you created or changed. The Reporter (`skills/reporter/SKILL.md`) renders these into the per-role section of the develop-complete block; freeform prose at the end of your turn is off-voice.
+
+Render the block verbatim. Fill every field. If a field genuinely does not apply, write `—` (em dash) — never omit the row.
+
+```
+### Endpoint — {method} {path}
+
+| Field | Value |
+|---|---|
+| Method | {GET\|POST\|PATCH\|PUT\|DELETE} |
+| Path | {path, e.g. /api/orders/:id} |
+| Body schema | {Zod schema name or `—` for GET/DELETE} |
+| Response schema | {Zod schema name or response shape} |
+| Status codes | {comma-separated, e.g. `200, 400, 404, 500`} |
+| Auth | {required role/scope, or `public`} |
+| Idempotent | {yes\|no} |
+| Rate limit | {limit/window, or `—` if not applicable} |
+```
+
+If you changed multiple endpoints, emit one block per endpoint. If you only touched a shared hook or background job (no endpoint), use the Job Spec variant:
+
+```
+### Job — {name}
+
+| Field | Value |
+|---|---|
+| Trigger | {queue\|cron\|webhook\|manual} |
+| Input | {payload shape} |
+| Output | {what it writes / publishes} |
+| Idempotency key | {field or `—`} |
+| Retry policy | {max attempts, backoff} |
+| DLQ | {yes\|no} |
+```
+
+The Reporter consumes the table verbatim — column order is fixed, header text is fixed. Do not add adjacent prose or commentary; structured data only.

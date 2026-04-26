@@ -1,5 +1,5 @@
 /**
- * Shared pipeline utilities — extracted from worker.ts, run.ts, server.ts,
+ * Shared pipeline utilities — extracted from run.ts, server.ts,
  * qa-fix-loop.ts, and vercel-preview.ts to eliminate duplication.
  */
 
