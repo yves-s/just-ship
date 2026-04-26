@@ -35,7 +35,7 @@ import { FORBIDDEN_QUESTION_TOPICS } from "./sidekick-policy.ts";
 // see exactly what to paste back in.
 // ---------------------------------------------------------------------------
 
-const LOCKED_PROMPT_DIGEST = "v2:6033fff6104af50e02f00d734b35f4a3f2dd07f215e3227c98fe893c2379299c";
+const LOCKED_PROMPT_DIGEST = "v3:4920f245159df8c4ad2f26cacf30dac1edefca3ebad9e66246234ed1986f7f4c";
 
 function digest(text: string): string {
   return `${SIDEKICK_PROMPT_VERSION}:${createHash("sha256").update(text, "utf8").digest("hex")}`;
