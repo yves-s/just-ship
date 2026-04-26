@@ -27,20 +27,23 @@ import {
 import { runAuditAsTool } from "./audit-runtime.ts";
 
 /**
- * Sidekick reasoning-first tool layer — T-983 (child of T-978).
+ * Sidekick reasoning-first tool layer — T-983 (child of T-978), extended in
+ * T-1020 with `update_thread_status`.
  *
- * Defines the seven tools the reasoning-first Sidekick orchestrator exposes
+ * Defines the eight tools the reasoning-first Sidekick orchestrator exposes
  * to Claude via tool-use. Replaces the classifier-first model that lived in
  * `sidekick-tools.ts` — the old classifier path was removed in T-979.
  *
- * Four artifact tools produce persistent board state; three expert tools
- * spawn read-only specialist agents. Each tool has a Zod schema for runtime
- * validation and an async handler. Expert-tool handlers return a stable
- * `not_implemented` error until T-980 ("Audit agent runtime") lands — this
- * is explicitly called out in the ticket's out-of-scope section.
+ * Five tools drive board / thread state (four create persistent artifacts,
+ * one — `update_thread_status` — drives the thread state machine); three
+ * expert tools spawn read-only specialist agents. Each tool has a Zod schema
+ * for runtime validation and an async handler. Expert-tool handlers return a
+ * stable `not_implemented` error for `consult_expert` and `start_sparring`
+ * until their runtimes land (`run_expert_audit` is wired against T-985's
+ * audit-runtime).
  *
  * Plan: docs/superpowers/plans/2026-04-23-sidekick-reasoning-architecture.md
- * Section 3.1 defines the seven tools; section 3.6 the thread scoping.
+ * Section 3.1 defines the original seven tools; T-1020 added the eighth.
  */
 
 // ---------------------------------------------------------------------------
@@ -661,7 +664,7 @@ function handleToolError(toolName: string, err: unknown, ctx: ToolContext): Tool
 }
 
 // ---------------------------------------------------------------------------
-// Tool registry — single place that lists all seven tools with their schemas
+// Tool registry — single place that lists all eight tools with their schemas
 // and handlers. Consumed by the Sidekick orchestrator (T-981) via
 // `toolSchemas()` (JSON Schema for the Anthropic SDK tool-use contract) and
 // `executeSidekickReasoningTool()` (dispatch by name).
@@ -762,7 +765,7 @@ export function zodToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
 }
 
 /**
- * Return all seven tools in the shape the Anthropic SDK expects for its
+ * Return all eight tools in the shape the Anthropic SDK expects for its
  * tool-use loop: `{ name, description, input_schema }`. Pass the result
  * directly into `client.messages.create({ tools: ... })` in T-981.
  */
