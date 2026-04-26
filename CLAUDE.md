@@ -75,6 +75,7 @@ Both are read-only. Neither blocks work.
 These rules are always in effect. Each is single-responsibility and intentionally small; treat them as extensions of this file.
 
 @.claude/rules/branch-check-before-edit.md
+@.claude/rules/main-context-edit-block.md
 @.claude/rules/decision-authority-enforcement.md
 @.claude/rules/sidekick-terminal-routing.md
 @.claude/rules/ship-trigger-context.md
