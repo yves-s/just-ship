@@ -1,3 +1,7 @@
+---
+applies_to: top-level-only
+---
+
 When brainstorming involves visual, UI, or UX topics — especially when the Visual Companion is active — apply the project's design skills before generating mockups.
 
 **Before writing any HTML mockup**, read the relevant skills from `skills/`:

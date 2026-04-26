@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: plugin-security-gate
 description: Scans third-party plugin skills for prompt injection, credential harvesting, exfiltration, and supply chain risks before installation. Run automatically during setup.sh plugin install or manually via /just-ship-audit --skills plugin-security-gate.
 category: audit

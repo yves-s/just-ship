@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: ticket
 description: Ticket schreiben — Bug, Feature, Improvement oder Spike als strukturiertes Ticket erfassen. Unterstützt auch Splitting (Epic + Children) und manuelles Gruppieren.
 ---

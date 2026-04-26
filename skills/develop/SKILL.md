@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: develop
 description: Nächstes ready_to_develop Ticket holen und autonom implementieren
 ---

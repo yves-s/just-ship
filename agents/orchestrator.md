@@ -1,4 +1,5 @@
 ---
+applies_to: pipeline-runtime-only
 name: orchestrator
 description: Orchestriert die autonome Entwicklung. Analysiert Tickets, erstellt Specs, spawnt Experten-Agents und schließt mit Commit/PR/Merge ab. Use proactively when a ticket needs to be implemented end-to-end.
 tools: Read, Write, Edit, Bash, Grep, Glob, Agent

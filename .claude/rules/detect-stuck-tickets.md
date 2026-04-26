@@ -1,3 +1,7 @@
+---
+applies_to: top-level-only
+---
+
 At the start of each session, on your first interaction with the user, check for stuck pipeline tickets.
 
 **IMPORTANT: This rule is READ-ONLY. Do NOT run any bash commands (no `rm`, no `curl`, no cleanup). Only use the Read and Glob tools to check files, then report findings as text.**

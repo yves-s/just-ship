@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: just-ship-status
 description: /just-ship-status — Lokalen Repo-Zustand anzeigen (Branches, PRs, Board, Worktrees)
 ---

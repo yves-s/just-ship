@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: sidekick-converse
 description: Run a short Sidekick conversation that shapes a fuzzy idea into a concrete artifact (ticket, epic, or spike) in at most 3 turns, using only business-level questions.
 ---

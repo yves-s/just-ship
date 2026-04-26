@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: init
 description: Projekt-Setup \u2014 project.json erstellen, Stack erkennen, CLAUDE.md generieren
 ---

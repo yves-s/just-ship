@@ -1,3 +1,7 @@
+---
+applies_to: all-agents
+---
+
 Before writing code, determine which abstraction level you are working on. The level dictates the solution approach.
 
 | Level | You are building... | Solution pattern |

@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: ship
 description: Alles abschliessen — commit, push, PR, merge, zurück auf main. Vollständig autonom, NULL Rückfragen. Unterstützt /ship T-{N} für direkten Branch-Zugriff.
 ---

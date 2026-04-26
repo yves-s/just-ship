@@ -1,3 +1,7 @@
+---
+applies_to: top-level-only
+---
+
 Never invoke `superpowers:finishing-a-development-branch` more than once per session.
 
 If the skill has already been invoked in the current conversation (the 4 options were already presented to the user), do not invoke it again — even if a parent skill (e.g. `executing-plans`) calls for it after a child skill (`subagent-driven-development`) already ran it.

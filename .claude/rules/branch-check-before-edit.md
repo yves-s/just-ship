@@ -1,3 +1,7 @@
+---
+applies_to: top-level-only
+---
+
 Vor dem ersten `Edit` oder `Write` in einer Session musst du wissen, auf welchem Branch du bist. Auf `main` (oder `master`) in einem Pipeline-konfigurierten Projekt ist Schreiben ohne explizite Freigabe verboten — das ist die Leitplanke, die den Ticket-Workflow schützt.
 
 `main` ist kein Arbeitsbranch. Code, der dort landet, ist einen PR-Merge von Prod entfernt. Ein versehentlicher Commit auf `main` kollidiert mit anderen Workers, bricht das Pipeline-Konto von `/develop` und `/ship`, und zementiert Workflow-Bypässe wie den Incident am 2026-04-21 (`docs/incidents/2026-04-21-workflow-bypass-design-lead.md`).

@@ -1,3 +1,7 @@
+---
+applies_to: subagents-only
+---
+
 Every agent dispatched by `/just-ship-audit` must include a Pre-Conclusion Audit section in its output, BEFORE the JSON findings block.
 
 **Mandatory structure (append after analysis, before JSON output):**

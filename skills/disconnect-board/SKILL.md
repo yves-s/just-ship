@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: disconnect-board
 description: Board-Verbindung entfernen — zurück zu CLI-only
 ---

@@ -1,4 +1,5 @@
 ---
+applies_to: subagents-only
 name: code-review
 description: Code Review Agent — reviewt den Diff gegen main auf Code-Qualität, Patterns, Edge Cases, Error Handling, Performance und Security. Fixt Issues direkt als Commits.
 tools: Read, Write, Edit, Bash, Grep, Glob

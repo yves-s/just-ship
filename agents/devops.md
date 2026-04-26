@@ -1,4 +1,5 @@
 ---
+applies_to: subagents-only
 name: devops
 description: DevOps Engineer für Build-Checks, TypeScript-Compilation und Lint. Fixt Build-Fehler. Use after implementation to verify the build passes.
 tools: Read, Edit, Bash, Grep, Glob

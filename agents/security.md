@@ -1,4 +1,5 @@
 ---
+applies_to: subagents-only
 name: security
 description: Security Reviewer für Auth, RLS, Input Validation und Secrets. Fixt kritische Issues. Use after implementation to verify security.
 tools: Read, Edit, Bash, Grep, Glob

@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: spike-review
 description: Spike-Ergebnis reviewen — Zusammenfassung anzeigen, Follow-Up-Tickets erstellen, Spike-Ticket abschliessen
 ---

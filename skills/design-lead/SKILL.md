@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: design-lead
 description: >
   Your Head of Design + Head of Product-UX. Use this skill whenever a decision is strategic — product structure, interaction philosophy, design-system direction, cross-feature consistency, or any "how should this feel across the product" question. Triggers on: product structure ("is this projekt-zentrisch or status-zentrisch?"), interaction philosophy ("click-to-expand or inline-edit across the app?"), design-system direction ("when do we use a sheet vs a page?"), consistency reviews across features, naming conventions for product concepts, whether a new pattern belongs in the system or is a one-off, and strategic UX calls that span multiple screens. Think of this as the Karri Saarinen (Linear) / Noah Levin (Figma) / Evil Rabbit (Vercel) lens — Design Leadership on equal footing with Technical Leadership. Peer to `product-cto`. Use proactively whenever a decision reaches beyond one screen or one component, even if the user does not explicitly say "strategic" — cross-product design is the job description, not an add-on.

@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: recover
 description: Stuck-Ticket recovern — Resume bei vorhandenem Code, Restart bei leerem Worktree
 ---

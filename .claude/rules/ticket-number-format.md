@@ -1,3 +1,7 @@
+---
+applies_to: all-agents
+---
+
 **CRITICAL — zero tolerance:** Ticket numbers MUST use the `T-` prefix. The `#` prefix is **FORBIDDEN**.
 
 - Correct: `T-1`, `T-351`, `T-272`

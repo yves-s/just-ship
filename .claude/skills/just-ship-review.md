@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: just-ship-review
 description: /just-ship-review — Branch lokal auschecken, builden, Dev-Server starten und testen
 ---

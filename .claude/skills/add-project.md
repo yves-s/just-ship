@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: add-project
 description: Neues Projekt im aktuellen Workspace verknüpfen — nur Projekt-ID in project.json schreiben
 ---

@@ -1,4 +1,5 @@
 ---
+applies_to: customer-projects-only
 description: Never edit settings_data.json in Shopify projects — it contains merchant customizations
 paths:
   - "sections/**"
