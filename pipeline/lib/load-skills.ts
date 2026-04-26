@@ -53,7 +53,11 @@ const SKILL_AGENT_MAP: Record<string, AgentRole[]> = {
   // QA + Security share testing/verification skills
   "webapp-testing": ["qa", "security"],
   "test-driven-development": ["qa", "security"],
-  "verification-before-completion": ["qa", "security", "backend", "frontend", "data-engineer"],
+  // DevOps shares verification-before-completion: its job is to verify the build
+  // before declaring done — same discipline qa/security/backend/frontend apply.
+  // This is the load-bearing entry that lets loadSkillsValidated() pass for the
+  // devops role, since devops has no dedicated domain skill (T-1025).
+  "verification-before-completion": ["qa", "security", "backend", "frontend", "data-engineer", "devops"],
 
   // Triage gets the ticket-writer skill so it can structure ambiguous input
   "ticket-writer": ["triage"],
