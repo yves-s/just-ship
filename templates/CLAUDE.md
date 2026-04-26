@@ -1,6 +1,6 @@
-# CLAUDE.md — {{PROJECT_NAME}}
+# CLAUDE.md — just-ship
 
-This file is the **constitution** of this project's Claude Code workspace: identity, decision authority, universal boundaries. Procedural depth lives in skills and rules.
+This file is the **constitution** of the just-ship engine repo: identity, decision authority, universal boundaries. Procedural depth lives in skills and rules. The source of truth for *why* this split exists is `docs/just-ship-operating-model.md` — read it before changing anything framework-level.
 
 ## Identity
 
@@ -21,34 +21,38 @@ The split is about *what product exists* (CEO) vs. *how it gets built* (team).
 When uncertainty arises, run the 5-step flow:
 
 1. Name the domain (architecture / UI / UX / ops / security / testing).
-2. Load the matching skill from `skills/` or `.claude/skills/`.
+2. Load the matching skill from `skills/`.
 3. Apply the principle — if two options both satisfy it, pick the one a senior at Linear/Vercel/Stripe would default to.
 4. State the decision: `Using [X] because [Y]` — one sentence.
 5. Continue. Do not wait. If wrong, the user redirects — that's cheaper than blocking on every micro-choice.
 
 Escalate only when the decision changes the **product direction** — not when it changes the *implementation of the same feature*.
 
-Deep examples, forbidden patterns, and the Anti-Pattern catalog live in the rule import below.
+Deep examples, forbidden patterns, and the Anti-Pattern catalog live in the rule import below. The scope of this authority, the ticket-bypass trap, and the branch-bypass trap are documented there too.
 
-## What this project is
+## What Just Ship is
 
-**{{PROJECT_NAME}}** — TODO: one-sentence description of what this product does and who it serves.
+just-ship is a multi-agent framework for autonomous software development with Claude Code. This repo is the **engine** — it gets installed into other projects via `setup.sh`. It also installs itself into itself, so we can develop the framework with the framework (source → installed paths are distinct; see `@.claude/rules/self-install-topology.md`).
 
-- **Stack, build commands, paths, pipeline connection:** `project.json`
-- **Architecture overview:** TODO — add pointer to `ARCHITECTURE.md` or inline below once it exists.
-- **Framework (just-ship) foundations:** `.claude/rules/*.md` imported below; skills under `.claude/skills/`.
+A single ticket triggers a full flow: intake → planning → implementation → testing → PR. The user decides *what* gets built and *whether* it ships. The team decides *how* it gets built.
+
+- **Product overview (all repos, features, relationships):** `PRODUCT.md`
+- **Operating model (reasoning vs classification, three-tier loading, two execution paths):** `docs/just-ship-operating-model.md`
+- **Projektspezifische Konfiguration (Stack, Build-Commands, Pfade, Pipeline-Verbindung):** `project.json`
+
+Stack: TypeScript (under `pipeline/`), Bash (`setup.sh`, scripts), Markdown (agents, commands, skills, rules). Commands and agents are in German; skills and rules are in English where it helps portability.
 
 ## How work flows
 
-Every user intent enters through the **Sidekick** — the reasoning orchestrator that lives wherever the user is (Claude Code terminal or Board browser widget). The Sidekick reads intent and decides between creating a ticket, starting a thread, running an audit, consulting an expert, triggering development, or creating a new project. The classification rules, category table, and role-anrede handling live in `@.claude/rules/sidekick-terminal-routing.md`.
+Every user intent enters through the **Sidekick** — the reasoning orchestrator that lives wherever the user is (Claude Code terminal or Board browser widget). Both surfaces talk to the same Engine endpoint via a single chat stream — no local classification, no four-category branch, no role-address pattern-match. The orchestrator LLM reads the input and reasons about which of its eight tools to call: `create_ticket`, `create_epic`, `create_project`, `start_conversation_thread`, `update_thread_status`, `run_expert_audit`, `consult_expert`, `start_sparring`. The terminal mechanics (when to open the chat stream, thread handling, on-`main` guardrail) live in `@.claude/rules/sidekick-terminal-routing.md`. The actual reasoning, the tool roster with Zod schemas, and the role-address heuristics live in `pipeline/lib/sidekick-system-prompt.ts` and `pipeline/lib/sidekick-reasoning-tools.ts`.
 
 Once a ticket exists, work runs through three commands:
 
 - `/ticket` — write a structured ticket (single or split into epic + children) via the ticket-writer skill.
-- `/develop T-{N}` — implement a ticket in a worktree on a feature branch, autonomously. Runs triage, planning, specialist agents, build check, code review, QA, docs check, and ends at PR + `in_review`. The full procedure is `.claude/skills/develop.md`.
+- `/develop T-{N}` — implement a ticket in a worktree on a feature branch, autonomously. Runs triage, planning, specialist agents, build check, code review, QA, docs check, and ends at PR + `in_review`. The full procedure is `skills/develop/SKILL.md`.
 - `/ship` — merge the PR after user approval. Autonomous once triggered; the approval is the gate. See `@.claude/rules/ship-trigger-context.md` for when short confirmations count as approval.
 
-**Board API rule:** never call the board API with raw `curl` + `X-Pipeline-Key` — it leaks the key to the terminal log. Always use `bash .claude/scripts/board-api.sh {get|patch|post} <path> [body]`, which resolves credentials internally and only prints the response. This rule is only relevant when `pipeline.workspace_id` is set in `project.json`.
+**Board API rule:** never call the board API with raw `curl` + `X-Pipeline-Key` — it leaks the key to the terminal log. Always use `bash .claude/scripts/board-api.sh {get|patch|post} <path> [body]`, which resolves credentials internally and only prints the response.
 
 ## Execution posture
 
@@ -56,13 +60,6 @@ Once a ticket exists, work runs through three commands:
 - **Konservativ bei echter Unklarheit** — nicht raten; wenn die Unklarheit *produktbezogen* ist, eskalieren.
 - **Commit → PR → `in_review`** am Ende jedes `/develop`-Flows. Merge passiert nur durch explizite User-Freigabe oder `/ship`.
 - **Keine API Keys, Tokens, Secrets im Code.** Input-Validation auf allen Endpoints.
-
-## Conventions
-
-- **Branches:** `feature/{ticket-id}-{kurzbeschreibung}`, `fix/...`, `chore/...`, `docs/...`.
-- **Commits:** Conventional Commits on English (`feat:`, `fix:`, `chore:`, `docs:`, `test:`).
-- **Code conventions (language, framework, imports):** TODO — fill in once the stack is chosen.
-- **Files:** never delete without explicit instruction.
 
 ## Session-start hints
 
@@ -84,6 +81,7 @@ These rules are always in effect. Each is single-responsibility and intentionall
 @.claude/rules/no-premature-merge.md
 @.claude/rules/post-develop-feedback.md
 @.claude/rules/brainstorming-design-awareness.md
+@.claude/rules/self-install-topology.md
 @.claude/rules/framework-abstraction-check.md
 @.claude/rules/ticket-number-format.md
 @.claude/rules/detect-stuck-tickets.md

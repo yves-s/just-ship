@@ -2,174 +2,92 @@
 applies_to: top-level-only
 ---
 
-Bei Sidekick-typischen Eingaben (Ideen, Feature-Wünsche, Projektstart, "bau mal", "ich will X") wird im Terminal derselbe Flow ausgeführt wie im Browser-Widget. Claude Code IST der Sidekick im Terminal — es gibt keinen `/sidekick` Command.
+When the user types into the Claude Code terminal and the input looks like a Sidekick intent (idea, feature wish, bug report, audit/review request, expert question, project pitch), Claude Code IS the Sidekick. There is no `/sidekick` command, no classification call, no four-category branch. The terminal opens a single chat stream against the Engine's reasoning-first Sidekick — the same endpoint the browser widget uses — and lets the orchestrator LLM reason about which of its eight tools (`create_ticket`, `create_epic`, `create_project`, `start_conversation_thread`, `update_thread_status`, `run_expert_audit`, `consult_expert`, `start_sparring`) to call.
 
-Der `sidekick-intake` Skill ist Single Source of Truth für die Klassifikation. Er wird direkt geladen (nicht die API — die ist nur der Web-Wrapper). Ergebnis: vier Kategorien → vier Routing-Entscheidungen.
+The role-address heuristic ("Design Lead, …", "CTO, …", "Backend, …") is part of the system prompt that ships with the Engine, not a hard-rule pattern-match in this file. The Sidekick uses the verb to disambiguate: a build/change verb routes to `create_ticket` or `create_epic`; an analysis verb ("schau dir an", "audit", "review", "ist das konsistent") routes to `run_expert_audit`; a knowledge or diagnosis verb ("wie denkst du", "warum passiert", "best practice") routes to `consult_expert`. The terminal does not pre-classify and does not block any of those routes.
 
-## Wann dieser Flow triggert
+This rule documents the terminal-side mechanics: when to open a chat stream, how to handle threads, what the on-`main` guardrail does, and which Anti-Patterns still apply. The Engine — via `pipeline/lib/sidekick-system-prompt.ts` and `pipeline/lib/sidekick-reasoning-tools.ts` — owns the actual reasoning and tool selection. When this rule and the system prompt disagree, the system prompt wins.
 
-Erkenne Sidekick-Intent an Signal-Mustern. Jedes reicht:
+## When this flow triggers
 
-- **Ideen-Rohform:** "ich habe eine Idee", "was wäre wenn", "mir schwebt X vor", "ich denke an X"
-- **Build-Intent für etwas Neues:** "ich will X bauen", "lass uns X entwickeln", "bau mal X", "X entwickeln"
-- **Feature-Wunsch an bestehendes Produkt:** "Füg X hinzu", "X fehlt noch", "wir brauchen X in Y", "ändere Y sodass..."
-- **Bug-Report oder Copy-Tweak:** "X funktioniert nicht", "der Text auf Y sollte Z sein", "Button macht nicht was er soll"
-- **Neues Produkt / neue Audience:** "ich will Y für Z bauen", "neues Projekt: ...", "eigene App für ..."
-- **Rollen-Anrede mit Feature-/Build-/UI-Signal:** "Design Lead, ...", "CTO, ...", "Backend, ..." + einem der oben genannten Intents. Siehe eigene Sektion unten.
+Any user input that looks like a Sidekick intent. The shape of the input matters less than it used to — there is no signal-checklist to satisfy. The orchestrator LLM reads the input and decides. A non-exhaustive list of inputs that should trigger a chat stream:
 
-Nicht Sidekick-Intent: explizite Commands (`/ticket`, `/develop`, `/ship`, `/recover`), Status-Fragen ("wie steht's"), Diagnose-Anfragen ("der CTO soll sich das anschauen"), oder reine Wissensfragen ("wie funktioniert X im Code"). Diese laufen über ihre bestehenden Pfade (Abschnitt "Intent-Erkennung" in CLAUDE.md).
+- **Idea (raw form):** "ich habe eine Idee", "was wäre wenn", "mir schwebt X vor"
+- **Build intent:** "ich will X bauen", "lass uns X entwickeln", "baut mal X"
+- **Feature wish:** "Füg X hinzu", "X fehlt noch", "ändere Y sodass …"
+- **Bug report / copy tweak:** "X funktioniert nicht", "der Text auf Y sollte Z sein"
+- **New product / new audience:** "ich will Y für Z bauen", "neues Projekt: …"
+- **Audit / review (with or without role-address):** "Design Lead, schau dir die Mobile Experience an", "ist die Onboarding-Copy konsistent?", "review the API surface"
+- **Expert question (with or without role-address):** "CTO, wie denkst du über X", "Backend, warum passiert Y immer wieder", "Design Lead, was ist best practice für Z"
 
-## Rollen-Anrede-Pattern
+What is **not** a Sidekick intent and never reaches the chat stream:
 
-Rollen-Anreden sind **keine Pair-Programming-Commands**. Eine Nachricht wie "Design Lead, lass uns die X-UI überarbeiten" adressiert zwar eine Rolle namentlich, aber der Kern-Intent bleibt ein Feature-Wunsch — und jeder Feature-Wunsch läuft durch den Sidekick-Intake. Rollen-Anrede + Feature/Build/UI-Signal → **immer Sidekick-Intake**, auch wenn die Rolle namentlich adressiert ist.
+- Explicit slash commands: `/ticket`, `/develop`, `/ship`, `/recover`. They have their own flows.
+- Status questions: "wie steht's", "was läuft gerade".
+- Pure knowledge questions about *the codebase itself*: "wie funktioniert X im Code". Those are answered directly via Read/Grep/etc.
 
-### Warum diese Regel existiert
+## The on-`main` guardrail (load-bearing)
 
-Am 2026-04-21 hat eine Session auf "Design Lead, lass uns mal diese Interaktionselemente optimieren" direkt angefangen zu coden — Rolle adressiert, Implementation-Skill (`frontend-design`) geladen, Ticket-Flow übersprungen, Code auf `main` geschrieben. Der vollständige Incident-Report liegt unter `docs/incidents/2026-04-21-workflow-bypass-design-lead.md`. Die Rolle im Anruf verführt zum "ich bin dran" — in Wahrheit ist es genau die Stelle, an der der Sidekick-Flow starten muss.
+The terminal still enforces that work happens on a feature branch. `branch-check-before-edit.md` is the source of truth — that rule decides whether the first `Edit` or `Write` of a session is allowed. This rule does **not** override it:
 
-### Klassifikations-Logik
-
-Rollen-Anrede = einer dieser Präfixe am Anfang der User-Nachricht (oder als erste Zeile vor dem eigentlichen Request):
-
-- "Design Lead, ...", "Design-Lead: ...", "Dear Design Lead, ..."
-- "CTO, ...", "@CTO ...", "Hey CTO ..."
-- "Backend, ...", "Backend Dev, ..."
-- "Frontend, ...", "Frontend Dev, ..."
-- "PM, ...", "Product Manager, ..."
-- "Data Engineer, ...", "UX Lead, ...", "Creative Director, ..."
-
-Feature/Build/UI-Signal = einer der Signal-Typen aus der Trigger-Liste oben (Ideen-Rohform, Build-Intent, Feature-Wunsch, Bug-Report, Copy-Tweak).
-
-Wenn **beide** Signale gemeinsam in derselben Nachricht auftreten → Sidekick-Intake, keine Ausnahme.
-
-### Beispiele
-
-#### Beispiel 1 — Design Lead + UI-Tweak
-
-```
-User: Design Lead, lass uns die Card-Buttons im Detail-Panel optimieren. Die sind mini und passen nicht zum Rest.
-
-Fehler (was 2026-04-21 passiert ist):
-❌ frontend-design laden, Files grepen, Edits auf main schreiben.
-
-Richtig:
-✅ sidekick-intake laden, klassifizieren. Kategorie 1 (Feature-Wunsch an bestehendes Produkt).
-   /ticket erzeugt T-{N}. Ausgabe: "Ist im Board: T-{N} — Detail-Panel Button-Sizing. {url}".
-```
-
-#### Beispiel 2 — CTO + Architektur-Wunsch
-
-```
-User: CTO, wir brauchen einen Cache-Layer vor dem Classifier, das ist zu langsam.
-
-Fehler:
-❌ product-cto als Implementation-Skill lesen, Cache-Code hinhacken.
-
-Richtig:
-✅ sidekick-intake laden. Kategorie 1 oder 2 je nach Scope (Single-Ticket vs. Epic für größere Architektur).
-   Ticket(s) erstellen. product-cto wird intern konsultiert für ACs und Out-of-Scope (siehe "Internal Expert Consultation").
-```
-
-#### Beispiel 3 — Backend + neues Endpoint
-
-```
-User: Backend, füge einen POST /api/sidekick/feedback Endpoint hinzu, damit User im Widget die Klassifikation korrigieren können.
-
-Fehler:
-❌ backend-Skill laden, Endpoint-Code schreiben, Tests machen.
-
-Richtig:
-✅ sidekick-intake laden. Kategorie 1 (Feature-Wunsch, klar umrissen, Single-Ticket).
-   /ticket mit Endpoint-Spec im Body. Backend-Skill wird im späteren /develop-Flow geladen.
-```
-
-### Ausnahme — Rollen-Anrede ohne Feature-Signal
-
-Wenn die Rollen-Anrede nur ein Status-Check, eine Wissensfrage oder eine Diagnose ist, ist es **kein** Sidekick-Intent:
-
-- "CTO, was denkst du über den aktuellen Pipeline-Aufbau?" → Diagnose → `product-cto` laden, analysieren, keine Ticket-Erstellung.
-- "Design Lead, wie funktioniert unser Theme-System?" → Wissensfrage → antworten, kein Ticket.
-- "Backend, warum ist das letzte Deploy gecrasht?" → Diagnose → Logs checken, Root-Cause, ggf. Ticket für den Fix.
-
-Der Unterschied: **"wie/was/warum"** = Wissensfrage. **"lass uns / bau / füge hinzu / ändere"** = Feature-Intent = Sidekick-Intake, auch mit Rollen-Anrede.
-
-### Selbst-Check
-
-Bevor du auf eine Rollen-Anrede reagierst:
-
-1. Enthält die Nachricht ein Feature-/Build-/UI-Signal (bauen, ändern, hinzufügen, optimieren, fixen)?
-2. Wenn ja: Sidekick-Intake, kein Direkt-Coden. Auch wenn die Rolle namentlich angesprochen ist.
-3. Wenn nein (reine Wissensfrage, Status, Diagnose): normaler Rollen-Skill-Flow, kein Ticket.
+- If the user types something that looks like a Sidekick intent and the branch is `main` with the pipeline configured, the terminal does not start writing files. It opens the chat stream. The Sidekick reasons; if the chosen tool is `create_ticket` or `create_epic`, an artifact is created and the user is told where it landed. The actual implementation happens later in a worktree via `/develop`.
+- If the user explicitly authorises direct work on `main` (the exception clause in `branch-check-before-edit.md`), the terminal honours that.
+- The "Sidekick-Intake-Skill laden" step from the previous version of this rule is gone. There is no intake skill anymore; the chat stream replaces it.
 
 ## Flow
 
-1. **Skill laden.** Read `skills/sidekick-intake/SKILL.md`. Announce: `⚡ Sidekick joined`.
-2. **Projekt-Kontext sammeln.** Falls Pipeline konfiguriert, lies über `board-api.sh` die letzten ~10 Ticket-Titel und bestehende Epic-Titel des Projekts. Kein API-Call, kein LLM — das ist der "project_context" für die Klassifikation.
-3. **Klassifizieren.** Wende die Regeln aus `sidekick-intake/SKILL.md` auf die User-Eingabe an:
-   - Business-Signale zählen, Implementierungs-Signale werden ignoriert.
-   - Confidence-Floor: unter 0.7 → forciert zu `conversation`.
-4. **Routen** nach der Kategorien-Tabelle unten.
-5. **Ergebnis präsentieren** — ohne PM-Sprache, ohne "Soll ich das anlegen?" (außer bei Kategorie 4, das ist der eine erlaubte Bestätigungspunkt).
+1. **Detect intent.** If the input matches a Sidekick-shape (see above), open a chat stream — do not reason locally about which "category" it falls into.
+2. **Resolve thread context.** If the user references a prior conversation ("der Thread von gestern zu Notifications", "weiter mit dem Analytics-Dashboard"), call `sidekick-api.sh thread-list` first, match by title, persist the thread ID in `.claude/.sidekick-thread`. The terminal does the matching itself; **never ask the user which thread**.
+3. **Stream the turn.** Call `sidekick-api.sh chat --project-id <uuid> [--thread-id <uuid>] --text "<input>"`. The SSE stream renders live: text deltas to stdout, status frames (`[tool_call …]`, `[tool_result …]`, `[thread_id=…]`) to stderr.
+4. **Surface tool results.** When the Engine calls a tool, the terminal already shows the `[tool_call …]` frame from the SSE stream. After the final `message` frame, render the human-readable artifact link or audit summary in the Sidekick voice — one line, no PM ceremony, no "Soll ich das anlegen?".
+5. **Handle thread state.** If the chosen tool changed thread status, fetch `sidekick-api.sh thread-get <id>` and report the transition in a single line: `Thread {title} ist jetzt {status}.` No raw JSON, no tables.
 
-## Kategorien-Routing
+## Image attachments
 
-| Kategorie | Trigger-Beispiele | Routing | Output-Format |
-|---|---|---|---|
-| **1 — ticket** | "Der Toggle schließt sich nicht richtig", "Änder die Empty-State-Copy auf X", "Füge einen Copy-Link-Button hinzu" | `/ticket` (Single-Ticket-Flow, kein Split) | `Ist im Board: T-{N} — {title}. {url}` |
-| **2 — epic** | "Wir brauchen ein Notifications-System mit Settings, Bell, Email, Inbox", "Build the Workspace Billing feature", "Vollständige Keyboard-Navigation mit j/k/c//" | `/ticket` mit Split-Flag → erzeugt Epic + Children automatisch | `Ist im Board als Epic T-{N} — {title}. {url}` + bullet-Liste der Children |
-| **3 — conversation** | "Sollen wir vielleicht Analytics einbauen?", "Was denkst du über neues Onboarding?", "Ich hab da eine Idee, weiß aber nicht wie" | Engine-Chat (`POST /api/sidekick/chat` via `sidekick-api.sh chat`) — SSE-Stream, Thread-Persistenz, Tool-Loop. Nur bei fehlender Engine-Konfig fällt das Terminal auf `sparring` zurück. | Live-Token-Stream im Terminal, am Ende: Artefakt-Link oder eine gezielte Business-Frage (gemäß `sidekick-converse`) |
-| **4 — project** | "Ich will Aime Coach bauen — AI-Accountability-App für Therapeuten", "Neues Shopify-Tool für Fashion-Brands", "Setup Just Ship Edu — eigenständiger Workspace" | `add-project`/`init` Skill laden; dann `/ticket` für Init-Epic + 3 Child-Tickets (Scope klären, Tech-Stack-Entscheidung, Erste User-Journey bauen) | Einmalige Bestätigung: "Das klingt nach einem neuen Projekt. Soll ich {Name} als Projekt anlegen?" → nach "ja": Project-URL + Init-Epic + Children-Liste |
+Detect local image paths in the user input — `\b(?:/|\./|\.\./)[^ ]+\.(?:png|jpe?g|webp|gif)\b` or explicitly dropped paths. Before the chat call, `sidekick-api.sh attach <path> [<path>…]` uploads them and returns `files[*].url`. Pass each URL as `--attach <url>` to the chat command. The image lands as `attachments[]` in the chat request — never as a Markdown link in the text.
 
-**Kategorie 4 ist der einzige Bestätigungspunkt.** Grund: ein neues Projekt ist strukturell größer (neuer Workspace-Scope, neue Audience). Identisch zur Browser-Widget-Regel aus T-877.
+## Project context
 
-**Kategorien 1-2 bestätigen NIE.** Der Skill wird aufgerufen, das Artefakt direkt erzeugt, der Link ausgegeben. "Soll ich das so anlegen?" ist verboten — es leakt PM-Sprache in den Konversationsfluss (T-876/T-879). Kategorie 3 endet mit genau einer Frage ("Soll ich ein Ticket anlegen?") — das ist kein Pre-Creation-Confirm, sondern der Abschluss der strukturierten Diskussion.
+Pass `--project-id` from `project.json → pipeline.project_id`. If the project is not yet on the board (no `pipeline.project_id`), the chat stream still works — the Engine falls back to a workspace-scoped flow where `create_project` is the natural first tool call.
 
-## Kategorie 3 — Engine-Chat-Flow im Terminal (T-926)
+## Fallback without Engine config
 
-Für Kategorie 3 ist der Engine-Chat-Endpoint die Single Source of Truth — er ist derselbe Endpoint, den das Browser-Widget aufruft. Das Terminal wickelt das über `.claude/scripts/sidekick-api.sh` ab, das Credentials versteckt und SSE-Frames in lesbare Ausgabe reduziert.
+If neither `ENGINE_API_URL` nor `BOARD_API_URL` resolves (`sidekick-api.sh` exits 1), the terminal falls back to `skills/sparring.md` for an offline-style sparring conversation. This is the emergency path for projects without an Engine deployment; it cannot create artifacts.
 
-### Flow
+## Output rules
 
-1. **Thread-Erkennung.** Wenn der User eine bestehende Konversation weiterführen will ("der Thread von gestern zu Notifications", "lass uns das mit dem Analytics-Dashboard weitermachen"), rufe zuerst `sidekick-api.sh thread-list --project-id <uuid> --status draft,waiting_for_input,ready_to_plan,planned,approved,in_progress` auf und wähle den passenden Thread — **nicht den User danach fragen**, den Titel-Match selbst machen. Bei Ambiguität den aktivsten (höchstes `last_activity_at`) nehmen und im Output kurz vermerken ("Weiter in Thread {title} — {id}"). Die Thread-ID wird in `.claude/.sidekick-thread` persistiert, damit Folge-Turns im selben Ticket ohne erneuten Listing-Call weitermachen.
-2. **Chat-Turn starten.** `sidekick-api.sh chat --project-id <uuid> [--thread-id <uuid>] --text "<user input>"` ausführen. Der SSE-Stream landet live im Terminal (stdout für Text-Deltas, stderr für Status-Frames wie `[tool_call …]`, `[thread_id=…]`). Neuer Turn ohne Thread-ID → Engine vergibt eine, wird im `[thread_id=…]`-Frame zurückgeliefert und dann persistiert.
-3. **Image-Pfade.** Erkenne lokale Image-Pfade im User-Input per Muster `\b(?:/|\./|\.\./)[^ ]+\.(?:png|jpe?g|webp|gif)\b` oder explizit gedroppte Pfade. Vor dem Chat-Call: `sidekick-api.sh attach <path> [<path>…]` aufrufen, die zurückgegebenen `files[*].url` sammeln und als `--attach <url>`-Flags ans `chat`-Command übergeben. Der User-Text bleibt unverändert — das Bild landet als `attachments[]` im Chat-Request.
-4. **Thread-State-Übergänge.** Wenn der Engine-Chat einen Tool-Call ausführt, der den Thread-Status ändert (z.B. auf `delivered`), gibt der SSE-Stream `[tool_call …]` / `[tool_result …]` aus. Nach dem finalen `message`-Frame den aktuellen Status per `sidekick-api.sh thread-get <id>` prüfen und dem User in einer einzigen Zeile zurückmelden: `Thread {title} ist jetzt {status}.` — keine Tabelle, kein Raw-JSON.
-5. **Fallback ohne Engine-Config.** Wenn weder `ENGINE_API_URL` noch `BOARD_API_URL` auflösbar sind (Exit 1 von `sidekick-api.sh`), lädt das Terminal stattdessen `skills/sparring.md` wie vor T-926. Das ist der Notfallpfad für Projekte ohne Engine-Deployment.
-
-### Anti-Patterns
-
-❌ **Thread-ID den User fragen.** Wenn bekannte Trigger ("der gestrige Thread", "weiter mit X") fallen, erledigt das Terminal das Matching selbst via `thread-list`. Nachfragen = Autonomy-Violation.
-
-❌ **Raw-JSON aus `thread-get`/`thread-list` an den User ausgeben.** Immer auf eine Zeile reduzieren: Titel + Status + ggf. Timestamp-Relative ("vor 2h aktualisiert").
-
-❌ **Parallele Chat-Turns im selben Thread.** Der Endpoint antwortet dann mit `409 thread_busy`. Im Fehlerfall: eine Zeile Rückmeldung, kein Retry-Loop — der User entscheidet.
-
-❌ **Image-Pfade als Markdown-Links an den Engine senden.** Der Engine erwartet `attachments: [{ url }]`; Text-Inlining würde die Deduplikation und die Storage-URL-Rotation brechen.
-
-✅ **Parity check.** Wenn der User dieselbe Eingabe ins Browser-Widget und ins Terminal tippt, erzeugt beides denselben Thread-Fortschritt und dasselbe finale Artefakt — weil beide Pfade denselben Engine-Endpoint treffen.
-
-## Internal Expert Consultation
-
-Während der Finalisierung (wenn Ticket-Body / Epic-Children geschrieben werden), darf intern `product-cto`, `design-lead`, `backend`, `frontend-design`, `data-engineer` oder `ux-planning` konsultiert werden — aber **nur intern**. Deren Output fließt in die ACs und Out-of-Scope-Listen des Artefakts. Der User sieht keine "Ich frage mal den CTO"-Nachricht und bekommt keine Implementierungs-Frage gestellt (T-879).
-
-## Parity zum Browser-Widget
-
-Gleiche Eingabe im Terminal und im Browser-Widget → gleiche Kategorie, gleiches Artefakt, gleicher Wortlaut der Antwort. Der einzige Unterschied ist das Transport-Layer: Terminal ruft den Skill direkt, Browser ruft `POST /api/sidekick/classify` + `POST /api/sidekick/create` (der API-Wrapper nutzt intern denselben Skill).
+- **No "Soll ich das anlegen?".** The Sidekick decides; the user steers product direction, not creation timing. The single exception is `create_project` — the system prompt forces a confirmation prompt before that tool fires, because a new project is structurally bigger than a ticket. Anything else is created silently and reported via the artifact link.
+- **No PM jargon.** No "acceptance criteria", "user story", "Definition of Done" in user-facing output. The artifact body may contain those headings — the chat reply does not.
+- **One line per artifact.** `Ist im Board: T-{N} — {title}. {url}` for tickets, `Ist im Board als Epic T-{N} — {title}. {url}` plus child bullet list for epics.
+- **No raw JSON to the user.** Reduce thread/list responses to a single line.
 
 ## Anti-Patterns
 
-❌ **Implementation-Fragen an den User.** "Welches Framework?", "Postgres oder SQLite?", "Modal oder Sheet?" — alles verboten. T-879 listet die vollständige Forbidden-Liste.
+❌ **Pre-classify locally.** The terminal does not run a four-category classifier before calling the chat stream. The classifier was killed in T-979; do not resurrect it as a local pattern-match.
 
-✅ **Business-Fragen only.** Zielgruppe, Timing, Scope-Boundary, Ersetzt-oder-Ergänzt, Erfolgskriterien, Priorität.
+❌ **Pattern-match the role-address.** Do not maintain a list of role prefixes ("Design Lead, …", "CTO, …") in this rule and use it to force a route. The Sidekick reads the verb in the input and reasons about the right tool. A "Design Lead, schau dir X an" produces an audit; a "Design Lead, bau mal X" produces a ticket — both via the same chat stream, no local routing.
 
-❌ **"Soll ich das anlegen?" bei Kategorie 1/2.** Die Plattform entscheidet, der User steuert. (Kategorie 3 endet nach der Diskussion mit "Soll ich ein Ticket anlegen?" — das ist erlaubt und erwartet.)
+❌ **Ask the user which thread to continue.** When a continuation cue appears, the terminal lists threads and matches by title itself. Asking is an autonomy violation.
 
-✅ **Silent classification, direct creation.** `Ist im Board: T-{N} …`
+❌ **Parallel chat turns in the same thread.** The Engine returns `409 thread_busy`. On 409, surface a single line and let the user decide — no retry loop.
 
-❌ **Vierte Frage in Kategorie 3.** Wenn Richtung nach 3 Turns unklar ist, wird ein Spike-Ticket erzeugt (siehe `sidekick-converse/SKILL.md`), nicht endlos weitergefragt.
+❌ **"Soll ich das anlegen?" before `create_ticket` / `create_epic`.** Forbidden. The only confirmation prompt is for `create_project`, and the system prompt enforces it.
 
-❌ **Einen neuen Slash-Command `/sidekick` bauen.** Claude Code ist der Sidekick — die Klassifikation läuft transparent im normalen Dialog.
+❌ **Inline image paths as Markdown.** The Engine expects `attachments: [{ url }]`. Inlining as Markdown breaks dedup and storage-URL rotation.
 
-## Quelle der Wahrheit
+✅ **Parity with the browser widget.** Same input, same Engine endpoint, same tool call, same artifact. The only difference is the transport: terminal calls `sidekick-api.sh`, widget calls the same SSE endpoint over HTTP.
 
-Die Kategorie-Definitionen, Confidence-Floor-Logik, Reply-Templates und API-Contracts leben in `skills/sidekick-intake/SKILL.md` und `skills/sidekick-converse/SKILL.md`. Diese Regel hier verdrahtet sie nur ins Terminal-Routing. Bei Konflikt gewinnt der Skill.
+## Source of truth
+
+The reasoning, the tool roster, and the role-address heuristics live in:
+
+- `pipeline/lib/sidekick-system-prompt.ts` — system prompt with few-shot examples and `SIDEKICK_PROMPT_VERSION` (Sentry-tagged).
+- `pipeline/lib/sidekick-reasoning-tools.ts` — the eight tool definitions with Zod schemas.
+- `pipeline/lib/audit-runtime.ts` — the read-only specialist runtime that backs `run_expert_audit`.
+- `skills/sidekick-converse/SKILL.md` — the converse mode used inside `start_conversation_thread`.
+
+When this rule and any of those disagree, those win. This rule wires terminal mechanics into the Engine; it does not duplicate the reasoning.
+
+## Plan reference
+
+See `docs/superpowers/plans/2026-04-23-sidekick-reasoning-architecture.md` — section 5 child 5 is the rewrite of this rule. The role-address pattern-match and the four-category classifier in the previous version of this file are explicitly retired by that plan.

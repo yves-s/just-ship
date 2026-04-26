@@ -27,7 +27,7 @@ Ablauf:
 
 | Branch | Pipeline konfiguriert | Aktion |
 |---|---|---|
-| `main` / `master` | Ja | **Hard-Stop.** Kein Edit, kein Write. Route über Sidekick-Intake oder frage nach Ticket/Branch. |
+| `main` / `master` | Ja | **Hard-Stop.** Kein Edit, kein Write. Route über den Sidekick-Chat-Stream oder frage nach Ticket/Branch. |
 | `main` / `master` | Nein | **Soft-Stop.** Nenne dem User den Branch, hole Bestätigung, bevor du schreibst. |
 | Feature-Branch (`feature/`, `fix/`, `chore/`, `docs/`) | beliebig | Weiter, kein Block. |
 | Detached HEAD / unbekannt | beliebig | Nenne den State, frage nach Klarheit. |
@@ -37,8 +37,8 @@ Ablauf:
 Wenn du auf `main` bist und die Pipeline konfiguriert ist, und der User ohne `/ticket`/`/develop`-Kontext Arbeit anstößt:
 
 1. Kein `Edit`, kein `Write`. Sofort unterbrechen.
-2. Prüfe, ob die User-Eingabe ein Sidekick-Trigger ist (siehe `sidekick-terminal-routing.md`). Wenn ja → Sidekick-Intake-Flow laden (`skills/sidekick-intake/SKILL.md`), `⚡ Sidekick joined` ankündigen, klassifizieren.
-3. Wenn die Eingabe kein Sidekick-Trigger ist (reine Wissensfrage, Status-Check, Diagnose), antworte ohne Edit — die Arbeit bleibt read-only.
+2. Prüfe, ob die User-Eingabe ein Sidekick-Intent ist (siehe `sidekick-terminal-routing.md` → "When this flow triggers"). Wenn ja → Chat-Stream gegen den Engine-Sidekick öffnen (`sidekick-api.sh chat`). Die Engine reasoning-Layer entscheidet selbst, welches Tool fliegt — `create_ticket`, `create_epic`, `run_expert_audit`, `consult_expert`, `start_conversation_thread`, `start_sparring`, `update_thread_status` oder `create_project`. Kein lokales Klassifizieren, keine Intake-Skill, kein Pattern-Match auf Rollen-Anrede.
+3. Wenn die Eingabe kein Sidekick-Intent ist (reine Wissensfrage zum Code, Status-Check, Diagnose ohne Build-Verb), antworte ohne Edit — die Arbeit bleibt read-only.
 4. Wenn unklar: eine einzige Frage an den User — "Ist auf `main`. Soll ich das als Ticket anlegen (`/ticket`) oder arbeitest du bewusst auf main (dann Branch bestätigen)?"
 
 Sobald ein Feature-Branch steht (via `/develop` oder expliziter Branch-Switch), ist der Check für die Session erledigt.
@@ -64,14 +64,14 @@ Die Freigabe muss aus der aktuellen Session kommen, nicht aus einer früheren. E
 
 1. Habe ich den Branch geprüft? Falls nein, `git branch --show-current` jetzt.
 2. Bin ich auf `main` oder `master`? Falls ja, ist die Pipeline konfiguriert?
-3. Wenn Pipeline + main: existiert ein Ticket für diese Arbeit, oder ist Sidekick-Intake der richtige Schritt?
+3. Wenn Pipeline + main: existiert ein Ticket für diese Arbeit, oder ist der Sidekick-Chat-Stream der richtige Schritt?
 4. Wenn keines von beidem: habe ich eine explizite User-Freigabe, auf main zu arbeiten?
 
 Erst wenn mindestens eine der Fragen 3 oder 4 mit Ja beantwortet ist, darf der erste Edit/Write laufen.
 
 ## Beispiele
 
-### Beispiel 1 — Sidekick-Trigger auf main (Hard-Stop, Route zum Intake)
+### Beispiel 1 — Sidekick-Intent auf main (Hard-Stop, Route in den Chat-Stream)
 
 ```
 User: Design Lead, lass uns die Card-Buttons überarbeiten.
@@ -80,8 +80,21 @@ Branch: main · Pipeline: konfiguriert
 Assistant-Flow:
 1. git branch --show-current → main
 2. Pipeline konfiguriert ✓
-3. Eingabe = Sidekick-Trigger (Rollen-Anrede + Feature-Wunsch, siehe sidekick-terminal-routing.md).
-4. Kein Edit. Sidekick-Intake-Skill laden, klassifizieren, Ticket erstellen.
+3. Eingabe = Sidekick-Intent (Build-Verb, siehe sidekick-terminal-routing.md → "When this flow triggers").
+4. Kein Edit. Chat-Stream gegen den Engine-Sidekick öffnen (sidekick-api.sh chat). Die Engine ruft create_ticket auf und gibt den Board-Link zurück.
+```
+
+### Beispiel 1b — Audit-Intent auf main (Hard-Stop, Route in den Chat-Stream)
+
+```
+User: Design Lead, schau dir mal die Mobile Experience an, ich glaube da ist viel Inkonsistenz.
+Branch: main · Pipeline: konfiguriert
+
+Assistant-Flow:
+1. git branch --show-current → main
+2. Pipeline konfiguriert ✓
+3. Eingabe = Sidekick-Intent (Analysis-Verb "schau dir an"), siehe sidekick-terminal-routing.md → "When this flow triggers".
+4. Kein Edit. Chat-Stream gegen den Engine-Sidekick öffnen. Die Engine ruft run_expert_audit (expert=design-lead, scope="Mobile Experience") auf und liefert den Findings-Report — kein Ticket wird erzeugt.
 ```
 
 ### Beispiel 2 — Feature-Branch (Check passiert, weiter ohne Block)

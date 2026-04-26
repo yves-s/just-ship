@@ -1,7 +1,7 @@
 ---
 template: ticket-created
-purpose: Sidekick reply for Category 1 — a single ticket was classified, written, and persisted to the board. One compact confirmation line, no prose before or after.
-fires_at: End of the Sidekick intake flow when classification resolved to Category 1 (single ticket). Currently invoked from `.claude/rules/sidekick-terminal-routing.md` (Category 1 row of the routing table).
+purpose: Sidekick reply after the reasoning-first orchestrator called `create_ticket` and the artifact was persisted to the board. One compact confirmation line, no prose before or after.
+fires_at: End of a Sidekick chat turn when the orchestrator picked the `create_ticket` tool. The Engine renders this template as the user-facing reply; terminal and browser widget surface it identically. See `pipeline/lib/sidekick-reasoning-tools.ts` for the tool definition and `.claude/rules/sidekick-terminal-routing.md` for terminal mechanics.
 ---
 
 # Template — ticket-created
@@ -36,7 +36,7 @@ Ist im Board: T-{ticket_number} — {title}. {url}{priority_suffix}
 - Rule 3 (Icons): `↑` / `↓` only, and only when priority is non-default. No `🔥`, no `📌`.
 - Rule 4 (Short active): one sentence, period-terminated. No leading filler like "Okay," or "Great —".
 - Rule 5 (No inner monologue): no "I classified this as…" — the classification is implicit in the output format.
-- Anti-pattern guard: the Sidekick routing rule explicitly forbids *"Soll ich das anlegen?"* before Category 1. This template is the confirmation of a ticket that **already exists** — never a pre-creation prompt.
+- Anti-pattern guard: the Sidekick routing rule explicitly forbids *"Soll ich das anlegen?"* before `create_ticket`. This template is the confirmation of a ticket that **already exists** — never a pre-creation prompt.
 
 ## Example — default priority
 

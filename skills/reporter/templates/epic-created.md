@@ -1,7 +1,7 @@
 ---
 template: epic-created
-purpose: Sidekick reply for Category 2 — an epic was split into children, all persisted to the board in one flow. The header confirms the epic, the table lists the children.
-fires_at: End of the Sidekick intake flow when classification resolved to Category 2 (epic + split). Currently invoked from `.claude/rules/sidekick-terminal-routing.md` (Category 2 row of the routing table).
+purpose: Sidekick reply after the reasoning-first orchestrator called `create_epic` — an epic plus its children were persisted to the board in one flow. The header confirms the epic, the table lists the children.
+fires_at: End of a Sidekick chat turn when the orchestrator picked the `create_epic` tool. The Engine renders this template as the user-facing reply; terminal and browser widget surface it identically. See `pipeline/lib/sidekick-reasoning-tools.ts` for the tool definition and `.claude/rules/sidekick-terminal-routing.md` for terminal mechanics.
 ---
 
 # Template — epic-created
@@ -45,11 +45,11 @@ T-1002  Per-Role Output-Sigs
 ## Voice checks
 
 - Rule 1 (Result-first): header is the outcome, not narration.
-- Rule 2 (Tables): children render as a two-column aligned block — always a table, never prose, because Category 2 by definition has ≥ 2 children and almost always ≥ 3.
+- Rule 2 (Tables): children render as a two-column aligned block — always a table, never prose, because `create_epic` by definition produces ≥ 2 children and almost always ≥ 3.
 - Rule 3 (Icons): none in the header. The children are pending work, not statuses — no icons needed.
 - Rule 4 (Short active): header is one sentence, period-terminated.
 - Rule 5 (No inner monologue): no "I've split this into…" — the split is evident from the table.
-- Anti-pattern guard: the Sidekick routing rule explicitly forbids *"Soll ich das so anlegen?"* at Category 2. This template confirms artifacts that **already exist**.
+- Anti-pattern guard: the Sidekick routing rule explicitly forbids *"Soll ich das so anlegen?"* before `create_epic`. This template confirms artifacts that **already exist**.
 
 ## Example — fully rendered
 
