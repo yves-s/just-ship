@@ -36,7 +36,7 @@ import { SIDEKICK_REASONING_TOOLS, type SidekickReasoningToolName } from "./side
  * `prompt_version` tag, so behaviour regressions can be attributed to a
  * specific revision.
  */
-export const SIDEKICK_PROMPT_VERSION = "v1" as const;
+export const SIDEKICK_PROMPT_VERSION = "v2" as const;
 
 export type SidekickPromptVersion = typeof SIDEKICK_PROMPT_VERSION;
 
@@ -120,6 +120,14 @@ export const SIDEKICK_PROMPT_EXAMPLES: ReadonlyArray<SidekickPromptExample> = Ob
     tool: "start_conversation_thread",
     args_sketch: `{ topic: "Onboarding rework — direction TBD", initial_context: "User has a rough idea, wants to shape it", project_id: "<active>" }`,
     notes: "Idea with no clear scope yet → open a thread, don't speculate an artifact.",
+  },
+
+  // --- update_thread_status — drive the thread state machine ---
+  {
+    input: "Pass — die Onboarding-Discovery ist durch, der Plan steht. Setz den Thread auf ready_to_plan.",
+    tool: "update_thread_status",
+    args_sketch: `{ thread_id: "<active-thread>", status: "ready_to_plan" }`,
+    notes: "User confirms direction is locked → advance thread state. Allowed transitions are enforced server-side; invalid jumps surface as invalid_transition.",
   },
   {
     input: "Sollen wir vielleicht Analytics einbauen?",

@@ -13,7 +13,17 @@ import {
   type CreatedTicket,
   type CreatedProject,
 } from "./sidekick-create.ts";
-import { createThread as createThreadRow, type Thread } from "./threads-store.ts";
+import {
+  createThread as createThreadRow,
+  getThread as getThreadRow,
+  updateThread as updateThreadRow,
+  THREAD_STATUSES,
+  ThreadNotFoundError,
+  ThreadTransitionError,
+  ThreadValidationError,
+  type Thread,
+  type ThreadStatus,
+} from "./threads-store.ts";
 import { runAuditAsTool } from "./audit-runtime.ts";
 
 /**
@@ -110,6 +120,17 @@ export const StartConversationThreadSchema = z.object({
   topic: zTitle,
   initial_context: z.string().trim().min(1).max(10_000),
   project_id: zProjectId,
+});
+
+// `update_thread_status` — drive the thread state machine from the chat.
+// Uses the canonical THREAD_STATUSES enum so adding a status to the store
+// automatically widens the tool surface (and the snapshot test on the
+// system prompt forces a version bump if descriptions drift).
+const zThreadStatus = z.enum(THREAD_STATUSES);
+
+export const UpdateThreadStatusSchema = z.object({
+  thread_id: z.string().trim().min(1),
+  status: zThreadStatus,
 });
 
 const zAuditScope = z.string().trim().min(1).max(500);
@@ -404,6 +425,100 @@ function buildThreadUrl(boardUrl: string | undefined, threadId: string): string 
   return `${boardUrl.replace(/\/+$/, "")}/threads/${threadId}`;
 }
 
+// ---------------------------------------------------------------------------
+// Artifact tool: update_thread_status
+//
+// Drives the thread state machine from the chat (e.g. "ready_to_plan" once the
+// user signs off, "delivered" when the artifact is shipped). The handler
+// enforces project-level ownership before delegating to the threads-store —
+// the chat caller's `project_id` is in `args`, but the row's `project_id` is
+// authoritative; mismatch fails closed with `forbidden` rather than leaking
+// existence of foreign threads.
+// ---------------------------------------------------------------------------
+
+export interface UpdatedThreadStatusResult {
+  id: string;
+  status: ThreadStatus;
+  previous_status: ThreadStatus;
+  title: string;
+  url: string;
+}
+
+async function execUpdateThreadStatus(
+  ctx: ToolContext,
+  args: z.infer<typeof UpdateThreadStatusSchema>,
+): Promise<ToolResult<UpdatedThreadStatusResult>> {
+  if (!isUuid(args.thread_id)) {
+    return { ok: false, error: "thread_id: must be a valid UUID", code: "invalid_args" };
+  }
+
+  const restDeps = ctx.fetchFn ? { fetchFn: ctx.fetchFn } : {};
+
+  let current: Thread;
+  try {
+    current = await getThreadRow(args.thread_id, restDeps);
+  } catch (err) {
+    if (err instanceof ThreadNotFoundError) {
+      return { ok: false, error: err.message, code: "thread_not_found" };
+    }
+    return handleToolError("update_thread_status", err, ctx);
+  }
+
+  // Workspace ownership check — never let a chat session in workspace A drive
+  // a thread that lives in workspace B. The threads-store does not enforce
+  // this at the SQL layer (PATCH by id is workspace-agnostic), so it must
+  // happen here before the write.
+  if (current.workspace_id !== ctx.workspaceId) {
+    logger.warn(
+      { threadId: args.thread_id, expectedWorkspace: ctx.workspaceId, actualWorkspace: current.workspace_id },
+      "update_thread_status: cross-workspace attempt rejected",
+    );
+    return { ok: false, error: "thread does not belong to this workspace", code: "forbidden" };
+  }
+
+  // No-op short circuit. Returning success keeps the model out of a retry
+  // loop if it requests the same status the thread is already in.
+  if (current.status === args.status) {
+    return {
+      ok: true,
+      result: {
+        id: current.id,
+        status: current.status,
+        previous_status: current.status,
+        title: current.title,
+        url: buildThreadUrl(ctx.boardUrl, current.id),
+      },
+    };
+  }
+
+  let updated: Thread;
+  try {
+    updated = await updateThreadRow(args.thread_id, { status: args.status }, restDeps);
+  } catch (err) {
+    if (err instanceof ThreadTransitionError) {
+      return { ok: false, error: err.message, code: "invalid_transition" };
+    }
+    if (err instanceof ThreadValidationError) {
+      return { ok: false, error: err.message, code: "validation_error" };
+    }
+    if (err instanceof ThreadNotFoundError) {
+      return { ok: false, error: err.message, code: "thread_not_found" };
+    }
+    return handleToolError("update_thread_status", err, ctx);
+  }
+
+  return {
+    ok: true,
+    result: {
+      id: updated.id,
+      status: updated.status,
+      previous_status: current.status,
+      title: updated.title,
+      url: buildThreadUrl(ctx.boardUrl, updated.id),
+    },
+  };
+}
+
 // Format-only UUID check — matches threads-store's existing private helper so
 // behavior stays in lockstep. We intentionally do NOT enforce the RFC-4122
 // version/variant nibbles because test fixtures and legacy IDs in the codebase
@@ -577,6 +692,13 @@ export const SIDEKICK_REASONING_TOOLS = {
       "Open a persistent conversation thread for multi-turn dialog when direction is uncertain and needs shaping (user has an idea, unsure scope, wants to sketch). Maps to the Engine thread status machine (draft → waiting_for_input → ready_to_plan → delivered).",
     schema: StartConversationThreadSchema,
     execute: execStartConversationThread,
+  },
+  update_thread_status: {
+    name: "update_thread_status",
+    description:
+      "Move a thread along the state machine (e.g. draft → ready_to_plan once scope is locked, in_progress → delivered when shipped). Pass the thread's UUID and the target status. Allowed transitions are enforced by the store; the tool returns invalid_transition for any non-allowed jump.",
+    schema: UpdateThreadStatusSchema,
+    execute: execUpdateThreadStatus,
   },
   run_expert_audit: {
     name: "run_expert_audit",

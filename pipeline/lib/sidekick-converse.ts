@@ -509,6 +509,10 @@ async function callModel(prompt: string): Promise<string> {
     options: {
       model: "sonnet",
       maxTurns: 1,
+      // CI-AUDIT-EXEMPT: legacy classifier-first converse path — single-shot
+      // JSON output, no tool surface needed. The reasoning-first chat
+      // (sidekick-chat.ts) is the live tool path; this module stays opt-in
+      // until the shadow rollout cuts over. See T-1020.
       allowedTools: [],
       permissionMode: "auto",
     },

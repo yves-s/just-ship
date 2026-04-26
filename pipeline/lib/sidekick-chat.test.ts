@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import {
   validateChatRequest,
   processChat,
@@ -7,10 +7,14 @@ import {
   _resetChatThreadsForTests,
   _getChatThreadForTests,
   _internal,
+  isSidekickReasoningEnabled,
+  buildSidekickAllowedTools,
   type ChatEvent,
   type ChatSink,
   type ModelEvent,
+  type ToolContextProvider,
 } from "./sidekick-chat.ts";
+import type { ToolContext } from "./sidekick-reasoning-tools.ts";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -53,12 +57,18 @@ function memorySink(opts: { disconnectAfter?: number } = {}): {
  * Mock the model runner with a fixed sequence of events. The stub respects
  * the AbortSignal so the disconnect test can observe cancellation.
  */
-function mockModel(events: ModelEvent[]): { calls: number; lastSignalAborted: () => boolean } {
+function mockModel(events: ModelEvent[]): {
+  calls: number;
+  lastSignalAborted: () => boolean;
+  lastCtx: () => unknown;
+} {
   let calls = 0;
   let lastSignal: AbortSignal | null = null;
-  vi.spyOn(_internal, "callChatModel").mockImplementation(async function* (_prompt, signal) {
+  let lastCtx: unknown = undefined;
+  vi.spyOn(_internal, "callChatModel").mockImplementation(async function* (_prompt, signal, ctx) {
     calls++;
     lastSignal = signal;
+    lastCtx = ctx;
     for (const ev of events) {
       if (signal.aborted) return;
       yield ev;
@@ -69,6 +79,7 @@ function mockModel(events: ModelEvent[]): { calls: number; lastSignalAborted: ()
       return calls;
     },
     lastSignalAborted: () => lastSignal?.aborted ?? false,
+    lastCtx: () => lastCtx,
   };
 }
 
@@ -610,5 +621,147 @@ describe("processChat rollback on failure", () => {
     const stored = _getChatThreadForTests(threadId);
     expect(stored?.map(m => m.text)).toEqual(["first", "ok"]);
     expect(stored?.some(m => m.text === "RETRY_ME")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reasoning-tools wiring (T-1020)
+//
+// The chat module's job is to forward a ToolContext from the HTTP handler
+// to the model runner. The actual SDK call lives in `defaultModelRunner`
+// — these tests stub `_internal.callChatModel` to verify the plumbing,
+// not the SDK behaviour. The SDK behaviour is tested separately via the
+// reasoning-tools registry (and the audit-runtime tests for run_expert_audit).
+// ---------------------------------------------------------------------------
+
+describe("isSidekickReasoningEnabled (T-1020 feature flag)", () => {
+  const ORIG = process.env.SIDEKICK_REASONING_ENABLED;
+  afterAll(() => {
+    if (ORIG === undefined) delete process.env.SIDEKICK_REASONING_ENABLED;
+    else process.env.SIDEKICK_REASONING_ENABLED = ORIG;
+  });
+
+  it("is off by default (production safety)", () => {
+    delete process.env.SIDEKICK_REASONING_ENABLED;
+    expect(isSidekickReasoningEnabled()).toBe(false);
+  });
+
+  it("recognises canonical truthy values", () => {
+    for (const v of ["1", "true", "yes", "on", "TRUE", "Yes"]) {
+      process.env.SIDEKICK_REASONING_ENABLED = v;
+      expect(isSidekickReasoningEnabled()).toBe(true);
+    }
+  });
+
+  it("treats other values as off", () => {
+    for (const v of ["0", "false", "no", "off", "", "  "]) {
+      process.env.SIDEKICK_REASONING_ENABLED = v;
+      expect(isSidekickReasoningEnabled()).toBe(false);
+    }
+  });
+});
+
+describe("buildSidekickAllowedTools (T-1020)", () => {
+  it("returns one MCP-prefixed entry per registry tool, never empty", () => {
+    const allowed = buildSidekickAllowedTools();
+    expect(allowed.length).toBeGreaterThan(0);
+    for (const name of allowed) {
+      expect(name.startsWith("mcp__sidekick__")).toBe(true);
+    }
+    // Spot-check: the eight reasoning tools must surface as allowedTools.
+    expect(allowed).toContain("mcp__sidekick__create_ticket");
+    expect(allowed).toContain("mcp__sidekick__update_thread_status");
+    expect(allowed).toContain("mcp__sidekick__run_expert_audit");
+  });
+});
+
+describe("processChat — toolContextProvider plumbing (T-1020)", () => {
+  function makeProviderCtx(): ToolContext {
+    return {
+      apiUrl: "https://board.test.io",
+      apiKey: "test-key",
+      workspaceId: "00000000-0000-0000-0000-000000000001",
+      userId: "11111111-1111-1111-1111-111111111111",
+      boardUrl: "https://board.test.io",
+    };
+  }
+
+  it("forwards the provider's ToolContext to the model runner", async () => {
+    const m = mockModel([{ kind: "assistant_final", id: "x", text: "ok" }]);
+    const expectedCtx = makeProviderCtx();
+    const provider: ToolContextProvider = () => expectedCtx;
+
+    const { sink } = memorySink();
+    await processChat(
+      { user_text: "hi", project_id: "p-1" },
+      sink,
+      { signal: new AbortController().signal, toolContextProvider: provider },
+    );
+
+    expect(m.lastCtx()).toBe(expectedCtx);
+  });
+
+  it("passes null to the runner when no provider is configured (legacy path)", async () => {
+    const m = mockModel([{ kind: "assistant_final", id: "x", text: "ok" }]);
+
+    const { sink } = memorySink();
+    await processChat(
+      { user_text: "hi", project_id: "p-1" },
+      sink,
+      { signal: new AbortController().signal },
+    );
+
+    expect(m.lastCtx()).toBeNull();
+  });
+
+  it("treats a provider returning null as the legacy path", async () => {
+    const m = mockModel([{ kind: "assistant_final", id: "x", text: "ok" }]);
+    const provider: ToolContextProvider = () => null;
+
+    const { sink } = memorySink();
+    await processChat(
+      { user_text: "hi", project_id: "p-1" },
+      sink,
+      { signal: new AbortController().signal, toolContextProvider: provider },
+    );
+
+    expect(m.lastCtx()).toBeNull();
+  });
+
+  it("falls back to legacy path and still completes the turn when the provider throws", async () => {
+    const m = mockModel([{ kind: "assistant_final", id: "x", text: "ok" }]);
+    const provider: ToolContextProvider = () => {
+      throw new Error("creds resolution failed");
+    };
+
+    const { sink, events } = memorySink();
+    await processChat(
+      { user_text: "hi", project_id: "p-1" },
+      sink,
+      { signal: new AbortController().signal, toolContextProvider: provider },
+    );
+
+    expect(m.lastCtx()).toBeNull();
+    // Crucially: the chat turn still ships a final message — a provider
+    // failure must not break the user-facing path. Tools are best-effort.
+    expect(events.find(e => e.type === "message")).toBeDefined();
+  });
+
+  it("supports an async provider", async () => {
+    const m = mockModel([{ kind: "assistant_final", id: "x", text: "ok" }]);
+    const expectedCtx = makeProviderCtx();
+    const provider: ToolContextProvider = async () => {
+      await new Promise((r) => setImmediate(r));
+      return expectedCtx;
+    };
+
+    const { sink } = memorySink();
+    await processChat(
+      { user_text: "hi", project_id: "p-1" },
+      sink,
+      { signal: new AbortController().signal, toolContextProvider: provider },
+    );
+
+    expect(m.lastCtx()).toBe(expectedCtx);
   });
 });

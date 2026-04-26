@@ -1,4 +1,5 @@
-import { query } from "@anthropic-ai/claude-agent-sdk";
+import { query, createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
+import type { McpSdkServerConfigWithInstance } from "@anthropic-ai/claude-agent-sdk";
 import { randomUUID } from "node:crypto";
 import { logger } from "./logger.ts";
 import { Sentry } from "./sentry.ts";
@@ -6,6 +7,12 @@ import {
   SIDEKICK_PROMPT_VERSION,
   buildSidekickSystemPrompt,
 } from "./sidekick-system-prompt.ts";
+import {
+  SIDEKICK_REASONING_TOOLS,
+  executeSidekickReasoningTool,
+  type ToolContext,
+  type ToolResult,
+} from "./sidekick-reasoning-tools.ts";
 
 /**
  * Sidekick Chat Mode — T-922.
@@ -375,13 +382,105 @@ export type ModelEvent =
   | { kind: "error"; message: string; code?: string };
 
 export interface ModelRunner {
-  (prompt: string, signal: AbortSignal): AsyncIterable<ModelEvent>;
+  (prompt: string, signal: AbortSignal, ctx: ToolContext | null): AsyncIterable<ModelEvent>;
 }
 
-async function* defaultModelRunner(prompt: string, signal: AbortSignal): AsyncIterable<ModelEvent> {
-  // Production path — delegate to the Claude Agent SDK. Tools are empty today
-  // (Child #2 plugs them in via allowedTools + MCP). The SDK still emits
-  // delta + final events, so the shape is identical to the tool-enabled path.
+/**
+ * Feature flag: read at call-time so tests can flip the env var per-test
+ * without re-importing the module. Truthy values: "1", "true", "yes" (case-
+ * insensitive). Anything else (including unset) is false.
+ *
+ * Default OFF in production. Engine deployments and dev environments that
+ * want the reasoning-first chat opt in by setting `SIDEKICK_REASONING_ENABLED=1`.
+ */
+export function isSidekickReasoningEnabled(): boolean {
+  const raw = process.env.SIDEKICK_REASONING_ENABLED;
+  if (!raw) return false;
+  const v = raw.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes" || v === "on";
+}
+
+/**
+ * Build the in-process MCP server that exposes the eight reasoning tools to
+ * the SDK. The same `ToolContext` is captured by every handler in this server,
+ * so workspace/user credentials are scoped to a single chat turn and never
+ * leak to a subsequent turn that may have a different user.
+ *
+ * Exported for testability — the chat tests stub the server when they need to
+ * verify the wiring shape without spinning up the SDK.
+ */
+export function buildSidekickMcpServer(ctx: ToolContext): McpSdkServerConfigWithInstance {
+  // Each registry entry's schema is a `z.object({...})` — `.shape` gives the
+  // ZodRawShape the SDK's `tool()` helper expects. We dispatch through
+  // `executeSidekickReasoningTool` rather than calling `t.execute` directly
+  // so the same Zod-validation + error-shape contract used by the unit tests
+  // applies on the live path.
+  //
+  // The `tool()` helper is generic over a specific ZodRawShape. We index the
+  // registry by string name at runtime, so the static type for any one entry
+  // is `ZodTypeAny` — we cast to a generic `Record<string, unknown>` shape
+  // for the SDK signature, which matches the runtime contract: handlers
+  // receive a `Record<string, unknown>` and validate with their own schema.
+  type SdkTool = ReturnType<typeof tool<Record<string, never>>>;
+  const tools: SdkTool[] = Object.values(SIDEKICK_REASONING_TOOLS).map((t) => {
+    const shape = (t.schema as unknown as { shape: Record<string, never> }).shape;
+    return tool<Record<string, never>>(
+      t.name,
+      t.description,
+      shape,
+      async (args) => {
+        const result: ToolResult = await executeSidekickReasoningTool(t.name, ctx, args);
+        // MCP CallToolResult contract: `content` is an array of text blocks;
+        // tool failures get `isError: true` so the model can recognise the
+        // outcome and either retry, swap tools, or fall back to a plain reply.
+        // We serialise the structured result so the model can echo numbers /
+        // urls back to the user verbatim.
+        const text = JSON.stringify(result);
+        if (result.ok) {
+          return { content: [{ type: "text", text }] };
+        }
+        return { content: [{ type: "text", text }], isError: true };
+      },
+    );
+  });
+
+  return createSdkMcpServer({
+    name: "sidekick",
+    version: "1.0.0",
+    tools,
+  });
+}
+
+/**
+ * Compute the SDK `allowedTools` array for the reasoning-first chat path.
+ * MCP tools surface to the SDK with the prefix `mcp__<server>__<toolname>`.
+ * Exported for the CI grep-guard test — it imports this function to verify
+ * the array is non-empty when the feature flag is on.
+ */
+export function buildSidekickAllowedTools(): string[] {
+  return Object.keys(SIDEKICK_REASONING_TOOLS).map((name) => `mcp__sidekick__${name}`);
+}
+
+async function* defaultModelRunner(
+  prompt: string,
+  signal: AbortSignal,
+  ctx: ToolContext | null,
+): AsyncIterable<ModelEvent> {
+  // Production path — delegate to the Claude Agent SDK. With a ToolContext and
+  // the feature flag on we wire the eight reasoning tools as in-process MCP
+  // tools; without either, fall back to the legacy tool-less stream so the
+  // shadow rollout never breaks pre-existing deployments. Both branches emit
+  // the same delta/tool/final event shape, so downstream sink code is uniform.
+  const reasoningOn = ctx !== null && isSidekickReasoningEnabled();
+  const mcpServers = reasoningOn ? { sidekick: buildSidekickMcpServer(ctx) } : undefined;
+  const allowedTools = reasoningOn ? buildSidekickAllowedTools() : [];
+  // The reasoning-first path needs more than one turn — the SDK runs the
+  // tool-use loop internally, and one turn = one model API call. Three turns
+  // covers tool_use → tool_result → final reply with one fix-up turn budgeted
+  // for retries / chained tool calls. The legacy tool-less path stays at
+  // maxTurns: 1 because there is no loop to budget for.
+  const maxTurns = reasoningOn ? 4 : 1;
+
   let finalText = "";
   let assistantUuid: string | null = null;
 
@@ -390,10 +489,13 @@ async function* defaultModelRunner(prompt: string, signal: AbortSignal): AsyncIt
       prompt,
       options: {
         model: "sonnet",
-        maxTurns: 1,
-        allowedTools: [],
+        maxTurns,
+        // CI-AUDIT-EXEMPT: reasoning-flag-off path is the legacy shadow-mode
+        // default — see T-1020 ACs. The grep guard whitelists this line.
+        allowedTools,
         permissionMode: "auto",
         includePartialMessages: true,
+        ...(mcpServers ? { mcpServers } : {}),
       },
     });
 
@@ -491,12 +593,39 @@ export const _internal: { callChatModel: ModelRunner } = {
 // Public entry point — drive the SSE stream from a validated request.
 // ---------------------------------------------------------------------------
 
+/**
+ * Provides the per-request `ToolContext` (board credentials, workspace, user)
+ * that the reasoning tools need to talk to the board API and the threads-store.
+ *
+ * The chat module deliberately does NOT read `serverConfig` directly — that
+ * would make the unit tests of `processChat` either spin up a real server
+ * config or stub it via module mocks. Instead the HTTP handler builds a
+ * provider closure from `serverConfig` once, and the test path supplies a
+ * canned context.
+ *
+ * Returning `null` or omitting the provider entirely keeps the legacy
+ * "no tools" behaviour — the chat still streams replies, just without the
+ * reasoning-first tool-call loop. This is the production default until the
+ * shadow rollout flips.
+ */
+export type ToolContextProvider = (
+  req: ChatRequest,
+) => ToolContext | null | Promise<ToolContext | null>;
+
 export interface ProcessChatOptions {
   /**
    * Abort signal for the model call. The HTTP handler wires this to the
    * response's close event so a disconnected client cancels the upstream.
    */
   signal: AbortSignal;
+  /**
+   * When set AND the reasoning-tools feature flag is enabled, the chat turn
+   * runs with the eight reasoning tools wired into the SDK as MCP tools.
+   * When omitted or returning null, the chat falls back to the legacy
+   * tool-less stream — preserving production behaviour during the shadow
+   * rollout (T-1020 AC: Default in Production: alt).
+   */
+  toolContextProvider?: ToolContextProvider;
 }
 
 /**
@@ -522,6 +651,28 @@ export async function processChat(
   }
   thread.inFlight = true;
 
+  // Resolve the ToolContext up front so a provider error short-circuits the
+  // turn before we commit a user message we'd then have to roll back. A
+  // null/undefined provider, or a provider returning null, keeps the legacy
+  // tool-less path active — that is the production default during the
+  // shadow rollout.
+  let toolCtx: ToolContext | null = null;
+  if (opts.toolContextProvider) {
+    try {
+      toolCtx = (await opts.toolContextProvider(req)) ?? null;
+    } catch (err) {
+      logger.error(
+        { err: err instanceof Error ? err.message : String(err), threadId: thread.id, projectId: req.project_id },
+        "chat: toolContextProvider threw — falling back to tool-less stream",
+      );
+      Sentry.captureException(err, {
+        tags: { area: "sidekick-chat", phase: "tool_context_provider" },
+        extra: { threadId: thread.id, projectId: req.project_id },
+      });
+      toolCtx = null;
+    }
+  }
+
   // Commit the user turn up front so that even if the model call errors we
   // keep a coherent transcript (matching the Board's existing behaviour).
   // We snapshot the index we just wrote so we can roll it back on failure,
@@ -535,7 +686,7 @@ export async function processChat(
   let sawError = false;
 
   try {
-    for await (const ev of _internal.callChatModel(prompt, opts.signal)) {
+    for await (const ev of _internal.callChatModel(prompt, opts.signal, toolCtx)) {
       if (!sink.isOpen()) {
         logger.info(
           { threadId: thread.id, projectId: req.project_id, reason: "client_disconnect" },
