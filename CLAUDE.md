@@ -44,7 +44,7 @@ Stack: TypeScript (under `pipeline/`), Bash (`setup.sh`, scripts), Markdown (age
 
 ## How work flows
 
-Every user intent enters through the **Sidekick** — the reasoning orchestrator that lives wherever the user is (Claude Code terminal or Board browser widget). The Sidekick reads intent and decides between creating a ticket, starting a thread, running an audit, consulting an expert, triggering development, or creating a new project. The classification rules, category table, and role-anrede handling live in `@.claude/rules/sidekick-terminal-routing.md`.
+Every user intent enters through the **Sidekick** — the reasoning orchestrator that lives wherever the user is (Claude Code terminal or Board browser widget). Both surfaces talk to the same Engine endpoint via a single chat stream — no local classification, no four-category branch, no role-address pattern-match. The orchestrator LLM reads the input and reasons about which of its eight tools to call: `create_ticket`, `create_epic`, `create_project`, `start_conversation_thread`, `update_thread_status`, `run_expert_audit`, `consult_expert`, `start_sparring`. The terminal mechanics (when to open the chat stream, thread handling, on-`main` guardrail) live in `@.claude/rules/sidekick-terminal-routing.md`. The actual reasoning, the tool roster with Zod schemas, and the role-address heuristics live in `pipeline/lib/sidekick-system-prompt.ts` and `pipeline/lib/sidekick-reasoning-tools.ts`.
 
 Once a ticket exists, work runs through three commands:
 

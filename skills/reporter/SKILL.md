@@ -27,8 +27,8 @@ Load the Reporter and render the matching template at exactly these five trigger
 |---|---|---|
 | End of `/develop` — after QA, docs-check, PR creation, summary | `templates/develop-complete.md` | `commands/develop.md` step 11 via `.claude/scripts/develop-summary.sh` |
 | End of `/ship` — after merge, branch delete, worktree cleanup | `templates/ship-complete.md` | `commands/ship.md` step 7 via `.claude/scripts/ship-summary.sh` |
-| Sidekick classification → Category 1 (single ticket) | `templates/ticket-created.md` | `.claude/rules/sidekick-terminal-routing.md` Category 1 row |
-| Sidekick classification → Category 2 (epic + children) | `templates/epic-created.md` | `.claude/rules/sidekick-terminal-routing.md` Category 2 row |
+| Sidekick `create_ticket` tool result (single ticket) | `templates/ticket-created.md` | Engine chat-stream surface (`pipeline/lib/sidekick-reasoning-tools.ts → create_ticket`) |
+| Sidekick `create_epic` tool result (epic + children) | `templates/epic-created.md` | Engine chat-stream surface (`pipeline/lib/sidekick-reasoning-tools.ts → create_epic`) |
 | Any phase transition during a long-running operation | `templates/phase-progress.md` | `/develop`, `/ship`, `/just-ship-audit`, any multi-phase flow |
 
 `/just-ship-status` also uses this skill: it composes a status view out of `phase-progress.md` (for any active operation), plus the relevant completion template (`develop-complete.md` / `ship-complete.md`) if a PR is pending.
@@ -101,7 +101,7 @@ A template is rendered by substituting `{variable}` placeholders with string val
 
 - **`commands/develop.md`** calls `develop-complete` at step 11 via `.claude/scripts/develop-summary.sh`. The script and the template evolve together; `pipeline/run.ts` writes `.claude/.reporter-team-roster.json` in its Pre-Develop step so the renderer can fill the Team block without inventing rows.
 - **`commands/ship.md`** calls `ship-complete` at step 7 via `.claude/scripts/ship-summary.sh` (the "EINZIGE Ausgabe an den User" block). Pre-Merge (build / tests / conflict-check), Merge (commit / push / merge), and Post-Merge phases also render `phase-progress` lines.
-- **`.claude/rules/sidekick-terminal-routing.md`** references `ticket-created` and `epic-created` in the Category 1 / Category 2 rows.
+- **`pipeline/lib/sidekick-reasoning-tools.ts`** is the canonical caller of `ticket-created` (after `create_ticket`) and `epic-created` (after `create_epic`); the terminal mechanics that surface those template renders live in `.claude/rules/sidekick-terminal-routing.md`.
 - **`skills/just-ship-status/SKILL.md`** composes status screens out of `phase-progress` and the relevant completion template.
 
 When any of the above are edited, also check that the variables they pass match the template's declared set.
