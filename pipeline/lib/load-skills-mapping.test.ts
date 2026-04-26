@@ -66,12 +66,14 @@ function setupFixture(): { dir: string; cleanup: () => void } {
   mkdirSync(resolve(dir, "skills/data-engineer"), { recursive: true });
   mkdirSync(resolve(dir, "skills/frontend-design"), { recursive: true });
   mkdirSync(resolve(dir, "skills/webapp-testing"), { recursive: true });
+  mkdirSync(resolve(dir, "skills/verification-before-completion"), { recursive: true });
   // The current loader resolves `${name}.md` directly under `skills/`, not
   // `skills/<name>/SKILL.md`. Mirror what setup.sh installs.
   writeFileSync(resolve(dir, "skills/backend.md"), makeSkill("backend", ROLE_ANNOUNCEMENT.backend));
   writeFileSync(resolve(dir, "skills/data-engineer.md"), makeSkill("data-engineer", ROLE_ANNOUNCEMENT["data-engineer"]));
   writeFileSync(resolve(dir, "skills/frontend-design.md"), makeSkill("frontend-design", ROLE_ANNOUNCEMENT.frontend));
   writeFileSync(resolve(dir, "skills/webapp-testing.md"), makeSkill("webapp-testing", ROLE_ANNOUNCEMENT.qa));
+  writeFileSync(resolve(dir, "skills/verification-before-completion.md"), makeSkill("verification-before-completion", ""));
 
   // Agents directory (.claude/agents/) — required for expectedAgentRolesForRepo()
   mkdirSync(resolve(dir, ".claude/agents"), { recursive: true });
@@ -79,6 +81,7 @@ function setupFixture(): { dir: string; cleanup: () => void } {
   writeFileSync(resolve(dir, ".claude/agents/data-engineer.md"), makeAgent("data-engineer"));
   writeFileSync(resolve(dir, ".claude/agents/frontend.md"), makeAgent("frontend"));
   writeFileSync(resolve(dir, ".claude/agents/qa.md"), makeAgent("qa"));
+  writeFileSync(resolve(dir, ".claude/agents/devops.md"), makeAgent("devops"));
 
   return {
     dir,
@@ -128,6 +131,17 @@ describe("loadSkills — SKILL_AGENT_MAP wiring (T-1023)", () => {
     expect(map["webapp-testing"]).toContain("qa");
   });
 
+  it("SKILL_AGENT_MAP includes devops via verification-before-completion (T-1025)", () => {
+    // T-1025: devops had no SKILL_AGENT_MAP entry, so loadSkillsValidated
+    // crashed at startup with "agents have no domain skill assigned — devops".
+    // The fix adds devops to the shared verification-before-completion entry.
+    const map = getSkillAgentMap();
+    expect(
+      map["verification-before-completion"],
+      "verification-before-completion must include devops as a target role"
+    ).toContain("devops");
+  });
+
   it("delivers backend skill to backend role with ⚡ announcement", () => {
     const config = makeConfig(["backend"]);
     const result = loadSkills(fixture.dir, config);
@@ -161,16 +175,37 @@ describe("loadSkills — SKILL_AGENT_MAP wiring (T-1023)", () => {
     expect(content).toContain(ROLE_ANNOUNCEMENT.qa);
   });
 
+  it("delivers verification-before-completion to devops role (T-1025)", () => {
+    // T-1025: devops was the one agent role with an agent file but no skill
+    // wired into byRole. With the shared entry on verification-before-completion,
+    // loading just that skill must produce non-empty content for the devops role.
+    const config = makeConfig(["verification-before-completion"]);
+    const result = loadSkills(fixture.dir, config);
+    const content = result.byRole.get("devops");
+    expect(
+      content,
+      "byRole.get('devops') must be non-empty after T-1025 fix"
+    ).toBeTruthy();
+    expect(content).toContain("# verification-before-completion body");
+  });
+
   it("realistic engine config: every primary role gets its skill", () => {
     const config = makeConfig([
       "backend",
       "data-engineer",
       "frontend-design",
       "webapp-testing",
+      "verification-before-completion",
     ]);
     const result = loadSkills(fixture.dir, config);
 
-    for (const role of ["backend", "data-engineer", "frontend", "qa"] as AgentRole[]) {
+    for (const role of [
+      "backend",
+      "data-engineer",
+      "frontend",
+      "qa",
+      "devops",
+    ] as AgentRole[]) {
       const content = result.byRole.get(role);
       expect(
         content,
