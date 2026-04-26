@@ -44,9 +44,12 @@ import {
   processChat,
   ChatValidationError,
   ChatThreadBusyError,
+  isSidekickReasoningEnabled,
   type ChatEvent,
   type ChatSink,
+  type ToolContextProvider,
 } from "./lib/sidekick-chat.ts";
+import type { ToolContext as SidekickToolContext } from "./lib/sidekick-reasoning-tools.ts";
 import {
   validateCreateConversationRequest,
   createConversation,
@@ -1958,10 +1961,37 @@ async function handleSidekickChatRoute(req: IncomingMessage, res: ServerResponse
   // processChat throws `ChatThreadBusyError` synchronously before emitting
   // anything, so we catch it via a pre-flight invocation that delegates into
   // the SSE sink only once we know the call is accepted.
+  // Build the per-request ToolContext only when the reasoning-first chat is
+  // active. The provider closure runs inside processChat, captures the
+  // current request, and never reaches into globals — so a future per-tenant
+  // credential rotation just needs to swap the closure target.
+  //
+  // Production stays on the legacy tool-less path until SIDEKICK_REASONING_ENABLED
+  // is flipped (T-1020 AC: Default in Production: alt). The engine repo and
+  // dev environments opt in via env var.
+  const toolContextProvider: ToolContextProvider | undefined = isSidekickReasoningEnabled()
+    ? (req): SidekickToolContext | null => {
+        const workspaceId = serverConfig?.workspace?.workspace_id;
+        if (!workspaceId) return null;
+        const { apiUrl, apiKey } = getApiCredentials();
+        const boardUrl = serverConfig?.workspace?.board_url;
+        return {
+          apiUrl,
+          apiKey,
+          workspaceId,
+          ...(req.user_id ? { userId: req.user_id } : {}),
+          ...(boardUrl ? { boardUrl } : {}),
+        };
+      }
+    : undefined;
+
   try {
     const sink = createSseChatSink(res, abortCtrl);
     try {
-      await processChat(validated, sink, { signal: abortCtrl.signal });
+      await processChat(validated, sink, {
+        signal: abortCtrl.signal,
+        ...(toolContextProvider ? { toolContextProvider } : {}),
+      });
     } catch (err) {
       if (err instanceof ChatThreadBusyError) {
         // The thread was reserved by another concurrent request. We already

@@ -249,6 +249,15 @@ const TOOL_CORPUS: ToolCorpusScenario[] = [
     notes: "Speculative 'sollen wir' → thread. Direction IS the question.",
   },
 
+  // --- update_thread_status (1) — drive the thread state machine (T-1020) ---
+  {
+    userInput: "Pass — die Onboarding-Discovery ist durch, Plan steht. Setz den Thread auf ready_to_plan.",
+    expectedTool: "update_thread_status",
+    forbiddenFinalization: "Welche datenbank soll dafür den Status persistieren?",
+    businessFollowUp: "Soll ich danach automatisch ein Epic für die Implementierung anlegen?",
+    notes: "User confirms direction is locked → advance thread state. Allowed transitions are enforced server-side.",
+  },
+
   // --- run_expert_audit (3) — analysis / review / consistency ---
   {
     userInput: "Design Lead, mach ein Audit der Mobile Experience auf dem Board.",
@@ -386,9 +395,9 @@ describe("tool-selection corpus — reasoning-first (T-980)", () => {
     expect(TOOL_CORPUS.length).toBeGreaterThanOrEqual(20);
   });
 
-  it("exercises all seven tools from the reasoning-first roster", () => {
+  it("exercises all eight tools from the reasoning-first roster (T-1020 added update_thread_status)", () => {
     const registryNames = Object.keys(SIDEKICK_REASONING_TOOLS) as SidekickReasoningToolName[];
-    expect(registryNames.length).toBe(7);
+    expect(registryNames.length).toBe(8);
     const seen = new Set<SidekickReasoningToolName>(TOOL_CORPUS.map((s) => s.expectedTool));
     const missing = registryNames.filter((t) => !seen.has(t));
     expect(missing, `tools without a corpus scenario: ${missing.join(", ")}`).toEqual([]);

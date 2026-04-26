@@ -162,6 +162,25 @@ If any answer is no, the intervention is wrong or this document must change firs
 
 ---
 
+## Shadow rollout for the reasoning-first chat (T-1020)
+
+The reasoning-first Sidekick chat path (eight tools wired into the SDK as in-process MCP tools) ships behind the `SIDEKICK_REASONING_ENABLED` environment flag. The flag is **off by default in production** so existing deployments keep the legacy tool-less stream they have been running on. Engine repos and dev environments opt in by setting the flag to `1` / `true` / `yes` / `on`.
+
+**Why shadow, not hard cutover.** The Browser-Widget classifier from the pre-1020 era used a separate code path; the new path may classify identical inputs differently because tool-use is a fundamentally different signal than a fixed classifier. A hard cutover would risk surprising regressions for live workspaces during a single deploy. Shadow mode keeps the old path live in production while the new path is exercised in the engine repo and any opted-in environments — every divergence becomes observable before the cutover.
+
+**Cutover criteria.** The flag flips from default-off to default-on once **all** of:
+
+1. The engine repo has run with the flag enabled for ≥ 7 consecutive days with no `expert_runtime_not_implemented` failure spikes in Sentry (`area: sidekick-chat` + `tool: …`).
+2. At least one ticket per artifact tool (`create_ticket`, `create_epic`, `create_project`, `start_conversation_thread`, `update_thread_status`) has been driven from the chat path end-to-end and ended in the expected board state.
+3. The CI grep guard (`pipeline/lib/sidekick-allowed-tools-guard.test.ts`) is green and no production callsite has been added that uses `allowedTools: []` without an explicit `// CI-AUDIT-EXEMPT:` annotation.
+4. The shadow-mode prompt version (`SIDEKICK_PROMPT_VERSION`) has not been bumped in the cutover window (a bump resets the timer — too much can drift between observed and post-flip behaviour otherwise).
+
+After cutover the legacy classifier modules (`sidekick-policy.ts`, `sidekick-converse.ts`, `sidekick-tools.ts`) become deletion candidates — that work lands in a follow-up ticket (out of scope for T-1020 per the ticket's "Out of Scope" list).
+
+**Reversibility.** Flipping the flag back to off restores the legacy path in a single deploy; the chat code keeps both branches reachable through the cutover window. Once the legacy modules are deleted, the flag becomes vestigial and can be removed in the same PR.
+
+---
+
 ## What this document does not do
 
 - It does not prescribe which skills to create. That is product work.

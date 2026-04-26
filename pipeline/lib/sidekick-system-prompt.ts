@@ -4,7 +4,7 @@ import { SIDEKICK_REASONING_TOOLS, type SidekickReasoningToolName } from "./side
  * Sidekick reasoning-first system prompt — T-986 (child of T-978).
  *
  * Teaches the orchestrator LLM how to reason about user intent and pick the
- * right one of the seven tools defined in `sidekick-reasoning-tools.ts`. This
+ * right one of the eight tools defined in `sidekick-reasoning-tools.ts`. This
  * replaces the legacy generic chat prompt that lived inline in
  * `sidekick-chat.ts` (and the classifier-first intake skill that was removed
  * in T-979).
@@ -36,7 +36,7 @@ import { SIDEKICK_REASONING_TOOLS, type SidekickReasoningToolName } from "./side
  * `prompt_version` tag, so behaviour regressions can be attributed to a
  * specific revision.
  */
-export const SIDEKICK_PROMPT_VERSION = "v1" as const;
+export const SIDEKICK_PROMPT_VERSION = "v3" as const;
 
 export type SidekickPromptVersion = typeof SIDEKICK_PROMPT_VERSION;
 
@@ -67,7 +67,7 @@ export interface SidekickPromptExample {
 
 /**
  * Corpus of input → tool-call pairs. Required: at least 15 entries spanning
- * all seven tools, role-address variants (build / analysis / question verbs),
+ * all eight tools, role-address variants (build / analysis / question verbs),
  * and the conversation fallback. Order matters — examples are rendered in
  * declaration order and the snapshot test asserts the order is stable.
  */
@@ -120,6 +120,14 @@ export const SIDEKICK_PROMPT_EXAMPLES: ReadonlyArray<SidekickPromptExample> = Ob
     tool: "start_conversation_thread",
     args_sketch: `{ topic: "Onboarding rework — direction TBD", initial_context: "User has a rough idea, wants to shape it", project_id: "<active>" }`,
     notes: "Idea with no clear scope yet → open a thread, don't speculate an artifact.",
+  },
+
+  // --- update_thread_status — drive the thread state machine ---
+  {
+    input: "Pass — die Onboarding-Discovery ist durch, der Plan steht. Setz den Thread auf ready_to_plan.",
+    tool: "update_thread_status",
+    args_sketch: `{ thread_id: "<active-thread>", status: "ready_to_plan" }`,
+    notes: "User confirms direction is locked → advance thread state. Allowed transitions are enforced server-side; invalid jumps surface as invalid_transition.",
   },
   {
     input: "Sollen wir vielleicht Analytics einbauen?",
@@ -247,7 +255,7 @@ If you catch yourself drafting an implementation question, replace it with a bus
 
 # Your tools
 
-You have exactly seven tools. Four create persistent board artifacts. Three spawn read-only specialist agents.
+You have exactly eight tools. Five drive the board / thread state (four create persistent artifacts, one updates the thread state machine). Three spawn read-only specialist agents.
 
 ${renderToolRoster()}
 
@@ -295,7 +303,7 @@ Never expose internal mechanics ("I'll dispatch an audit subagent now"). The use
 
 # Few-shot grounding
 
-The corpus below shows the canonical move for representative inputs. The list spans all seven tools and the three role-address verb patterns. When in doubt, find the closest example and mirror its tool choice.
+The corpus below shows the canonical move for representative inputs. The list spans all eight tools and the three role-address verb patterns. When in doubt, find the closest example and mirror its tool choice.
 
 ${renderExamples()}
 

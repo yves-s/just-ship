@@ -97,13 +97,14 @@ function makeCtx(overrides: Partial<ToolContext> = {}): ToolContext {
 // ---------------------------------------------------------------------------
 
 describe("SIDEKICK_REASONING_TOOLS registry", () => {
-  it("exposes exactly the seven tools from the plan", () => {
+  it("exposes the eight reasoning tools — seven from the plan plus update_thread_status (T-1020)", () => {
     const names = listSidekickReasoningToolNames();
     expect(names).toEqual([
       "create_ticket",
       "create_epic",
       "create_project",
       "start_conversation_thread",
+      "update_thread_status",
       "run_expert_audit",
       "consult_expert",
       "start_sparring",
@@ -140,7 +141,7 @@ describe("SIDEKICK_REASONING_TOOLS registry", () => {
 describe("toolSchemas() — Anthropic SDK tool-use payload", () => {
   it("emits JSON Schema objects the SDK can consume", () => {
     const schemas = toolSchemas();
-    expect(schemas).toHaveLength(7);
+    expect(schemas).toHaveLength(8);
     for (const s of schemas) {
       expect(typeof s.name).toBe("string");
       expect(typeof s.description).toBe("string");
@@ -549,6 +550,179 @@ describe("start_conversation_thread", () => {
     expect(res.ok).toBe(true);
     const body = calls[0].body as { pending_questions: unknown };
     expect(body.pending_questions).toEqual([]);
+  });
+});
+
+describe("update_thread_status (T-1020)", () => {
+  const THREAD_ID = "33333333-3333-3333-3333-333333333333";
+  const WORKSPACE_ID = "00000000-0000-0000-0000-000000000001";
+
+  it("transitions a thread from draft → ready_to_plan when the workspace owns it (happy path)", async () => {
+    const draftRow = {
+      id: THREAD_ID,
+      workspace_id: WORKSPACE_ID,
+      project_id: "22222222-2222-2222-2222-222222222222",
+      user_id: "11111111-1111-1111-1111-111111111111",
+      title: "Analytics idea",
+      status: "draft",
+      classification: null,
+      pending_questions: [],
+      last_activity_at: "2026-04-23T00:00:00Z",
+      created_at: "2026-04-23T00:00:00Z",
+    };
+    const updatedRow = { ...draftRow, status: "ready_to_plan" };
+    // First call = getThread; second call = getThread again (transition validation reads current),
+    // third call = PATCH. We need to script enough fetches to cover both store calls.
+    const { fn, calls } = makeMockFetch([
+      { body: [draftRow] },          // getThread (initial fetch in tool handler)
+      { body: [draftRow] },          // getThread inside updateThread (transition check)
+      { body: [updatedRow] },        // PATCH response
+    ]);
+    const ctx = makeCtx({ fetchFn: fn });
+
+    const res = await executeSidekickReasoningTool("update_thread_status", ctx, {
+      thread_id: THREAD_ID,
+      status: "ready_to_plan",
+    });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.result).toMatchObject({
+        id: THREAD_ID,
+        status: "ready_to_plan",
+        previous_status: "draft",
+      });
+    }
+    // Last call must be the PATCH against the threads endpoint.
+    expect(calls.at(-1)?.method).toBe("PATCH");
+    expect(calls.at(-1)?.url).toContain(`/rest/v1/threads?id=eq.${encodeURIComponent(THREAD_ID)}`);
+  });
+
+  it("rejects cross-workspace status updates with `forbidden` (security)", async () => {
+    const foreignRow = {
+      id: THREAD_ID,
+      workspace_id: "ffffffff-ffff-ffff-ffff-ffffffffffff",
+      project_id: "22222222-2222-2222-2222-222222222222",
+      user_id: "11111111-1111-1111-1111-111111111111",
+      title: "Foreign thread",
+      status: "draft",
+      classification: null,
+      pending_questions: [],
+      last_activity_at: "2026-04-23T00:00:00Z",
+      created_at: "2026-04-23T00:00:00Z",
+    };
+    const { fn, calls } = makeMockFetch([{ body: [foreignRow] }]);
+    const ctx = makeCtx({ fetchFn: fn });
+
+    const res = await executeSidekickReasoningTool("update_thread_status", ctx, {
+      thread_id: THREAD_ID,
+      status: "ready_to_plan",
+    });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.code).toBe("forbidden");
+    // Crucially: no PATCH was issued. The only call was the GET.
+    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(0);
+  });
+
+  it("returns thread_not_found when the thread does not exist", async () => {
+    const { fn } = makeMockFetch([{ body: [] }]); // empty rows = ThreadNotFoundError
+    const ctx = makeCtx({ fetchFn: fn });
+
+    const res = await executeSidekickReasoningTool("update_thread_status", ctx, {
+      thread_id: THREAD_ID,
+      status: "ready_to_plan",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.code).toBe("thread_not_found");
+  });
+
+  it("returns invalid_transition when the requested status is not allowed from current", async () => {
+    // closed → anything is forbidden by the transition map.
+    const closedRow = {
+      id: THREAD_ID,
+      workspace_id: WORKSPACE_ID,
+      project_id: "22222222-2222-2222-2222-222222222222",
+      user_id: "11111111-1111-1111-1111-111111111111",
+      title: "Closed thread",
+      status: "closed",
+      classification: null,
+      pending_questions: [],
+      last_activity_at: "2026-04-23T00:00:00Z",
+      created_at: "2026-04-23T00:00:00Z",
+    };
+    const { fn } = makeMockFetch([
+      { body: [closedRow] }, // getThread (handler)
+      { body: [closedRow] }, // getThread inside updateThread → triggers ThreadTransitionError
+    ]);
+    const ctx = makeCtx({ fetchFn: fn });
+
+    const res = await executeSidekickReasoningTool("update_thread_status", ctx, {
+      thread_id: THREAD_ID,
+      status: "draft",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.code).toBe("invalid_transition");
+  });
+
+  it("rejects invalid_args when thread_id is not a UUID", async () => {
+    const { fn, calls } = makeMockFetch([]);
+    const ctx = makeCtx({ fetchFn: fn });
+
+    const res = await executeSidekickReasoningTool("update_thread_status", ctx, {
+      thread_id: "not-a-uuid",
+      status: "ready_to_plan",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.code).toBe("invalid_args");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("rejects invalid_args when status is not in the THREAD_STATUSES enum", async () => {
+    const { fn, calls } = makeMockFetch([]);
+    const ctx = makeCtx({ fetchFn: fn });
+
+    const res = await executeSidekickReasoningTool("update_thread_status", ctx, {
+      thread_id: THREAD_ID,
+      status: "shipped", // not a valid status
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.code).toBe("invalid_args");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("short-circuits to a no-op success when the thread is already in the requested status", async () => {
+    const draftRow = {
+      id: THREAD_ID,
+      workspace_id: WORKSPACE_ID,
+      project_id: "22222222-2222-2222-2222-222222222222",
+      user_id: "11111111-1111-1111-1111-111111111111",
+      title: "Already draft",
+      status: "draft",
+      classification: null,
+      pending_questions: [],
+      last_activity_at: "2026-04-23T00:00:00Z",
+      created_at: "2026-04-23T00:00:00Z",
+    };
+    const { fn, calls } = makeMockFetch([{ body: [draftRow] }]);
+    const ctx = makeCtx({ fetchFn: fn });
+
+    const res = await executeSidekickReasoningTool("update_thread_status", ctx, {
+      thread_id: THREAD_ID,
+      status: "draft",
+    });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.result).toMatchObject({
+        id: THREAD_ID,
+        status: "draft",
+        previous_status: "draft",
+      });
+    }
+    // No PATCH was issued — short-circuit avoids unnecessary writes (and
+    // keeps the model out of a retry loop on a redundant tool call).
+    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(0);
   });
 });
 

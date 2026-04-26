@@ -13,24 +13,37 @@ import {
   type CreatedTicket,
   type CreatedProject,
 } from "./sidekick-create.ts";
-import { createThread as createThreadRow, type Thread } from "./threads-store.ts";
+import {
+  createThread as createThreadRow,
+  getThread as getThreadRow,
+  updateThread as updateThreadRow,
+  THREAD_STATUSES,
+  ThreadNotFoundError,
+  ThreadTransitionError,
+  ThreadValidationError,
+  type Thread,
+  type ThreadStatus,
+} from "./threads-store.ts";
 import { runAuditAsTool } from "./audit-runtime.ts";
 
 /**
- * Sidekick reasoning-first tool layer — T-983 (child of T-978).
+ * Sidekick reasoning-first tool layer — T-983 (child of T-978), extended in
+ * T-1020 with `update_thread_status`.
  *
- * Defines the seven tools the reasoning-first Sidekick orchestrator exposes
+ * Defines the eight tools the reasoning-first Sidekick orchestrator exposes
  * to Claude via tool-use. Replaces the classifier-first model that lived in
  * `sidekick-tools.ts` — the old classifier path was removed in T-979.
  *
- * Four artifact tools produce persistent board state; three expert tools
- * spawn read-only specialist agents. Each tool has a Zod schema for runtime
- * validation and an async handler. Expert-tool handlers return a stable
- * `not_implemented` error until T-980 ("Audit agent runtime") lands — this
- * is explicitly called out in the ticket's out-of-scope section.
+ * Five tools drive board / thread state (four create persistent artifacts,
+ * one — `update_thread_status` — drives the thread state machine); three
+ * expert tools spawn read-only specialist agents. Each tool has a Zod schema
+ * for runtime validation and an async handler. Expert-tool handlers return a
+ * stable `not_implemented` error for `consult_expert` and `start_sparring`
+ * until their runtimes land (`run_expert_audit` is wired against T-985's
+ * audit-runtime).
  *
  * Plan: docs/superpowers/plans/2026-04-23-sidekick-reasoning-architecture.md
- * Section 3.1 defines the seven tools; section 3.6 the thread scoping.
+ * Section 3.1 defines the original seven tools; T-1020 added the eighth.
  */
 
 // ---------------------------------------------------------------------------
@@ -110,6 +123,17 @@ export const StartConversationThreadSchema = z.object({
   topic: zTitle,
   initial_context: z.string().trim().min(1).max(10_000),
   project_id: zProjectId,
+});
+
+// `update_thread_status` — drive the thread state machine from the chat.
+// Uses the canonical THREAD_STATUSES enum so adding a status to the store
+// automatically widens the tool surface (and the snapshot test on the
+// system prompt forces a version bump if descriptions drift).
+const zThreadStatus = z.enum(THREAD_STATUSES);
+
+export const UpdateThreadStatusSchema = z.object({
+  thread_id: z.string().trim().min(1),
+  status: zThreadStatus,
 });
 
 const zAuditScope = z.string().trim().min(1).max(500);
@@ -404,6 +428,115 @@ function buildThreadUrl(boardUrl: string | undefined, threadId: string): string 
   return `${boardUrl.replace(/\/+$/, "")}/threads/${threadId}`;
 }
 
+// ---------------------------------------------------------------------------
+// Artifact tool: update_thread_status
+//
+// Drives the thread state machine from the chat (e.g. "ready_to_plan" once the
+// user signs off, "delivered" when the artifact is shipped). The handler
+// enforces workspace-level ownership before delegating to the threads-store —
+// the chat caller's workspace is in `ctx.workspaceId`, but the row's
+// `workspace_id` is authoritative; mismatch fails closed with `forbidden`
+// rather than silently writing across workspaces. We deliberately do NOT
+// return `thread_not_found` for foreign rows: the chat is already
+// authenticated to a workspace, so leaking "this UUID exists but elsewhere"
+// is a controlled disclosure (the alternative would mask a misconfigured
+// caller as a missing-row case, which is a worse debugging story).
+// ---------------------------------------------------------------------------
+
+export interface UpdatedThreadStatusResult {
+  id: string;
+  status: ThreadStatus;
+  previous_status: ThreadStatus;
+  title: string;
+  url: string;
+}
+
+async function execUpdateThreadStatus(
+  ctx: ToolContext,
+  args: z.infer<typeof UpdateThreadStatusSchema>,
+): Promise<ToolResult<UpdatedThreadStatusResult>> {
+  if (!isUuid(args.thread_id)) {
+    return { ok: false, error: "thread_id: must be a valid UUID", code: "invalid_args" };
+  }
+
+  const restDeps = ctx.fetchFn ? { fetchFn: ctx.fetchFn } : {};
+
+  let current: Thread;
+  try {
+    current = await getThreadRow(args.thread_id, restDeps);
+  } catch (err) {
+    if (err instanceof ThreadNotFoundError) {
+      return { ok: false, error: err.message, code: "thread_not_found" };
+    }
+    return handleToolError("update_thread_status", err, ctx);
+  }
+
+  // Workspace ownership check — never let a chat session in workspace A drive
+  // a thread that lives in workspace B. The threads-store does not enforce
+  // this at the SQL layer (PATCH by id is workspace-agnostic), so it must
+  // happen here before the write. Sentry-captured because a cross-workspace
+  // attempt is either a configuration bug or an attack — both warrant a
+  // visible signal in the error tracker, not just a log line.
+  if (current.workspace_id !== ctx.workspaceId) {
+    logger.warn(
+      { threadId: args.thread_id, expectedWorkspace: ctx.workspaceId, actualWorkspace: current.workspace_id },
+      "update_thread_status: cross-workspace attempt rejected",
+    );
+    Sentry.captureMessage("update_thread_status: cross-workspace attempt rejected", {
+      level: "warning",
+      tags: { tool: "update_thread_status", area: "sidekick-reasoning-tools", outcome: "forbidden" },
+      extra: {
+        threadId: args.thread_id,
+        expectedWorkspace: ctx.workspaceId,
+        actualWorkspace: current.workspace_id,
+      },
+    });
+    return { ok: false, error: "thread does not belong to this workspace", code: "forbidden" };
+  }
+
+  // No-op short circuit. Returning success keeps the model out of a retry
+  // loop if it requests the same status the thread is already in.
+  if (current.status === args.status) {
+    return {
+      ok: true,
+      result: {
+        id: current.id,
+        status: current.status,
+        previous_status: current.status,
+        title: current.title,
+        url: buildThreadUrl(ctx.boardUrl, current.id),
+      },
+    };
+  }
+
+  let updated: Thread;
+  try {
+    updated = await updateThreadRow(args.thread_id, { status: args.status }, restDeps);
+  } catch (err) {
+    if (err instanceof ThreadTransitionError) {
+      return { ok: false, error: err.message, code: "invalid_transition" };
+    }
+    if (err instanceof ThreadValidationError) {
+      return { ok: false, error: err.message, code: "validation_error" };
+    }
+    if (err instanceof ThreadNotFoundError) {
+      return { ok: false, error: err.message, code: "thread_not_found" };
+    }
+    return handleToolError("update_thread_status", err, ctx);
+  }
+
+  return {
+    ok: true,
+    result: {
+      id: updated.id,
+      status: updated.status,
+      previous_status: current.status,
+      title: updated.title,
+      url: buildThreadUrl(ctx.boardUrl, updated.id),
+    },
+  };
+}
+
 // Format-only UUID check — matches threads-store's existing private helper so
 // behavior stays in lockstep. We intentionally do NOT enforce the RFC-4122
 // version/variant nibbles because test fixtures and legacy IDs in the codebase
@@ -531,7 +664,7 @@ function handleToolError(toolName: string, err: unknown, ctx: ToolContext): Tool
 }
 
 // ---------------------------------------------------------------------------
-// Tool registry — single place that lists all seven tools with their schemas
+// Tool registry — single place that lists all eight tools with their schemas
 // and handlers. Consumed by the Sidekick orchestrator (T-981) via
 // `toolSchemas()` (JSON Schema for the Anthropic SDK tool-use contract) and
 // `executeSidekickReasoningTool()` (dispatch by name).
@@ -577,6 +710,13 @@ export const SIDEKICK_REASONING_TOOLS = {
       "Open a persistent conversation thread for multi-turn dialog when direction is uncertain and needs shaping (user has an idea, unsure scope, wants to sketch). Maps to the Engine thread status machine (draft → waiting_for_input → ready_to_plan → delivered).",
     schema: StartConversationThreadSchema,
     execute: execStartConversationThread,
+  },
+  update_thread_status: {
+    name: "update_thread_status",
+    description:
+      "Move a thread along the state machine (e.g. draft → ready_to_plan once scope is locked, in_progress → delivered when shipped). Pass the thread's UUID and the target status. Allowed transitions are enforced by the store; the tool returns invalid_transition for any non-allowed jump.",
+    schema: UpdateThreadStatusSchema,
+    execute: execUpdateThreadStatus,
   },
   run_expert_audit: {
     name: "run_expert_audit",
@@ -625,7 +765,7 @@ export function zodToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
 }
 
 /**
- * Return all seven tools in the shape the Anthropic SDK expects for its
+ * Return all eight tools in the shape the Anthropic SDK expects for its
  * tool-use loop: `{ name, description, input_schema }`. Pass the result
  * directly into `client.messages.create({ tools: ... })` in T-981.
  */

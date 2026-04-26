@@ -139,6 +139,8 @@ Labels: ${ticket.labels}`;
         cwd: workDir,
         model: "haiku",
         permissionMode: "default",
+        // CI-AUDIT-EXEMPT: triage agent is single-turn JSON-only — tools
+        // would only confuse the model and bloat the budget. See T-1020.
         allowedTools: [],
         maxTurns: 1,
         env: { ...process.env, ...(env ?? {}) },
