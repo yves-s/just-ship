@@ -1,3 +1,7 @@
+---
+applies_to: top-level-only
+---
+
 Kurze Bestätigungswörter wie "passt", "done", "fertig", "klappt", "sieht gut aus" dürfen `/ship` NUR dann triggern, wenn der Konversationskontext eindeutig auf eine Review-Freigabe wartet.
 
 `/ship` ist destruktiv im Sinne von irreversibel sichtbar: commit + push + merge zu `main`. Ein falsch interpretiertes "passt" kann ungeprüften Code in Production bringen. Die Trigger-Logik muss also vorsichtig sein — im Zweifel nicht shippen.

@@ -1,4 +1,5 @@
 ---
+applies_to: customer-projects-only
 description: Shopify domain knowledge comes from the MCP server, not local skill files
 paths:
   - "sections/**"

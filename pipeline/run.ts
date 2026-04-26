@@ -10,7 +10,7 @@ import { createEventHooks, postPipelineEvent, postPipelineSummary, type EventCon
 import { runQaWithFixLoop } from "./lib/qa-fix-loop.ts";
 import type { QaContext } from "./lib/qa-runner.ts";
 import { generateChangeSummary } from "./lib/change-summary.ts";
-import { loadSkills, type AgentRole } from "./lib/load-skills.ts";
+import { loadSkills, loadSkillsValidated, type AgentRole } from "./lib/load-skills.ts";
 import { Sentry } from "./lib/sentry.ts";
 import { updateCheckpoint, clearCheckpoint, type PipelineCheckpoint } from "./lib/checkpoint.ts";
 import { sanitizeBranchName } from "./lib/sanitize.ts";
@@ -256,7 +256,10 @@ export async function executePipeline(opts: PipelineOptions): Promise<PipelineRe
 
   // --- Load agents + orchestrator prompt ---
   const agents = loadAgents(projectDir);
-  const loadedSkills = loadSkills(projectDir, config);
+  // T-1021: validate applies_to: scope markers as the loader runs. Throws on
+  // missing/mismatched markers when JS_APPLIES_TO_MODE is fail (the engine-repo
+  // default), warns otherwise. Single source of truth for the runtime context.
+  const loadedSkills = loadSkillsValidated(projectDir, config, "pipeline");
   if (loadedSkills.skillNames.length > 0) {
     logger.info({
       skills: loadedSkills.skillNames,
@@ -1020,7 +1023,10 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
   }
 
   const agents = loadAgents(projectDir);
-  const loadedSkills = loadSkills(projectDir, config);
+  // T-1021: validate applies_to: scope markers as the loader runs. Throws on
+  // missing/mismatched markers when JS_APPLIES_TO_MODE is fail (the engine-repo
+  // default), warns otherwise. Single source of truth for the runtime context.
+  const loadedSkills = loadSkillsValidated(projectDir, config, "pipeline");
   if (loadedSkills.skillNames.length > 0) {
     logger.info({
       skills: loadedSkills.skillNames,

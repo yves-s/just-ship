@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: setup-just-ship
 description: Just Ship installieren und Projekt konfigurieren — Stack erkennen, project.json befüllen, Board verbinden
 disable-model-invocation: true

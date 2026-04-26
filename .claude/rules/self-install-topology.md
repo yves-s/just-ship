@@ -1,3 +1,7 @@
+---
+applies_to: engine-repo-only
+---
+
 This repo is Just Ship bootstrapping itself: the framework **source** lives here, AND the framework is **installed** here so we can use `/ticket`, `/develop`, `/ship` while developing the framework. The two coexist in the filesystem — and they must not be confused. Editing the installed copy silently diverges it from the source and causes incidents like T-989 (2026-04 stash-pop conflict that blocked `git pull` for six rebase attempts).
 
 ## The topology

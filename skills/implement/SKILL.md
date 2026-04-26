@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: implement
 description: Implementiere was gerade besprochen wurde — ohne Ticket, mit vollem Agent-Workflow
 disable-model-invocation: true

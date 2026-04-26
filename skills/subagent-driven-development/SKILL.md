@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: subagent-driven-development
 description: Use when executing implementation plans with independent tasks in the current session
 triggers:

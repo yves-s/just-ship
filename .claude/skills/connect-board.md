@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: connect-board
 description: Board-Verbindung einrichten — Status prüfen oder auf Terminal verweisen
 ---

@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: reporter
 description: Single source of truth for how the just-ship pipeline talks to the CEO. Defines the voice (Result-First, tables for lists of 3+, status icons, short active sentences, no inner monologue) and the five Core Templates (develop-complete, ship-complete, ticket-created, epic-created, phase-progress). Every user-facing output string produced by an agent, a skill, or a pipeline phase runs through this skill — never freeform prose. Triggers at the end of /develop, at the end of /ship, in Sidekick replies for ticket/epic creation, in /just-ship-status, and during phase-progress updates. Load whenever you are about to render a terminal block the CEO will read.
 triggers:

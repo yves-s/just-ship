@@ -1,3 +1,7 @@
+---
+applies_to: top-level-only
+---
+
 Don't merge PRs or branches to main without explicit user confirmation.
 
 - "Mach weiter" means continue the process (review, test), NOT merge

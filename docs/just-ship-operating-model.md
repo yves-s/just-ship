@@ -181,6 +181,52 @@ After cutover the legacy classifier modules (`sidekick-policy.ts`, `sidekick-con
 
 ---
 
+## Artifact scoping — `applies_to:` (T-1021)
+
+Every artifact (rule, skill, agent definition) carries one — and only one — `applies_to:` value in its YAML frontmatter. This value tells loaders and human readers WHERE the artifact applies. Missing or mismatched values are not silently skipped — the loader throws.
+
+The vocabulary is deliberately small (10 values) so that scope is unambiguous. It lives in `pipeline/lib/applies-to.ts` as the single source of truth; the pre-commit hook only checks for the field's presence.
+
+**Vocabulary:**
+
+| Value | Meaning |
+|---|---|
+| `all-agents` | Universal — applies to top-level Claude Code AND all subagents. |
+| `top-level-only` | Top-level Claude Code session only. Subagents do not see / act on this. |
+| `subagents-only` | Spawned subagents only (e.g. `backend`, `qa`, `frontend`). |
+| `audit-runtime-only` | Inside `runExpertAudit` SDK calls only — never general-purpose agents. |
+| `pipeline-runtime-only` | Inside `pipeline/run.ts` (the engine orchestrator) only. |
+| `engine-repo-only` | Only when running in the just-ship engine source repo (both `pipeline/` and `.pipeline/` present). |
+| `customer-projects-only` | Only when running in an installed customer project. |
+| `source-repo-only` | Source files that don't ship to install (e.g. anything under `pipeline/`). |
+| `install-repo-only` | Files that exist post-install (e.g. anything under `.pipeline/`). |
+| `human-readable-only` | Documentation-only artifact — must never be loaded by any runtime. |
+
+**Why this matters.** Three bug classes in 48 hours had the same root: artifacts loaded into the wrong context.
+
+1. **T-1014** — `Read('skills/<role>/SKILL.md')` in agent files referenced source paths that don't exist in installed repos.
+2. **CTO Audit Lauf 1** — `expert-audit-scope.md` (scope: code-runtime in `audit-runtime.ts`) was read by a general-purpose agent as a universal behavioral rule, leading to a single-shot audit instead of the parallel-subagent audit that runtime constraint actually allows.
+3. **Naked subagents** — skills only present in `skills/` (source) but not in `.claude/skills/` (install) silently failed to load. No error; subagents ran without their domain skill.
+
+`applies_to:` makes scope a first-class field. Loader hard-fails on mismatch. Pre-commit hook rejects new artifacts without it.
+
+### 4-step migration for new repos / forks
+
+If you're adopting `applies_to:` in a fork or downstream project:
+
+1. **Default new artifacts to the safest scope.** Skills usually start as `all-agents`. Rules default to `top-level-only` unless they are clearly subagent or runtime-specific. Agents default to `subagents-only`; the orchestrator is `pipeline-runtime-only`.
+2. **Migrate existing artifacts in warn mode.** Set `JS_APPLIES_TO_MODE=warn` so the loader logs missing/mismatched markers without throwing. Run the pipeline; review warnings; add `applies_to:` to each artifact based on actual usage.
+3. **Verify by spot-check.** Spawn a subagent (e.g. `backend`) and confirm it announces `⚡ Backend Dev joined` (skill body fired) without a body `Read('skills/...')` instruction. If the announcement is missing, the loader injection isn't reaching that role — check the `skills:` frontmatter on the agent.
+4. **Flip to fail mode.** Unset `JS_APPLIES_TO_MODE` (defaults to `fail` in engine repos, `warn` in customer repos) or explicitly set `JS_APPLIES_TO_MODE=fail`. Now the next mismatched artifact stops the pipeline at startup with a precise error message instead of silently producing a naked agent.
+
+### Two-truth elimination
+
+Before T-1021, four agents (`backend`, `data-engineer`, `frontend`, `qa`) declared their domain skills in two competing places: the `skills:` frontmatter (read by `pipeline/lib/load-skills.ts` and auto-injected into the system prompt) AND a body instruction telling the subagent to `Read('skills/<role>/SKILL.md')` as its first tool call. Either path could win; both could fail differently. This is the bug shape that produces silent drift.
+
+After T-1021 the body instructions are gone. The `skills:` frontmatter is the single truth. The loader injection is the single delivery mechanism. The `⚡ Role joined` announcement still fires — it lives in the skill body, which gets injected, so it appears the moment the loader does its work.
+
+---
+
 ## What this document does not do
 
 - It does not prescribe which skills to create. That is product work.

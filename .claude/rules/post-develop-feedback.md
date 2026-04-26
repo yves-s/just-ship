@@ -1,3 +1,7 @@
+---
+applies_to: top-level-only
+---
+
 When the user gives feedback after `/develop` has run (corrections, bug reports, design adjustments, "fix X", "Y is wrong", "change Z"), this is an implementation task — not a question.
 
 **Do NOT ask the user what to do. Classify and act:**

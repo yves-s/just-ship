@@ -1,3 +1,7 @@
+---
+applies_to: top-level-only
+---
+
 Bei Sidekick-typischen Eingaben (Ideen, Feature-Wünsche, Projektstart, "bau mal", "ich will X") wird im Terminal derselbe Flow ausgeführt wie im Browser-Widget. Claude Code IST der Sidekick im Terminal — es gibt keinen `/sidekick` Command.
 
 Der `sidekick-intake` Skill ist Single Source of Truth für die Klassifikation. Er wird direkt geladen (nicht die API — die ist nur der Web-Wrapper). Ergebnis: vier Kategorien → vier Routing-Entscheidungen.

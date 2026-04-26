@@ -1,4 +1,5 @@
 ---
+applies_to: subagents-only
 name: triage
 description: Analysiert Ticket-Qualität und reichert bei Bedarf die Beschreibung an. Schnelle Vorprüfung vor der Agent-Execution.
 tools:

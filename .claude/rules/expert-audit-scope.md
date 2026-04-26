@@ -1,3 +1,7 @@
+---
+applies_to: audit-runtime-only
+---
+
 Audit agents spawned via `run_expert_audit` are read-only specialists. They analyze the scope they are given, report structured findings, and return control to the Sidekick. They never write, never create tickets, never call board APIs — if something needs to change, the Sidekick decides what to do with the finding.
 
 The runtime in `pipeline/lib/audit-runtime.ts` enforces these constraints in code (`allowedTools` whitelist + `canUseTool` callback). This rule documents the constraints so anyone reading the code, reviewing a PR, or writing a new audit flow understands why the runtime looks the way it does — and which shortcuts are off-limits.

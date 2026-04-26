@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: just-ship-update
 description: CLAUDE.md und project.json gegen aktuelle Framework-Templates abgleichen und ergänzen
 disable-model-invocation: true

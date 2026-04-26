@@ -1,4 +1,5 @@
 ---
+applies_to: subagents-only
 name: triage-enrichment
 description: Phase 2 der Triage — reichert Tickets mit Codebase-Kontext an. Läuft nach Phase 1 mit Tool-Zugriff.
 tools: Grep, Glob, Read

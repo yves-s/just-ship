@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: autonomy-boundary
 description: >
   The operating system for decision-making in this team. ALWAYS load this skill. It defines what the human decides and what the AI expert team decides autonomously. Use on EVERY task, EVERY conversation, EVERY feature. This skill prevents the anti-pattern of asking the user technical, design, or implementation questions that an expert should answer. It is the single most important skill in the stack — without it, every other skill's quality is bottlenecked by the user being asked questions they shouldn't answer. Triggers on: literally everything. This is not optional. Load it first, always.

@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: just-ship-vps
 description: VPS verwalten — Status pruefen, Projekte verbinden, neuen VPS einrichten
 ---

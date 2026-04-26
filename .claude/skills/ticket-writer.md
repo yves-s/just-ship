@@ -1,4 +1,5 @@
 ---
+applies_to: all-agents
 name: ticket-writer
 description: Write high-quality product tickets — user stories, bugs, improvements, spikes, and technical debt items. Use this skill whenever the user wants to create, refine, split, or review a ticket for any project management tool (Notion, Linear, Jira, GitHub Issues, or plain Markdown). Triggers on phrases like "write a ticket", "create a story", "document this bug", "formulate a ticket for...", "this ticket is too big", or when the user shares rough requirements, bug reports, or feature ideas that need structuring. Also triggers when the user asks to review or improve an existing ticket. Always use this skill before writing tickets to ensure consistent, PM-quality structure — never include implementation details, code, or architecture decisions in tickets.
 triggers:

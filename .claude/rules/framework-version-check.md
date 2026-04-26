@@ -1,3 +1,7 @@
+---
+applies_to: top-level-only
+---
+
 At session start, check if the installed framework version may be outdated.
 
 **IMPORTANT: This rule is READ-ONLY. Do NOT run any bash commands. Only use the Read tool to check files, then report findings as text.**
