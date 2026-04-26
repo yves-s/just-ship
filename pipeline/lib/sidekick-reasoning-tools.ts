@@ -430,10 +430,14 @@ function buildThreadUrl(boardUrl: string | undefined, threadId: string): string 
 //
 // Drives the thread state machine from the chat (e.g. "ready_to_plan" once the
 // user signs off, "delivered" when the artifact is shipped). The handler
-// enforces project-level ownership before delegating to the threads-store —
-// the chat caller's `project_id` is in `args`, but the row's `project_id` is
-// authoritative; mismatch fails closed with `forbidden` rather than leaking
-// existence of foreign threads.
+// enforces workspace-level ownership before delegating to the threads-store —
+// the chat caller's workspace is in `ctx.workspaceId`, but the row's
+// `workspace_id` is authoritative; mismatch fails closed with `forbidden`
+// rather than silently writing across workspaces. We deliberately do NOT
+// return `thread_not_found` for foreign rows: the chat is already
+// authenticated to a workspace, so leaking "this UUID exists but elsewhere"
+// is a controlled disclosure (the alternative would mask a misconfigured
+// caller as a missing-row case, which is a worse debugging story).
 // ---------------------------------------------------------------------------
 
 export interface UpdatedThreadStatusResult {
@@ -467,12 +471,23 @@ async function execUpdateThreadStatus(
   // Workspace ownership check — never let a chat session in workspace A drive
   // a thread that lives in workspace B. The threads-store does not enforce
   // this at the SQL layer (PATCH by id is workspace-agnostic), so it must
-  // happen here before the write.
+  // happen here before the write. Sentry-captured because a cross-workspace
+  // attempt is either a configuration bug or an attack — both warrant a
+  // visible signal in the error tracker, not just a log line.
   if (current.workspace_id !== ctx.workspaceId) {
     logger.warn(
       { threadId: args.thread_id, expectedWorkspace: ctx.workspaceId, actualWorkspace: current.workspace_id },
       "update_thread_status: cross-workspace attempt rejected",
     );
+    Sentry.captureMessage("update_thread_status: cross-workspace attempt rejected", {
+      level: "warning",
+      tags: { tool: "update_thread_status", area: "sidekick-reasoning-tools", outcome: "forbidden" },
+      extra: {
+        threadId: args.thread_id,
+        expectedWorkspace: ctx.workspaceId,
+        actualWorkspace: current.workspace_id,
+      },
+    });
     return { ok: false, error: "thread does not belong to this workspace", code: "forbidden" };
   }
 
