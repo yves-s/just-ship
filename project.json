@@ -29,7 +29,21 @@
     "store": ""
   },
   "skills": {
-    "domain": [],
+    "domain": [
+      "backend",
+      "data-engineer",
+      "frontend-design",
+      "creative-design",
+      "webapp-testing",
+      "test-driven-development",
+      "verification-before-completion",
+      "ticket-writer",
+      "dispatching-parallel-agents",
+      "subagent-driven-development",
+      "writing-plans",
+      "systematic-debugging",
+      "find-skills"
+    ],
     "custom": []
   },
   "paths": {
