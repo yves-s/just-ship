@@ -333,15 +333,29 @@ export function _getChatThreadForTests(id: string): ChatMessage[] | null {
 // Prompt assembly
 // ---------------------------------------------------------------------------
 
-function buildPrompt(thread: ThreadState, newUserText: string, ctx: ChatContext | undefined, attachments: ChatAttachment[] | undefined): string {
+function buildPrompt(
+  thread: ThreadState,
+  newUserText: string,
+  ctx: ChatContext | undefined,
+  attachments: ChatAttachment[] | undefined,
+  toolCtx: ToolContext | null,
+): string {
   // The base prompt — including the seven-tool roster, role-address heuristics,
   // and the few-shot corpus — comes from `sidekick-system-prompt.ts`. We append
   // per-turn context (page URL, attachments) and the running transcript here;
   // the prompt module's `buildSidekickSystemPrompt` handles the project/page
   // context block so the snapshot-tested base prompt stays untouched.
+  //
+  // T-1049: pass `workspaceId` from the resolved ToolContext so the
+  // `create_project` few-shot example can reference the active workspace ID
+  // through the per-turn context block instead of via a literal placeholder.
+  // The project ID itself is intentionally NOT plumbed into the prompt — it
+  // is server-stamped onto every artifact via `ctx.projectId`, never visible
+  // to the model.
   const baseWithContext = buildSidekickSystemPrompt({
     ...(ctx?.page_url ? { pageUrl: ctx.page_url } : {}),
     ...(ctx?.page_title ? { pageTitle: ctx.page_title } : {}),
+    ...(toolCtx?.workspaceId ? { workspaceId: toolCtx.workspaceId } : {}),
   });
 
   // Attachments pass through as URL hints until proper multimodal lands.
@@ -679,7 +693,7 @@ export async function processChat(
   // keeping the next turn's prompt clean.
   const userTurnIndex = thread.messages.push({ role: "user", text: req.user_text }) - 1;
 
-  const prompt = buildPrompt(thread, req.user_text, req.context, req.attachments);
+  const prompt = buildPrompt(thread, req.user_text, req.context, req.attachments, toolCtx);
 
   let finalText = "";
   let finalId: string | null = null;

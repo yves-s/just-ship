@@ -1979,6 +1979,13 @@ async function handleSidekickChatRoute(req: IncomingMessage, res: ServerResponse
           apiUrl,
           apiKey,
           workspaceId,
+          // T-1049: stamp the active project_id from the validated chat
+          // request so the Sidekick tool handlers can attach it to every
+          // project-scoped artifact without exposing the field on the tool
+          // surface. Auth-validation that the project belongs to the active
+          // workspace is out of scope here — it lives in the follow-up
+          // "Sidekick Auth-Hardening" ticket.
+          projectId: req.project_id,
           ...(req.user_id ? { userId: req.user_id } : {}),
           ...(boardUrl ? { boardUrl } : {}),
         };

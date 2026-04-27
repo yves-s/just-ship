@@ -35,7 +35,7 @@ import { FORBIDDEN_QUESTION_TOPICS } from "./sidekick-policy.ts";
 // see exactly what to paste back in.
 // ---------------------------------------------------------------------------
 
-const LOCKED_PROMPT_DIGEST = "v3:4920f245159df8c4ad2f26cacf30dac1edefca3ebad9e66246234ed1986f7f4c";
+const LOCKED_PROMPT_DIGEST = "v4:d8a7f0b75bb880bedf61b85df92a44d00b46ab070abbe8d932a0679e2a83479b";
 
 function digest(text: string): string {
   return `${SIDEKICK_PROMPT_VERSION}:${createHash("sha256").update(text, "utf8").digest("hex")}`;
@@ -249,6 +249,47 @@ describe("sidekick-system-prompt", () => {
       const out = buildSidekickSystemPrompt({ projectName: "Just Ship" });
       expect(out).not.toContain("Page URL:");
       expect(out).not.toContain("Page title:");
+    });
+
+    it("renders the active workspace ID into the per-turn context block (T-1049)", () => {
+      const wsId = "00000000-0000-0000-0000-000000000000";
+      const out = buildSidekickSystemPrompt({
+        projectName: "Test Project",
+        workspaceId: wsId,
+      });
+      expect(out).toContain("Per-turn context");
+      expect(out).toContain(`Active workspace ID: ${wsId}`);
+    });
+  });
+
+  describe("placeholder safety (T-1049)", () => {
+    it("rendered prompt contains no unresolved placeholders", () => {
+      // Realistic per-turn context — the kind of input the HTTP handler ships
+      // every chat turn. The guard runs against the FULL rendered prompt
+      // (base body + per-turn context), so a placeholder in either block fails
+      // the test.
+      const prompt = buildSidekickSystemPrompt({
+        projectName: "Test Project",
+        projectType: "web",
+        workspaceId: "00000000-0000-0000-0000-000000000000",
+        pageUrl: "https://example.com",
+        pageTitle: "Test Page",
+      });
+
+      // Forbidden placeholder patterns. The first matches any
+      // `<single_lowercase_token>` style placeholder (incl. snake_case and
+      // dashes). HTML-like text in prose does not match — the prompt body is
+      // plain markdown with no real HTML tags. The second catches Mustache-
+      // style markers. Historically `<active>` leaked through CI for 8
+      // months because the snapshot test accepted it as legitimate prompt
+      // content; this guard closes that door.
+      const FORBIDDEN_PATTERNS = [
+        /<[a-z][a-z0-9_-]*>/i,
+        /\{\{[^}]+\}\}/,
+      ];
+      for (const pattern of FORBIDDEN_PATTERNS) {
+        expect(prompt).not.toMatch(pattern);
+      }
     });
   });
 });

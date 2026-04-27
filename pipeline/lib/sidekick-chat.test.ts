@@ -681,6 +681,7 @@ describe("processChat — toolContextProvider plumbing (T-1020)", () => {
       apiUrl: "https://board.test.io",
       apiKey: "test-key",
       workspaceId: "00000000-0000-0000-0000-000000000001",
+      projectId: "22222222-2222-2222-2222-222222222222",
       userId: "11111111-1111-1111-1111-111111111111",
       boardUrl: "https://board.test.io",
     };
