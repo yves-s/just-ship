@@ -22,3 +22,5 @@ Before writing code, determine which abstraction level you are working on. The l
 | Build a feature inline that other projects need too | Extract to a skill, agent, or setup.sh function | Framework provides, projects consume |
 
 **The npm analogy:** project.json is to Just Ship what package.json is to Node. External dependencies are declared, not vendored. setup.sh is the install step. Skills are the modules.
+
+**Plugin-Dependencies:** see `@.claude/rules/plugin-dependency-system.md` for the actual `project.json.plugins` schema, `setup.sh` resolution logic, and the framework-defaults-win merge rule.
