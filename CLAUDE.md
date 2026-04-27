@@ -84,6 +84,7 @@ These rules are always in effect. Each is single-responsibility and intentionall
 @.claude/rules/brainstorming-design-awareness.md
 @.claude/rules/self-install-topology.md
 @.claude/rules/framework-abstraction-check.md
+@.claude/rules/plugin-dependency-system.md
 @.claude/rules/ticket-number-format.md
 @.claude/rules/detect-stuck-tickets.md
 @.claude/rules/framework-version-check.md
