@@ -1,0 +1,143 @@
+name: Notify on workflow failure
+
+# Sends a Telegram alert when a watched workflow fails on the main branch.
+#
+# WHY HERE (not just-ship-ops): workflow_run events are intra-repo only.
+# WATCHED: "Build Pipeline Image", "Setup Drift Check". Add more names to the
+#   `workflows:` list under `on.workflow_run` to extend the watchlist.
+# SECRETS: TELEGRAM_BOT_TOKEN, TELEGRAM_OPERATOR_CHAT_ID (same as ops staleness-watchdog).
+# RUNBOOK: runbooks/notify-on-failure.md in just-ship-ops.
+#
+# DEDUPLICATION: workflow_run fires once per run, not per step — one alert per
+#   failed run is guaranteed by the trigger model; no extra dedup logic needed.
+
+on:
+  workflow_run:
+    workflows:
+      - "Build Pipeline Image"
+      - "Setup Drift Check"
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      force_alert:
+        description: "Send a test alert (runbook drill)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: notify-on-failure-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Fire on real failures on main, OR on a manual force_alert dispatch.
+    if: >
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.conclusion == 'failure') ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.event.inputs.force_alert == 'true')
+
+    steps:
+      # 1 — Resolve run metadata into step outputs
+      - name: Resolve metadata
+        id: meta
+        env:
+          FORCED: ${{ github.event.inputs.force_alert }}
+          WF_NAME: ${{ github.event.workflow_run.name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          AUTHOR_NAME: ${{ github.event.workflow_run.head_commit.author.name }}
+          AUTHOR_EMAIL: ${{ github.event.workflow_run.head_commit.author.email }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -euo pipefail
+          if [ "${FORCED:-false}" = "true" ]; then
+            echo "mode=test"         >> "$GITHUB_OUTPUT"
+            echo "sha_short=(test)"  >> "$GITHUB_OUTPUT"
+            echo "author=(test)"     >> "$GITHUB_OUTPUT"
+            echo "run_url=(test)"    >> "$GITHUB_OUTPUT"
+            echo "wf_name=notify-on-failure dry-run" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=real"                                 >> "$GITHUB_OUTPUT"
+            echo "sha_short=${HEAD_SHA:0:7}"                 >> "$GITHUB_OUTPUT"
+            echo "author=${AUTHOR_NAME:-${AUTHOR_EMAIL:-}}"  >> "$GITHUB_OUTPUT"
+            echo "run_url=${RUN_URL}"                        >> "$GITHUB_OUTPUT"
+            echo "wf_name=${WF_NAME}"                        >> "$GITHUB_OUTPUT"
+          fi
+
+      # 2 — Fetch first failing step name via GitHub API (real runs only)
+      - name: Fetch failing step
+        id: step
+        if: steps.meta.outputs.mode == 'real'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          STEP_NAME=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/jobs" \
+            --jq '.jobs[] | select(.conclusion=="failure") | .steps[] | select(.conclusion=="failure") | .name' \
+            2>/dev/null | head -n 1 || true)
+          echo "name=${STEP_NAME:-(unknown — see run logs)}" >> "$GITHUB_OUTPUT"
+
+      # 3 — Compose and send Telegram alert
+      - name: Send Telegram alert
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_OPERATOR_CHAT_ID }}
+          MODE: ${{ steps.meta.outputs.mode }}
+          WF_NAME: ${{ steps.meta.outputs.wf_name }}
+          SHA_SHORT: ${{ steps.meta.outputs.sha_short }}
+          AUTHOR: ${{ steps.meta.outputs.author }}
+          RUN_URL: ${{ steps.meta.outputs.run_url }}
+          FAILING_STEP: ${{ steps.step.outputs.name }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "::warning::Telegram secrets not configured — skipping notification"
+            exit 0
+          fi
+          if [ "$MODE" = "test" ]; then
+            MSG="$(printf '🧪 [test] notify-on-failure dry-run\n\nManual test — no real failure occurred.')"
+          else
+            MSG="$(printf '🔴 CI failure: %s\n\nCommit: %s\nAuthor: %s\nFailing step: %s\n\nRun: %s' \
+              "$WF_NAME" "$SHA_SHORT" "$AUTHOR" \
+              "${FAILING_STEP:-(unknown — see run logs)}" "$RUN_URL")"
+          fi
+          # Plain text — no parse_mode — avoids markdown escape bugs in commit subjects.
+          curl --max-time 15 -sf -X POST \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${MSG}" \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            >/dev/null \
+            || echo "::warning::Telegram notification failed (non-blocking)"
+
+      # 4 — Write job summary
+      - name: Summary
+        if: always()
+        env:
+          MODE: ${{ steps.meta.outputs.mode }}
+          WF_NAME: ${{ steps.meta.outputs.wf_name }}
+          SHA_SHORT: ${{ steps.meta.outputs.sha_short }}
+          AUTHOR: ${{ steps.meta.outputs.author }}
+          FAILING_STEP: ${{ steps.step.outputs.name }}
+          RUN_URL: ${{ steps.meta.outputs.run_url }}
+        run: |
+          {
+            echo "## Notify on workflow failure"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Mode | ${MODE:-?} |"
+            echo "| Workflow | ${WF_NAME:-?} |"
+            echo "| Commit | ${SHA_SHORT:-?} |"
+            echo "| Author | ${AUTHOR:-?} |"
+            echo "| Failing step | ${FAILING_STEP:-(unknown)} |"
+            echo "| Run URL | ${RUN_URL:-?} |"
+          } >> "$GITHUB_STEP_SUMMARY"
