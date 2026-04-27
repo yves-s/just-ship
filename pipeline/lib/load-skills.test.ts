@@ -28,22 +28,34 @@ vi.mock("node:fs", () => ({
 
 const makeShopifyConfig = (variant: string): ProjectConfig => ({
   name: "test-project",
+  description: "",
+  conventions: { branch_prefix: "feature/" },
+  pipeline: {
+    projectId: "",
+    workspaceId: "",
+    apiUrl: "",
+    apiKey: "",
+  },
+  maxWorkers: 1,
+  qa: {
+    maxFixIterations: 3,
+    playwrightTimeoutMs: 60000,
+    previewProvider: "none",
+    vercelProjectId: "",
+    vercelTeamId: "",
+    vercelPreviewPollIntervalMs: 10000,
+    vercelPreviewMaxWaitMs: 300000,
+    coolifyUrl: "",
+    coolifyAppUuid: "",
+    coolifyPollIntervalMs: 10000,
+    coolifyMaxWaitMs: 300000,
+  },
   stack: {
-    language: "Liquid/JSON",
-    framework: "",
-    backend: "",
-    package_manager: "npm",
+    packageManager: "npm",
     platform: "shopify",
     variant,
   },
-  build: { dev: "", web: "", install: "", verify: "", test: "" },
-  hosting: { provider: "", project_id: "", team_id: "", coolify_url: "", coolify_app_uuid: "" },
-  shopify: { store: "test.myshopify.com" },
   skills: { domain: [], custom: [] },
-  paths: { src: "src/", tests: "tests/" },
-  supabase: { project_id: "" },
-  pipeline: { workspace_id: "", project_id: "" },
-  conventions: { branch_prefix: "feature/", commit_format: "conventional", language: "en" },
 });
 
 describe("loadSkills — Shopify MCP migration", () => {
@@ -76,10 +88,7 @@ describe("loadSkills — Shopify MCP migration", () => {
       const config: ProjectConfig = {
         ...makeShopifyConfig(""),
         stack: {
-          language: "TypeScript",
-          framework: "Next.js",
-          backend: "Node.js",
-          package_manager: "npm",
+          packageManager: "npm",
           platform: "vercel",
           variant: "",
         },
@@ -102,10 +111,7 @@ describe("loadSkills — Shopify MCP migration", () => {
       const config: ProjectConfig = {
         ...makeShopifyConfig(""),
         stack: {
-          language: "TypeScript",
-          framework: "Next.js",
-          backend: "Node.js",
-          package_manager: "npm",
+          packageManager: "npm",
           platform: "",
           variant: "",
         },
@@ -129,10 +135,7 @@ describe("loadSkills — Shopify MCP migration", () => {
       const config: ProjectConfig = {
         ...makeShopifyConfig(""),
         stack: {
-          language: "TypeScript",
-          framework: "Next.js",
-          backend: "Node.js",
-          package_manager: "npm",
+          packageManager: "npm",
           platform: "",
           variant: "",
         },
@@ -150,10 +153,7 @@ describe("loadSkills — Shopify MCP migration", () => {
       const config: ProjectConfig = {
         ...makeShopifyConfig(""),
         stack: {
-          language: "TypeScript",
-          framework: "Next.js",
-          backend: "Node.js",
-          package_manager: "npm",
+          packageManager: "npm",
           platform: "vercel",
           variant: "",
         },
@@ -291,10 +291,7 @@ describe("loadSkillFrontmatters", () => {
     const config: ProjectConfig = {
       ...makeShopifyConfig(""),
       stack: {
-        language: "TypeScript",
-        framework: "Next.js",
-        backend: "Node.js",
-        package_manager: "npm",
+        packageManager: "npm",
         platform: "",
         variant: "",
       },
