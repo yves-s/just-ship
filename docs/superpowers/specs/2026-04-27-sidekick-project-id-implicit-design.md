@@ -65,7 +65,9 @@ interface ToolContext {
 }
 ```
 
-`projectId` ist required für jeden Chat-Turn. Der HTTP-Handler in `pipeline/server.ts` (`/sidekick/chat`-Endpoint) liest `project_id` aus dem Request-Body und stempelt sie in den `ToolContext`. **Heute fehlt:** Server-seitige Validierung, dass die `project_id` zum aktiven Workspace gehört. Diese Validierung kommt im Follow-up-Ticket (Auth-Hardening), **nicht** in diesem Ticket.
+`projectId` ist required für jeden Chat-Turn. Der HTTP-Handler in `pipeline/server.ts` (`handleSidekickChatRoute`, ~ Zeile 1851+) liest `validated.project_id` (das Feld existiert bereits im Request-Schema, siehe `pipeline/server.ts:1952`) und stempelt es in den `ToolContext` über den `provider`-Closure (siehe `pipeline/server.ts:1972-1986`). Konkret: dem Closure-Aufbau, der heute `serverConfig?.workspace?.workspace_id` als `workspaceId` setzt, wird ein zusätzliches Feld `projectId: validated.project_id` ergänzt. **Heute fehlt:** Server-seitige Validierung, dass die `project_id` zum aktiven Workspace gehört. Diese Validierung kommt im Follow-up-Ticket (Auth-Hardening), **nicht** in diesem Ticket.
+
+**Zod-Mode-Entscheidung:** Die Schemas bleiben im Zod-Default `.strip()` — heißt: wenn ein Modell (z.B. aus Conversation-History) noch ein altes `project_id`-Feld im Args-Objekt schickt, wird es still abgeschnitten, kein `ZodError`. Das ist die backward-kompatible Variante. Ein `.strict()`-Mode würde alte Conversations brechen und kein zusätzlicher Mehrwert bieten — der Snapshot-Guard (Section 3) ist die strukturelle Verteidigung, nicht der Schema-Mode.
 
 ### Handler-Pattern
 
@@ -125,13 +127,12 @@ Alle 20+ Beispiele in `SIDEKICK_PROMPT_EXAMPLES`: das `project_id: "<active>"`-F
 
 Bei `create_epic` zusätzlich: kein `project_id: "<active>"` auf Top-Level, keine `project_id` auf Children.
 
-**Sonderfall `create_project`:** Das Beispiel zeigt heute `workspace_id: "<active>"`. Hier ist `<active>` ebenfalls problematisch (Modell könnte den Literal-String schicken). Drei Optionen:
+**Sonderfall `create_project`:** Das Beispiel zeigt heute `workspace_id: "<active>"`. Hier ist `<active>` ebenfalls problematisch (Modell könnte den Literal-String schicken). **Entscheidung — die Lösung ist binär, nicht Trichter:**
 
-a) `<active>` durch echte `ctx.workspaceId` substituieren in `buildSidekickSystemPrompt`. Erfordert dass die UUID in den Prompt landet.
-b) Den Wortlaut umstellen auf `workspace_id: "<the active workspace_id from the per-turn context block above>"` — eine Anweisung an das Modell, statt eines Markers.
-c) Die Per-Turn-Context-Block bekommt eine Zeile `Active workspace ID: <UUID>`, das Beispiel referenziert das.
+1. Der Per-Turn-Context-Block in `buildSidekickSystemPrompt` bekommt eine zusätzliche Zeile: `Active workspace ID: 00000000-0000-0000-0000-000000000000` (echte UUID).
+2. Das `create_project`-Few-Shot-Beispiel ändert den `args_sketch` von `workspace_id: "<active>"` auf `workspace_id: "use the Active workspace ID from the context block above"`. Das ist eine **Englisch-Anweisung** im String, kein `<placeholder>`-Marker — das Modell liest die Anweisung und ersetzt sie durch die echte UUID aus dem Context-Block.
 
-**Empfehlung:** Kombination aus (b) und (c). Per-Turn-Context-Block bekommt die echte `workspace_id`, der Few-Shot referenziert sie als Englisch-Phrase. Der Snapshot-Test-Guard (Section 3) erkennt die Englisch-Phrase nicht als Platzhalter.
+Konkret im Snapshot-Test-Guard (Section 3) muss die Regex `<placeholder>`-Style mit Bindestrichen/Unterstrichen matchen, **nicht** beliebige Angle-Brackets — sonst würden HTML-artige Strings im Prompt fälschlich anschlagen.
 
 ### Neuer Abschnitt im Prompt-Body
 
@@ -188,12 +189,17 @@ test("rendered prompt contains no unresolved placeholders", () => {
   // Forbidden placeholder patterns. If a few-shot example or context block
   // ever leaves an unsubstituted "<...>" marker visible to the model, this
   // test catches it before merge.
+  //
+  // The first pattern matches any `<single_lowercase_token>` style placeholder
+  // (incl. snake_case and dashes). This is broader than naming the specific
+  // names that have leaked historically (`<active>`, `<workspace>`, …) and
+  // catches future placeholder names like `<project_id>` or `<workspace-id>`
+  // automatically. HTML-like text in prose (e.g. "<button>") doesn't match
+  // because the body of this prompt is in plain Markdown — there are no real
+  // HTML tags. The second pattern catches Mustache-style markers.
   const FORBIDDEN_PATTERNS = [
-    /<active>/,
-    /<workspace>/,
-    /<project>/,
-    /<TODO>/,
-    /\{\{[^}]+\}\}/,  // Mustache-style {{var}}
+    /<[a-z][a-z0-9_-]*>/i,
+    /\{\{[^}]+\}\}/,
   ];
 
   for (const pattern of FORBIDDEN_PATTERNS) {
@@ -228,7 +234,7 @@ test("rendered prompt contains no unresolved placeholders", () => {
 
 ### Unit Tests
 
-1. **Schema-Validation:** Für jedes der 5 betroffenen Tool-Schemas ein Test, dass `project_id` im Args-Objekt zu einem `ZodError` führt (oder still gestrippt wird, je nach Zod-Mode-Entscheidung).
+1. **Schema-Validation:** Für jedes der 5 betroffenen Tool-Schemas ein Test, dass `project_id` im Args-Objekt **still gestrippt** wird (Zod-Default `.strip()`, siehe Section 1 — backward-kompatibel mit Conversation-History). Kein `ZodError` erwartet.
 2. **Handler-Stempel:** Für jeden Handler ein Test, dass der ausgehende `CreateRequest` die `project_id` aus `ctx.projectId` trägt, nicht aus `args`.
 3. **Snapshot-Test-Guard:** Der neue Test in Section 3.
 4. **Snapshot-Test:** `SIDEKICK_PROMPT_VERSION = "v4"` Snapshot-File neu generieren.
