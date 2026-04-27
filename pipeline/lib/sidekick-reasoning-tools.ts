@@ -70,7 +70,6 @@ export type ExpertSkill = (typeof EXPERT_SKILLS)[number];
 // Anthropic SDK is derived from the Zod schema (see toolSchemas()).
 // ---------------------------------------------------------------------------
 
-const zProjectId = z.string().min(1, "project_id is required");
 const zWorkspaceId = z.string().min(1, "workspace_id is required");
 const zTitle = z.string().trim().min(1).max(200);
 const zBody = z.string().trim().min(1).max(20_000);
@@ -78,11 +77,18 @@ const zPriority = z.enum(["high", "medium", "low"]);
 const zTags = z.array(z.string()).optional();
 const zExpertSkill = z.enum(EXPERT_SKILLS);
 
+// T-1049: project_id is no longer part of the tool surface for project-scoped
+// artifacts. The server stamps it from `ctx.projectId` (sourced from the HTTP
+// request body) before the artifact handler runs. Schemas stay in Zod's
+// default `.strip()` mode so legacy callers (e.g. conversation history that
+// still contains a `project_id` arg) are tolerated silently — no ZodError, no
+// retry loop. The placeholder-guard test in `sidekick-system-prompt.test.ts`
+// is the structural defence; the tool-arg shape is the runtime defence.
+
 export const CreateTicketSchema = z.object({
   title: zTitle,
   body: zBody,
   priority: zPriority.default("medium"),
-  project_id: zProjectId,
   tags: zTags,
 });
 
@@ -91,19 +97,12 @@ const zChildTicket = z.object({
   body: zBody,
   priority: zPriority.optional(),
   tags: zTags,
-  // T-903: per-child project override — required when the epic is
-  // cross-project (`project_id: null` at the top level).
-  project_id: z.string().min(1).optional(),
 });
 
 export const CreateEpicSchema = z.object({
   title: zTitle,
   body: zBody,
   children: z.array(zChildTicket).min(1).max(20),
-  // `null` = workspace-scoped cross-project epic. Every child MUST then carry
-  // its own project_id; the artifact handler forwards to the sidekick-create
-  // primitive, which enforces this invariant (see validateCreateRequest).
-  project_id: z.union([zProjectId, z.null()]),
   priority: zPriority.default("medium"),
   tags: zTags,
 });
@@ -122,7 +121,6 @@ export const CreateProjectSchema = z.object({
 export const StartConversationThreadSchema = z.object({
   topic: zTitle,
   initial_context: z.string().trim().min(1).max(10_000),
-  project_id: zProjectId,
 });
 
 // `update_thread_status` — drive the thread state machine from the chat.
@@ -141,19 +139,16 @@ const zAuditScope = z.string().trim().min(1).max(500);
 export const RunExpertAuditSchema = z.object({
   scope: zAuditScope,
   expert_skill: zExpertSkill,
-  project_id: zProjectId,
 });
 
 export const ConsultExpertSchema = z.object({
   question: z.string().trim().min(1).max(2_000),
   expert_skill: zExpertSkill,
-  project_id: zProjectId,
 });
 
 export const StartSparringSchema = z.object({
   topic: zTitle,
   experts: z.array(zExpertSkill).min(1).max(4),
-  project_id: zProjectId.optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -171,6 +166,19 @@ export interface ToolContext {
   apiKey: string;
   /** Active workspace uuid — stamped onto created threads. */
   workspaceId: string;
+  /**
+   * Active project uuid — stamped onto every project-scoped artifact created
+   * during this chat turn (T-1049). Sourced from the HTTP request body
+   * (`validated.project_id` in `pipeline/server.ts`). Required for all tools
+   * except `create_project` (which receives `workspace_id` in args because it
+   * creates the project itself) and `update_thread_status` (which targets a
+   * thread by id, not a project).
+   *
+   * The model never writes a `project_id`; the tool schemas do not expose it.
+   * This field is the single source of truth for which project an artifact
+   * belongs to during a chat turn.
+   */
+  projectId: string;
   /** User uuid — stamped onto created threads; required for thread creation. */
   userId?: string;
   /** Board web base URL, used to build `url` fields in artifact responses. */
@@ -198,7 +206,7 @@ async function execCreateTicket(
 ): Promise<ToolResult<CreatedTicketResult>> {
   const req: CreateRequest = {
     category: "ticket",
-    project_id: args.project_id,
+    project_id: ctx.projectId,
     ...(ctx.boardUrl ? { board_url: ctx.boardUrl } : {}),
     ticket: {
       title: args.title,
@@ -239,7 +247,7 @@ async function execCreateEpic(
 ): Promise<ToolResult<CreatedEpicResult>> {
   const req: CreateRequest = {
     category: "epic",
-    project_id: args.project_id,
+    project_id: ctx.projectId,
     ...(ctx.boardUrl ? { board_url: ctx.boardUrl } : {}),
     epic: {
       title: args.title,
@@ -252,17 +260,18 @@ async function execCreateEpic(
       body: c.body,
       ...(c.priority ? { priority: c.priority } : {}),
       ...(c.tags && c.tags.length > 0 ? { tags: c.tags } : {}),
-      ...(c.project_id ? { project_id: c.project_id } : {}),
     })),
   };
 
   const cfg = toBoardCfg(ctx);
 
   try {
-    // Workspace-scoped epic invariant (T-903): when project_id is null, every
-    // child MUST carry its own project_id. The primitive's validator enforces
-    // this — run it first so we fail fast with `validation_error` instead of
-    // waking the Board API and relying on its CHECK constraint.
+    // T-903 invariant lives in `validateCreateRequest` and is preserved as a
+    // library function. The Page-Sidekick tool surface no longer reaches the
+    // cross-project branch (project_id is always ctx.projectId, never null),
+    // so the validator runs as a defensive no-op here. A future workspace-
+    // scoped Sidekick tool can opt back into the cross-project path without
+    // changes to the primitive (T-1049 spec, "Cross-Project-Epics" section).
     validateCreateRequest(req);
     const res: CreateResult = await createFromClassification(req, cfg);
     if (res.category !== "epic") {
@@ -357,8 +366,9 @@ async function execStartConversationThread(
   // a non-UUID value would otherwise surface as a confusing Supabase 400 with
   // a raw Postgres error. The Sidekick chat endpoint (T-981) will supply
   // authenticated UUIDs; this is a defense-in-depth check against a caller
-  // that wires `ctx` incorrectly or receives a non-UUID `project_id` from the
-  // model's tool arguments.
+  // that wires `ctx` incorrectly. Per T-1049, project_id is now sourced from
+  // `ctx.projectId` (server-stamped) rather than from tool args, so we guard
+  // the same value via the ctx field.
   if (!isUuid(ctx.workspaceId)) {
     return {
       ok: false,
@@ -373,7 +383,7 @@ async function execStartConversationThread(
       code: "invalid_args",
     };
   }
-  if (!isUuid(args.project_id)) {
+  if (!isUuid(ctx.projectId)) {
     return {
       ok: false,
       error: "project_id: must be a valid UUID",
@@ -398,7 +408,7 @@ async function execStartConversationThread(
     const row = await createThreadRow(
       {
         workspace_id: ctx.workspaceId,
-        project_id: args.project_id,
+        project_id: ctx.projectId,
         user_id: ctx.userId,
         title: args.topic,
         status: "draft",
@@ -578,7 +588,7 @@ export interface AuditReport {
 }
 
 async function execRunExpertAudit(
-  _ctx: ToolContext,
+  ctx: ToolContext,
   args: z.infer<typeof RunExpertAuditSchema>,
 ): Promise<ToolResult<AuditReport>> {
   // Delegates to the audit runtime in `audit-runtime.ts`. The runtime owns the
@@ -587,13 +597,14 @@ async function execRunExpertAudit(
   // registry stays focused on the tool-use API surface; the runtime can evolve
   // (add caching, swap model, change prompt) without touching this file.
   //
-  // ctx is intentionally unused — the audit agent has no board access, no
-  // pipeline key, and no user bearer. That's the whole point of the read-only
-  // contract (see .claude/rules/expert-audit-scope.md).
+  // T-1049: projectId is server-stamped (ctx.projectId), not tool-arg-supplied.
+  // The audit agent itself has no board access, no pipeline key, and no user
+  // bearer — that's the read-only contract (see .claude/rules/expert-audit-scope.md).
+  // The projectId is passed for telemetry / scope context only.
   return runAuditAsTool({
     scope: args.scope,
     expertSkill: args.expert_skill,
-    projectId: args.project_id,
+    projectId: ctx.projectId,
   });
 }
 
@@ -693,7 +704,7 @@ export const SIDEKICK_REASONING_TOOLS = {
   create_epic: {
     name: "create_epic",
     description:
-      "Create an epic plus its child tickets when the user wants multiple connected changes (feature with several parts, cross-cutting initiative). Pass `project_id: null` for workspace-scoped cross-project epics; every child must then carry its own project_id.",
+      "Create an epic plus its child tickets when the user wants multiple connected changes (feature with several parts, cross-cutting initiative). The epic and all children land in the active project.",
     schema: CreateEpicSchema,
     execute: execCreateEpic,
   },

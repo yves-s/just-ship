@@ -36,7 +36,7 @@ import { SIDEKICK_REASONING_TOOLS, type SidekickReasoningToolName } from "./side
  * `prompt_version` tag, so behaviour regressions can be attributed to a
  * specific revision.
  */
-export const SIDEKICK_PROMPT_VERSION = "v3" as const;
+export const SIDEKICK_PROMPT_VERSION = "v4" as const;
 
 export type SidekickPromptVersion = typeof SIDEKICK_PROMPT_VERSION;
 
@@ -76,19 +76,19 @@ export const SIDEKICK_PROMPT_EXAMPLES: ReadonlyArray<SidekickPromptExample> = Ob
   {
     input: "Fix the typo in the header on /pricing — it says \"recieve\" instead of \"receive\".",
     tool: "create_ticket",
-    args_sketch: `{ title: "Fix typo on /pricing header", body: "...", priority: "low", project_id: "<active>" }`,
+    args_sketch: `{ title: "Fix typo on /pricing header", body: "...", priority: "low" }`,
     notes: "Single concrete change with a clear outcome → ticket, no expert needed.",
   },
   {
     input: "Der Toggle im Settings-Sheet schließt sich nach dem Klick nicht mehr.",
     tool: "create_ticket",
-    args_sketch: `{ title: "Settings sheet toggle stays open after click", body: "...", priority: "medium", project_id: "<active>" }`,
+    args_sketch: `{ title: "Settings sheet toggle stays open after click", body: "...", priority: "medium" }`,
     notes: "Bug report, scoped to one component → ticket. No analysis needed first.",
   },
   {
     input: "Add a copy-to-clipboard button to the ticket detail header.",
     tool: "create_ticket",
-    args_sketch: `{ title: "Add copy-link button to ticket header", body: "...", priority: "medium", project_id: "<active>" }`,
+    args_sketch: `{ title: "Add copy-link button to ticket header", body: "...", priority: "medium" }`,
     notes: "Single feature add, well-scoped → ticket.",
   },
 
@@ -96,13 +96,13 @@ export const SIDEKICK_PROMPT_EXAMPLES: ReadonlyArray<SidekickPromptExample> = Ob
   {
     input: "Build a notifications system: bell icon, settings page, email digest, and an in-app inbox.",
     tool: "create_epic",
-    args_sketch: `{ title: "Notifications system", body: "...", children: [{title: "Bell icon + dropdown"}, {title: "Notification settings page"}, {title: "Email digest pipeline"}, {title: "In-app inbox view"}], project_id: "<active>" }`,
+    args_sketch: `{ title: "Notifications system", body: "...", children: [{title: "Bell icon + dropdown"}, {title: "Notification settings page"}, {title: "Email digest pipeline"}, {title: "In-app inbox view"}] }`,
     notes: "User explicitly listed 4 connected pieces → epic with named children.",
   },
   {
     input: "Wir brauchen Workspace-Billing — Pricing-Seite, Stripe-Integration, Plan-Limits-Enforcement, Customer-Portal.",
     tool: "create_epic",
-    args_sketch: `{ title: "Workspace billing", body: "...", children: [{title: "Pricing page"}, {title: "Stripe integration"}, {title: "Plan limits enforcement"}, {title: "Customer portal"}], project_id: "<active>" }`,
+    args_sketch: `{ title: "Workspace billing", body: "...", children: [{title: "Pricing page"}, {title: "Stripe integration"}, {title: "Plan limits enforcement"}, {title: "Customer portal"}] }`,
     notes: "Feature with multiple named subsystems → epic.",
   },
 
@@ -110,7 +110,7 @@ export const SIDEKICK_PROMPT_EXAMPLES: ReadonlyArray<SidekickPromptExample> = Ob
   {
     input: "Ich will Aime Coach bauen — eine AI-Accountability-App für Therapeut:innen, ganz eigenes Produkt.",
     tool: "create_project",
-    args_sketch: `{ name: "Aime Coach", description: "AI accountability app for therapists", workspace_id: "<active>", confirmed: true }`,
+    args_sketch: `{ name: "Aime Coach", description: "AI accountability app for therapists", workspace_id: "use the Active workspace ID from the context block above", confirmed: true }`,
     notes: "New product, new audience → project. THIS is the one tool that requires asking the user once for confirmation before calling — never call create_project without an explicit yes from the user.",
   },
 
@@ -118,7 +118,7 @@ export const SIDEKICK_PROMPT_EXAMPLES: ReadonlyArray<SidekickPromptExample> = Ob
   {
     input: "Ich hab da eine Idee für besseres Onboarding, weiß aber noch nicht genau wie.",
     tool: "start_conversation_thread",
-    args_sketch: `{ topic: "Onboarding rework — direction TBD", initial_context: "User has a rough idea, wants to shape it", project_id: "<active>" }`,
+    args_sketch: `{ topic: "Onboarding rework — direction TBD", initial_context: "User has a rough idea, wants to shape it" }`,
     notes: "Idea with no clear scope yet → open a thread, don't speculate an artifact.",
   },
 
@@ -126,13 +126,13 @@ export const SIDEKICK_PROMPT_EXAMPLES: ReadonlyArray<SidekickPromptExample> = Ob
   {
     input: "Pass — die Onboarding-Discovery ist durch, der Plan steht. Setz den Thread auf ready_to_plan.",
     tool: "update_thread_status",
-    args_sketch: `{ thread_id: "<active-thread>", status: "ready_to_plan" }`,
+    args_sketch: `{ thread_id: "use the thread_id from the active conversation", status: "ready_to_plan" }`,
     notes: "User confirms direction is locked → advance thread state. Allowed transitions are enforced server-side; invalid jumps surface as invalid_transition.",
   },
   {
     input: "Sollen wir vielleicht Analytics einbauen?",
     tool: "start_conversation_thread",
-    args_sketch: `{ topic: "Analytics — should we?", initial_context: "User exploring whether analytics is worth doing", project_id: "<active>" }`,
+    args_sketch: `{ topic: "Analytics — should we?", initial_context: "User exploring whether analytics is worth doing" }`,
     notes: "Speculative \"sollen wir\" → conversation, not ticket. Direction is the question.",
   },
 
@@ -140,19 +140,19 @@ export const SIDEKICK_PROMPT_EXAMPLES: ReadonlyArray<SidekickPromptExample> = Ob
   {
     input: "Design Lead, mach mal ein Audit der Mobile Experience auf dem Board.",
     tool: "run_expert_audit",
-    args_sketch: `{ scope: "Mobile experience on the board UI", expert_skill: "design-lead", project_id: "<active>" }`,
+    args_sketch: `{ scope: "Mobile experience on the board UI", expert_skill: "design-lead" }`,
     notes: "Role address + analysis verb (\"mach Audit\") → audit, not ticket. The expert looks first; tickets come from the findings.",
   },
   {
     input: "Schau dir die API-Endpoints im pipeline/server.ts an — sind die konsistent?",
     tool: "run_expert_audit",
-    args_sketch: `{ scope: "API endpoint consistency in pipeline/server.ts", expert_skill: "backend", project_id: "<active>" }`,
+    args_sketch: `{ scope: "API endpoint consistency in pipeline/server.ts", expert_skill: "backend" }`,
     notes: "\"Schau dir X an\" + consistency question → audit.",
   },
   {
     input: "Backend, review die letzten Migrations auf Performance-Risiken.",
     tool: "run_expert_audit",
-    args_sketch: `{ scope: "Recent migrations — performance risks", expert_skill: "backend", project_id: "<active>" }`,
+    args_sketch: `{ scope: "Recent migrations — performance risks", expert_skill: "backend" }`,
     notes: "Role + \"review\" verb → audit. Read-only specialist work.",
   },
 
@@ -160,19 +160,19 @@ export const SIDEKICK_PROMPT_EXAMPLES: ReadonlyArray<SidekickPromptExample> = Ob
   {
     input: "CTO, wie denkst du über den aktuellen Pipeline-Aufbau?",
     tool: "consult_expert",
-    args_sketch: `{ question: "How do you think about the current pipeline architecture?", expert_skill: "product-cto", project_id: "<active>" }`,
+    args_sketch: `{ question: "How do you think about the current pipeline architecture?", expert_skill: "product-cto" }`,
     notes: "Role + \"wie denkst du\" → consult, not ticket and not audit. User wants the expert's take.",
   },
   {
     input: "Design Lead, wie funktioniert unser Theme-System eigentlich?",
     tool: "consult_expert",
-    args_sketch: `{ question: "How does the theme system work?", expert_skill: "design-lead", project_id: "<active>" }`,
+    args_sketch: `{ question: "How does the theme system work?", expert_skill: "design-lead" }`,
     notes: "\"Wie funktioniert\" — pure knowledge question → consult.",
   },
   {
     input: "Backend, warum hängt der Worker manchmal beim Polling?",
     tool: "consult_expert",
-    args_sketch: `{ question: "Why does the worker sometimes hang during polling?", expert_skill: "backend", project_id: "<active>" }`,
+    args_sketch: `{ question: "Why does the worker sometimes hang during polling?", expert_skill: "backend" }`,
     notes: "Diagnosis question (\"warum\") → consult. The expert investigates and answers; if a fix is needed, the user steers ticket creation after.",
   },
 
@@ -180,13 +180,13 @@ export const SIDEKICK_PROMPT_EXAMPLES: ReadonlyArray<SidekickPromptExample> = Ob
   {
     input: "Lass uns durchdenken: brauchen wir eine eigene Mobile-App oder reicht eine PWA? Hol Design Lead und CTO dazu.",
     tool: "start_sparring",
-    args_sketch: `{ topic: "Native mobile app vs PWA", experts: ["design-lead", "product-cto"], project_id: "<active>" }`,
+    args_sketch: `{ topic: "Native mobile app vs PWA", experts: ["design-lead", "product-cto"] }`,
     notes: "Strategic question with named peers → sparring. User wants to think with the team, not get a single answer.",
   },
   {
     input: "Ich überlege, ob wir Analytics jetzt oder erst nach Launch bauen — wäre gut, Backend und Design Lead gemeinsam zu hören.",
     tool: "start_sparring",
-    args_sketch: `{ topic: "Analytics now vs after launch", experts: ["backend", "design-lead"], project_id: "<active>" }`,
+    args_sketch: `{ topic: "Analytics now vs after launch", experts: ["backend", "design-lead"] }`,
     notes: "Trade-off discussion with multiple experts requested → sparring.",
   },
 
@@ -194,19 +194,19 @@ export const SIDEKICK_PROMPT_EXAMPLES: ReadonlyArray<SidekickPromptExample> = Ob
   {
     input: "Design Lead, bau mal ein neues Empty-State-Pattern für /tickets.",
     tool: "create_ticket",
-    args_sketch: `{ title: "New empty-state pattern for /tickets", body: "...", priority: "medium", project_id: "<active>" }`,
+    args_sketch: `{ title: "New empty-state pattern for /tickets", body: "...", priority: "medium" }`,
     notes: "Role + BUILD verb (\"bau mal\") → ticket. The role is just an expertise hint; the verb decides the tool.",
   },
   {
     input: "Design Lead, ist das Empty-State auf /tickets konsistent mit dem Rest?",
     tool: "run_expert_audit",
-    args_sketch: `{ scope: "Empty-state consistency on /tickets vs rest of app", expert_skill: "design-lead", project_id: "<active>" }`,
+    args_sketch: `{ scope: "Empty-state consistency on /tickets vs rest of app", expert_skill: "design-lead" }`,
     notes: "Same role, ANALYSIS verb (\"ist das konsistent\") → audit.",
   },
   {
     input: "Design Lead, was ist eigentlich unser aktueller Empty-State-Standard?",
     tool: "consult_expert",
-    args_sketch: `{ question: "What is the current empty-state standard?", expert_skill: "design-lead", project_id: "<active>" }`,
+    args_sketch: `{ question: "What is the current empty-state standard?", expert_skill: "design-lead" }`,
     notes: "Same role, QUESTION verb (\"was ist\") → consult. Knowledge, no work.",
   },
 ]);
@@ -301,6 +301,14 @@ When you spawn an expert tool, narrate it in first-person voice so the user feel
 
 Never expose internal mechanics ("I'll dispatch an audit subagent now"). The user talks to peers, not infrastructure.
 
+# Project context
+
+You are always operating in the active project — the one the user is looking at. Tools that create or reference project-scoped artifacts (\`create_ticket\`, \`create_epic\`, \`start_conversation_thread\`, \`run_expert_audit\`, \`consult_expert\`, \`start_sparring\`) **do not** take a \`project_id\` argument. The server stamps it from the active context. Do not invent, guess, or pass project IDs.
+
+Two exceptions:
+- \`create_project\` takes \`workspace_id\` because it creates a new project inside the workspace.
+- \`update_thread_status\` takes \`thread_id\` because it targets a specific thread.
+
 # Few-shot grounding
 
 The corpus below shows the canonical move for representative inputs. The list spans all eight tools and the three role-address verb patterns. When in doubt, find the closest example and mirror its tool choice.
@@ -337,6 +345,14 @@ export function buildSidekickSystemPrompt(opts: {
   projectType?: string;
   pageUrl?: string;
   pageTitle?: string;
+  /**
+   * Active workspace uuid (T-1049). Surfaced in the per-turn context block so
+   * the `create_project` few-shot example can reference it without forcing the
+   * model to invent or echo a placeholder. The model uses this value when (and
+   * only when) calling `create_project`; every other tool gets `project_id`
+   * server-stamped and never sees a workspace id.
+   */
+  workspaceId?: string;
 } = {}): string {
   const ctxLines: string[] = [];
   if (opts.projectName) {
@@ -344,6 +360,7 @@ export function buildSidekickSystemPrompt(opts: {
       `Active project: "${opts.projectName}"${opts.projectType ? ` (${opts.projectType})` : ""}`,
     );
   }
+  if (opts.workspaceId) ctxLines.push(`Active workspace ID: ${opts.workspaceId}`);
   if (opts.pageUrl) ctxLines.push(`Page URL: ${opts.pageUrl}`);
   if (opts.pageTitle) ctxLines.push(`Page title: ${opts.pageTitle}`);
   if (ctxLines.length === 0) return SIDEKICK_SYSTEM_PROMPT;

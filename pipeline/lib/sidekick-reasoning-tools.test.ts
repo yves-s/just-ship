@@ -86,6 +86,7 @@ function makeCtx(overrides: Partial<ToolContext> = {}): ToolContext {
     apiUrl: "https://board.test.io",
     apiKey: "pipeline-key-abc",
     workspaceId: "00000000-0000-0000-0000-000000000001",
+    projectId: "22222222-2222-2222-2222-222222222222",
     userId: "11111111-1111-1111-1111-111111111111",
     boardUrl: "https://board.test.io",
     ...overrides,
@@ -165,16 +166,15 @@ describe("toolSchemas() — Anthropic SDK tool-use payload", () => {
     ).toContain("confirmed");
   });
 
-  it("create_epic allows project_id = null for workspace-scoped epics", () => {
+  it("create_epic schema has no project_id field on tool surface (T-1049)", () => {
+    // Cross-project epics are no longer reachable from the Page-Sidekick tool
+    // surface — project_id is server-stamped via ctx.projectId. The validator
+    // for cross-project epics (validateCreateRequest) is preserved as a
+    // library function for a future workspace-scoped Sidekick tool.
     const ep = toolSchemas().find((s) => s.name === "create_epic");
     expect(ep).toBeDefined();
     const props = (ep!.input_schema as { properties: Record<string, unknown> }).properties;
-    expect(props.project_id).toMatchObject({
-      anyOf: expect.arrayContaining([
-        expect.objectContaining({ type: "string" }),
-        expect.objectContaining({ type: "null" }),
-      ]),
-    });
+    expect(props.project_id).toBeUndefined();
   });
 
   it("run_expert_audit constrains expert_skill to the eight-value enum", () => {
@@ -295,7 +295,6 @@ describe("create_ticket", () => {
     const res = await executeSidekickReasoningTool("create_ticket", ctx, {
       title: "Fix header typo",
       body: "Typo on homepage header",
-      project_id: "proj-1",
       priority: "medium",
     });
 
@@ -310,7 +309,8 @@ describe("create_ticket", () => {
     }
     expect(calls[0].url).toBe("https://board.test.io/api/tickets");
     expect(calls[0].headers["X-Pipeline-Key"]).toBe("pipeline-key-abc");
-    expect((calls[0].body as { project_id: string }).project_id).toBe("proj-1");
+    // T-1049: project_id is server-stamped from ctx, not passed in args.
+    expect((calls[0].body as { project_id: string }).project_id).toBe(ctx.projectId);
   });
 
   it("returns a board_400 failure when the Board API rejects the request (error path)", async () => {
@@ -321,7 +321,6 @@ describe("create_ticket", () => {
     const res = await executeSidekickReasoningTool("create_ticket", ctx, {
       title: "X",
       body: "Y",
-      project_id: "proj-1",
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe("board_400");
@@ -342,7 +341,6 @@ describe("create_epic", () => {
     const res = await executeSidekickReasoningTool("create_epic", ctx, {
       title: "Feature X",
       body: "Container",
-      project_id: "proj-1",
       children: [
         { title: "Child A", body: "A body" },
         { title: "Child B", body: "B body" },
@@ -360,26 +358,15 @@ describe("create_epic", () => {
     }
     // Epic call carries ticket_type: "epic" to satisfy the board CHECK branch.
     expect((calls[0].body as { ticket_type?: string }).ticket_type).toBe("epic");
+    // T-1049: epic body carries the server-stamped project_id from ctx.
+    expect((calls[0].body as { project_id?: string }).project_id).toBe(ctx.projectId);
   });
 
-  it("returns invalid_args when the workspace-scoped epic omits child project_ids (error path)", async () => {
-    const { fn, calls } = makeMockFetch([]);
-    const ctx = makeCtx({ fetchFn: fn });
-    const res = await executeSidekickReasoningTool("create_epic", ctx, {
-      title: "Cross-project epic",
-      body: "Spans multiple projects",
-      project_id: null,
-      children: [
-        { title: "Child A", body: "A body" },
-      ],
-    });
-    expect(res.ok).toBe(false);
-    // The primitive's validateCreateRequest is not called by the new tool
-    // (we go straight to createFromClassification which also validates), so
-    // we expect a validation_error code coming from ValidationError.
-    if (!res.ok) expect(res.code).toBe("validation_error");
-    expect(calls).toHaveLength(0);
-  });
+  // T-1049 deletes the previous "workspace-scoped epic without per-child
+  // project_ids" test: cross-project epics are no longer reachable from the
+  // Page-Sidekick tool surface. The underlying validateCreateRequest invariant
+  // (T-903) is preserved as a library function and is exercised in
+  // sidekick-create.test.ts.
 });
 
 describe("create_project", () => {
@@ -451,7 +438,6 @@ describe("start_conversation_thread", () => {
     const res = await executeSidekickReasoningTool("start_conversation_thread", ctx, {
       topic: "Analytics idea",
       initial_context: "Rough idea — not sure if we need it",
-      project_id: "22222222-2222-2222-2222-222222222222",
     });
 
     expect(res.ok).toBe(true);
@@ -466,6 +452,8 @@ describe("start_conversation_thread", () => {
     // Call goes to Supabase REST, not Board API.
     expect(calls[0].url).toBe(`${TEST_SUPABASE_URL}/rest/v1/threads?select=*`);
     expect(calls[0].headers.apikey).toBe(TEST_SUPABASE_KEY);
+    // T-1049: thread row carries ctx.projectId, not args.project_id.
+    expect((calls[0].body as { project_id: string }).project_id).toBe(ctx.projectId);
   });
 
   it("returns not_authenticated when ctx.userId is missing (error path)", async () => {
@@ -476,7 +464,6 @@ describe("start_conversation_thread", () => {
     const res = await executeSidekickReasoningTool("start_conversation_thread", ctx, {
       topic: "Idea",
       initial_context: "rough thought",
-      project_id: "22222222-2222-2222-2222-222222222222",
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe("not_authenticated");
@@ -490,7 +477,6 @@ describe("start_conversation_thread", () => {
     const res = await executeSidekickReasoningTool("start_conversation_thread", ctx, {
       topic: "Idea",
       initial_context: "rough thought",
-      project_id: "22222222-2222-2222-2222-222222222222",
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe("invalid_args");
@@ -504,21 +490,21 @@ describe("start_conversation_thread", () => {
     const res = await executeSidekickReasoningTool("start_conversation_thread", ctx, {
       topic: "Idea",
       initial_context: "rough thought",
-      project_id: "22222222-2222-2222-2222-222222222222",
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe("invalid_args");
     expect(calls).toHaveLength(0);
   });
 
-  it("returns invalid_args when args.project_id is not a UUID (error path)", async () => {
+  it("returns invalid_args when ctx.projectId is not a UUID (error path)", async () => {
+    // T-1049: project_id is now sourced from ctx.projectId (server-stamped),
+    // not from tool args. The UUID guard at the tool boundary checks ctx.
     const { fn, calls } = makeMockFetch([]);
-    const ctx = makeCtx({ fetchFn: fn });
+    const ctx = makeCtx({ fetchFn: fn, projectId: "not-a-uuid" });
 
     const res = await executeSidekickReasoningTool("start_conversation_thread", ctx, {
       topic: "Idea",
       initial_context: "rough thought",
-      project_id: "not-a-uuid",
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe("invalid_args");
@@ -544,7 +530,6 @@ describe("start_conversation_thread", () => {
     const res = await executeSidekickReasoningTool("start_conversation_thread", ctx, {
       topic: "Analytics idea",
       initial_context: "Rough idea — not sure if we need it",
-      project_id: "22222222-2222-2222-2222-222222222222",
     });
 
     expect(res.ok).toBe(true);
@@ -746,7 +731,6 @@ describe("expert tools — tool-layer validation", () => {
     const res = await executeSidekickReasoningTool("run_expert_audit", ctx, {
       scope: "",
       expert_skill: "design-lead",
-      project_id: "proj-1",
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe("invalid_args");
@@ -759,7 +743,6 @@ describe("expert tools — tool-layer validation", () => {
     const res = await executeSidekickReasoningTool("run_expert_audit", ctx, {
       scope: "Mobile Experience",
       expert_skill: "cto-principal",
-      project_id: "proj-1",
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe("invalid_args");
@@ -771,7 +754,6 @@ describe("expert tools — tool-layer validation", () => {
     const res = await executeSidekickReasoningTool("consult_expert", ctx, {
       question: "How should we structure the auth token refresh?",
       expert_skill: "product-cto",
-      project_id: "proj-1",
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe("expert_runtime_not_implemented");
@@ -783,7 +765,6 @@ describe("expert tools — tool-layer validation", () => {
     const res = await executeSidekickReasoningTool("consult_expert", ctx, {
       question: "Q",
       expert_skill: "cto-principal",
-      project_id: "proj-1",
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe("invalid_args");
@@ -795,7 +776,6 @@ describe("expert tools — tool-layer validation", () => {
     const res = await executeSidekickReasoningTool("start_sparring", ctx, {
       topic: "Pricing strategy",
       experts: ["design-lead", "product-cto"],
-      project_id: "proj-1",
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe("expert_runtime_not_implemented");
@@ -813,7 +793,6 @@ describe("expert tools — tool-layer validation", () => {
         "frontend-design",
         "data-engineer",
       ],
-      project_id: "proj-1",
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe("invalid_args");
@@ -831,5 +810,158 @@ describe("zodToJsonSchema", () => {
     const out = zodToJsonSchema(CreateTicketSchema);
     expect(out.$schema).toBeUndefined();
     expect(out.type).toBe("object");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T-1049 — Schema project_id stripping (backward compatibility)
+//
+// The five "stempelbaren" tools (create_ticket, create_epic,
+// start_conversation_thread, run_expert_audit, consult_expert,
+// start_sparring) no longer expose project_id on the tool surface. Zod's
+// default `.strip()` mode silently drops the field if a legacy caller
+// (e.g. conversation history with old tool_use blocks) still passes it.
+// These tests document the contract: legacy args are tolerated, never
+// rejected with a ZodError.
+// ---------------------------------------------------------------------------
+
+describe("Schema project_id stripping (T-1049 backward compat)", () => {
+  it("CreateTicketSchema strips legacy project_id", () => {
+    const parsed = CreateTicketSchema.parse({
+      title: "x",
+      body: "y",
+      project_id: "00000000-0000-0000-0000-000000000000",
+    });
+    expect((parsed as Record<string, unknown>).project_id).toBeUndefined();
+    expect(parsed.title).toBe("x");
+  });
+
+  it("CreateEpicSchema strips legacy project_id (top-level + children)", () => {
+    const parsed = CreateEpicSchema.parse({
+      title: "x",
+      body: "y",
+      children: [{
+        title: "c1",
+        body: "b1",
+        project_id: "11111111-1111-1111-1111-111111111111",
+      }],
+      project_id: "00000000-0000-0000-0000-000000000000",
+    });
+    expect((parsed as Record<string, unknown>).project_id).toBeUndefined();
+    expect((parsed.children[0] as Record<string, unknown>).project_id).toBeUndefined();
+  });
+
+  it("StartConversationThreadSchema strips legacy project_id", () => {
+    const parsed = StartConversationThreadSchema.parse({
+      topic: "x",
+      initial_context: "y",
+      project_id: "00000000-0000-0000-0000-000000000000",
+    });
+    expect((parsed as Record<string, unknown>).project_id).toBeUndefined();
+  });
+
+  it("RunExpertAuditSchema strips legacy project_id", () => {
+    const parsed = RunExpertAuditSchema.parse({
+      scope: "x",
+      expert_skill: "design-lead",
+      project_id: "00000000-0000-0000-0000-000000000000",
+    });
+    expect((parsed as Record<string, unknown>).project_id).toBeUndefined();
+  });
+
+  it("ConsultExpertSchema strips legacy project_id", () => {
+    const parsed = ConsultExpertSchema.parse({
+      question: "x",
+      expert_skill: "design-lead",
+      project_id: "00000000-0000-0000-0000-000000000000",
+    });
+    expect((parsed as Record<string, unknown>).project_id).toBeUndefined();
+  });
+
+  it("StartSparringSchema strips legacy project_id", () => {
+    const parsed = StartSparringSchema.parse({
+      topic: "x",
+      experts: ["design-lead"],
+      project_id: "00000000-0000-0000-0000-000000000000",
+    });
+    expect((parsed as Record<string, unknown>).project_id).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T-1049 — Handler stamps ctx.projectId
+//
+// The five project-scoped artifact handlers attach project_id from
+// ctx.projectId (server-stamped) onto the outgoing Board API / threads-store
+// request. The model never writes a project_id; the field is invisible on
+// the tool surface.
+// ---------------------------------------------------------------------------
+
+describe("Handler stamps ctx.projectId (T-1049)", () => {
+  const ACTIVE_PROJECT = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+
+  it("execCreateTicket stamps ctx.projectId, ignores legacy args.project_id", async () => {
+    const { fn, calls } = makeMockFetch([
+      { body: { data: { id: "t-1", number: 1, title: "Fix typo" } } },
+    ]);
+    const ctx = makeCtx({ projectId: ACTIVE_PROJECT, fetchFn: fn });
+    // Legacy callers may still ship `project_id` in args (Zod strips it).
+    // Even when supplied, the handler stamps ctx.projectId on the outgoing
+    // Board request — never the legacy arg.
+    const result = await executeSidekickReasoningTool("create_ticket", ctx, {
+      title: "Fix typo",
+      body: "details",
+      project_id: "legacy-from-history",
+    });
+    expect(result.ok).toBe(true);
+    const body = calls[0]!.body as { project_id: string };
+    expect(body.project_id).toBe(ACTIVE_PROJECT);
+  });
+
+  it("execCreateEpic stamps ctx.projectId on the epic, no per-child project_id", async () => {
+    const { fn, calls } = makeMockFetch([
+      { body: { data: { id: "ep-1", number: 100, title: "Notifications" } } },
+      { body: { data: { id: "c-1", number: 101, title: "Bell" } } },
+    ]);
+    const ctx = makeCtx({ projectId: ACTIVE_PROJECT, fetchFn: fn });
+    const result = await executeSidekickReasoningTool("create_epic", ctx, {
+      title: "Notifications",
+      body: "epic body",
+      children: [{ title: "Bell", body: "child body" }],
+    });
+    expect(result.ok).toBe(true);
+    // Epic body carries ctx.projectId.
+    const epicBody = calls[0]!.body as { project_id: string; ticket_type?: string };
+    expect(epicBody.project_id).toBe(ACTIVE_PROJECT);
+    // The Board's `createFromClassification` primitive propagates project_id
+    // from the epic to each child row, so children also land in the active
+    // project. The tool no longer accepts a per-child project_id on the
+    // surface — children inherit ctx.projectId uniformly.
+    const childBody = calls[1]!.body as { project_id: string };
+    expect(childBody.project_id).toBe(ACTIVE_PROJECT);
+  });
+
+  it("execStartConversationThread stamps ctx.projectId on the thread row", async () => {
+    const row = {
+      id: "th-1",
+      workspace_id: "00000000-0000-0000-0000-000000000001",
+      project_id: ACTIVE_PROJECT,
+      user_id: "11111111-1111-1111-1111-111111111111",
+      title: "Idea",
+      status: "draft",
+      classification: null,
+      pending_questions: [],
+      last_activity_at: "2026-04-23T00:00:00Z",
+      created_at: "2026-04-23T00:00:00Z",
+    };
+    const { fn, calls } = makeMockFetch([{ body: row }]);
+    const ctx = makeCtx({ projectId: ACTIVE_PROJECT, fetchFn: fn });
+    const result = await executeSidekickReasoningTool("start_conversation_thread", ctx, {
+      topic: "Idea",
+      initial_context: "rough",
+    });
+    expect(result.ok).toBe(true);
+    const body = calls[0]!.body as { project_id: string };
+    expect(body.project_id).toBe(ACTIVE_PROJECT);
   });
 });
