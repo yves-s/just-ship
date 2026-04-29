@@ -4,7 +4,9 @@ import { execSync } from "node:child_process";
 import { writeFileSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadProjectConfig, parseCliArgs, type TicketArgs } from "./lib/config.ts";
+import { loadProjectConfig, type TicketArgs } from "./lib/config.ts";
+import { parseArgs } from "./lib/cli-args.ts";
+import { dispatchSubcommand } from "./lib/local-mode.ts";
 import { loadAgents, loadOrchestratorPrompt, loadTriagePrompt, loadEnrichmentPrompt } from "./lib/load-agents.ts";
 import { createEventHooks, postPipelineEvent, postPipelineSummary, type EventConfig } from "./lib/event-hooks.ts";
 import { runQaWithFixLoop } from "./lib/qa-fix-loop.ts";
@@ -1381,14 +1383,51 @@ export async function resumePipeline(opts: ResumeOptions): Promise<PipelineResul
 const isMain = process.argv[1]?.endsWith("run.ts");
 if (isMain) {
   (async () => {
-    const projectDir = process.cwd();
-    let ticket: TicketArgs;
+    const cwd = process.cwd();
+    const rawArgs = process.argv.slice(2);
+
+    // Parse args — supports both subcommand and legacy positional shapes.
+    let parsed;
     try {
-      ticket = parseCliArgs(process.argv.slice(2));
+      parsed = parseArgs(rawArgs);
     } catch (e) {
       logger.error(e instanceof Error ? e.message : String(e));
       process.exit(1);
     }
+
+    if (parsed.kind === "subcommand") {
+      // New-style: bun run pipeline/run.ts develop|ship|recover|resume --ticket=<N> --mode=local [--worktree=<path>]
+      logger.info(
+        { subcommand: parsed.args.subcommand, ticketId: parsed.args.ticketId, mode: parsed.args.mode },
+        "Autonomous Pipeline (subcommand) starting",
+      );
+      try {
+        const result = await dispatchSubcommand(parsed.args, cwd);
+        const cliResult = {
+          status: result.status,
+          subcommand: parsed.args.subcommand,
+          ticket_id: parsed.args.ticketId,
+          branch: result.branch,
+          pr_url: result.prUrl,
+          message: result.message,
+          ...(result.status === "failed" ? { exit_code: result.exitCode } : {}),
+        };
+        logger.info(cliResult, "Pipeline result");
+        console.log(JSON.stringify(cliResult));
+        if (result.status === "failed") process.exit(result.exitCode || 1);
+        process.exit(0);
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        logger.error({ reason }, "Subcommand dispatch failed");
+        console.log(JSON.stringify({ status: "failed", message: reason, exit_code: 1 }));
+        process.exit(1);
+      }
+      return;
+    }
+
+    // ── Legacy positional path ──
+    const projectDir = cwd;
+    const ticket: TicketArgs = parsed.ticket;
     const config = loadProjectConfig(projectDir);
 
     // --- Banner ---
