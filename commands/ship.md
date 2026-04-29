@@ -23,7 +23,6 @@ fi
 WORKTREE_DIR="$REPO_ROOT/.worktrees/T-$TICKET_NUMBER"
 [ -d "$WORKTREE_DIR" ] || WORKTREE_DIR="$REPO_ROOT"
 
-# Use install-path .pipeline/run.sh — works in engine + consumer repos, no bun required.
-cd "$WORKTREE_DIR" && bash "$REPO_ROOT/.pipeline/run.sh" ship \
+cd "$WORKTREE_DIR" && bun run "$REPO_ROOT/pipeline/run.ts" ship \
   --ticket="$TICKET_NUMBER" --mode=local --worktree="$WORKTREE_DIR"
 ```
