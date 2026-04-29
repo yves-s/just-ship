@@ -21,7 +21,8 @@ if [ -z "$TICKET_NUMBER" ]; then
 fi
 
 WORKTREE_DIR="$REPO_ROOT/.worktrees/T-$TICKET_NUMBER"
-cd "$REPO_ROOT" && bun run "$REPO_ROOT/pipeline/run.ts" recover \
+# Use install-path .pipeline/run.sh — works in engine + consumer repos, no bun required.
+cd "$REPO_ROOT" && bash "$REPO_ROOT/.pipeline/run.sh" recover \
   --ticket="$TICKET_NUMBER" --mode=local --worktree="$WORKTREE_DIR"
 ```
 

@@ -25,6 +25,7 @@ if [ ! -d "$WORKTREE_DIR" ]; then
   ln -sf "$REPO_ROOT/.env.local" "$WORKTREE_DIR/.env.local" 2>/dev/null || true
 fi
 
-cd "$WORKTREE_DIR" && bun run "$REPO_ROOT/pipeline/run.ts" develop \
+# Use install-path .pipeline/run.sh — works in engine + consumer repos, no bun required.
+cd "$WORKTREE_DIR" && bash "$REPO_ROOT/.pipeline/run.sh" develop \
   --ticket="$TICKET_NUMBER" --mode=local --worktree="$WORKTREE_DIR"
 ```

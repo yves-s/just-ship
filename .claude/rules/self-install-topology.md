@@ -76,6 +76,44 @@ Das Flag ist eine bewusste Entscheidung, nicht ein Default. Wer es setzt, weiß 
 
 ✅ Änderung an einem Agent / Command / Skill: `agents/<agent>.md`, `commands/<command>.md`, `skills/<skill>/SKILL.md` editieren. `setup.sh --update` regeneriert den Install unter `.claude/…`.
 
+## Anti-Pattern: Source-Pfade in Runtime-Aufrufen
+
+Slash-Commands, Hooks, und Scripts, die in **Konsumer-Repos** laufen müssen (also überall außer dem Engine-Repo selbst), dürfen ausschließlich **Install-Pfade** aufrufen — niemals Source-Pfade.
+
+**Regel:**
+
+| Wenn du aufrufen willst… | Nutze | NICHT |
+|---|---|---|
+| Den Pipeline-Runner | `bash "$REPO_ROOT/.pipeline/run.sh"` (oder `npx tsx .pipeline/run.ts`) | `bun run pipeline/run.ts` |
+| Ein Pipeline-Script | `bash .claude/scripts/board-api.sh ...` | `bash scripts/board-api.sh ...` |
+| Eine Agent-Definition (im Subagent-Spawn) | `Read('.claude/agents/{role}.md')` | `Read('agents/{role}.md')` |
+| Eine Skill-Definition (im Subagent-Spawn) | `Read('.claude/skills/{name}.md')` | `Read('skills/{name}/SKILL.md')` |
+
+**Warum:** Konsumer-Repos (`just-ship-board`, `supaflow`, jedes mit `setup.sh` installierte Projekt) haben **nur** den Install-Pfad. Source-Pfade wie `pipeline/`, `agents/`, `commands/`, `skills/` existieren dort schlicht nicht. Ein Aufruf gegen den Source-Pfad schlägt mit `No such file or directory` fehl, sobald das Konsumer-Projekt denselben Code ausführt.
+
+Im **Engine-Repo** funktionieren beide Pfade (Source-Pfad existiert + Install-Pfad ist eine kopierte Kopie). Das ist genau die Falle: Ein Refactor, der nur im Engine-Repo getestet wird, sieht keinen Fehler — und bricht im selben Moment in jedem Konsumer-Projekt.
+
+**Negativ-Beispiel (Incident T-1060, 2026-04-29):**
+
+```markdown
+# commands/develop.md (T-1060, kaputt in Konsumer-Repos)
+cd "$WORKTREE_DIR" && bun run "$REPO_ROOT/pipeline/run.ts" develop \
+  --ticket="$TICKET_NUMBER" --mode=local --worktree="$WORKTREE_DIR"
+```
+
+Zwei Bugs in einer Zeile: Source-Pfad `pipeline/` existiert nicht in Konsumer-Repos, und `bun` ist nicht universell installiert. Direkt nach Merge tagesgleich in Supaflow reproduziert: `command not found: bun`, dann `no pipeline/run.ts`.
+
+**Positiv-Beispiel (T-1061-Fix):**
+
+```markdown
+# commands/develop.md (korrekt)
+# Use install-path .pipeline/run.sh — works in engine + consumer repos, no bun required.
+cd "$WORKTREE_DIR" && bash "$REPO_ROOT/.pipeline/run.sh" develop \
+  --ticket="$TICKET_NUMBER" --mode=local --worktree="$WORKTREE_DIR"
+```
+
+`.pipeline/run.sh` ist ein Wrapper, der `exec npx tsx "$(dirname "$0")/run.ts" "$@"` macht — Node statt Bun, kein zusätzliches Tool nötig. Existiert in beiden Welten (im Engine-Repo per `setup.sh`-Install-in-self, im Konsumer per regulärem `setup.sh`).
+
 ## Historischer Kontext — T-989
 
 Am 2026-04 hat jemand in `.pipeline/lib/load-skills.ts` editiert, die Änderung gestasht, auf einen anderen State gewechselt, und beim Stash-Pop gab es einen Konflikt. Der Konflikt wurde nie aufgelöst — die Stage-1/2/3-Einträge blieben im Index, sechs Rebase-Versuche scheiterten am selben Problem, zwei lokale Docs-Commits stauten sich, `git pull` blockierte tagelang. Die Reparatur (T-989) war trivial: `git checkout --ours`, die Stash-Version verwerfen, Rebase läuft durch. Aber das echte Problem war, dass die Source-vs-Install-Verwechslung überhaupt möglich war. Diese Rule plus der Commit-Hook (T-988) schließen die Tür.
@@ -85,6 +123,7 @@ Am 2026-04 hat jemand in `.pipeline/lib/load-skills.ts` editiert, die Änderung 
 1. Liegt die Datei unter einem der **drei Hook-blockierten Pfade** (`.pipeline/`, `.claude/.pipeline-version`, `.claude/.template-hash`)? Falls ja: **STOP.** Source-Pfad ist `pipeline/…` (ohne Punkt), bzw. bei den Stempel-Dateien gar keiner — dann ist die Änderung ein `setup.sh`-Job, kein manueller Edit.
 2. Liegt die Datei unter `.claude/agents/`, `.claude/commands/`, oder `.claude/skills/`? Falls ja: **STOP.** Der Hook warnt hier nicht, aber der Edit wird beim nächsten Update überschrieben. Edit-Punkt ist `agents/`, `commands/` oder `skills/<name>/SKILL.md`.
 3. Falls keines von beidem: freie Fahrt (`.claude/rules/`, `.claude/scripts/`, `.claude/hooks/`, oder direkt in den Source-Verzeichnissen).
+4. Schreibe ich gerade einen Pfad in einem Slash-Command, Hook, oder Script, der in einem Konsumer-Projekt laufen soll? Falls ja: `.pipeline/`, `.claude/scripts/`, `.claude/agents/`, `.claude/skills/` (Install-Pfade), niemals `pipeline/`, `agents/`, `commands/`, `skills/` (Source-Pfade). Source-Pfade existieren nur im Engine-Repo. Siehe Sektion "Anti-Pattern: Source-Pfade in Runtime-Aufrufen".
 
 ## Verwandte Regeln
 
