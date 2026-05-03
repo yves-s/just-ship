@@ -28,11 +28,26 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
 # Extract ticket number from branch: feature/T-551-foo → 551, fix/42-bar → 42
 TICKET_NUMBER=$(echo "$BRANCH" | sed -n 's|^[a-z]*/T\{0,1\}-\{0,1\}\([0-9][0-9]*\)-.*|\1|p')
 
-ACTIVE_TICKET_FILE="$CWD/.claude/.active-ticket"
+# Persist .active-ticket in BOTH the CWD and the project root so subagent hooks
+# can find it regardless of which CWD they run in (T-1063 worktree-aware sync).
+GIT_COMMON=$(git rev-parse --git-common-dir 2>/dev/null) || GIT_COMMON=""
+if [ -n "$GIT_COMMON" ] && [ "$GIT_COMMON" != ".git" ]; then
+  PROJECT_ROOT=$(cd "$GIT_COMMON/.." && pwd 2>/dev/null) || PROJECT_ROOT="$CWD"
+else
+  PROJECT_ROOT="$CWD"
+fi
+
+CWD_ACTIVE="$CWD/.claude/.active-ticket"
+PROJECT_ACTIVE="$PROJECT_ROOT/.claude/.active-ticket"
 
 if [ -n "$TICKET_NUMBER" ]; then
-  # Persist ticket number for this session
-  echo "$TICKET_NUMBER" > "$ACTIVE_TICKET_FILE"
+  # Persist ticket number for this session — both locations
+  mkdir -p "$CWD/.claude" 2>/dev/null || true
+  echo "$TICKET_NUMBER" > "$CWD_ACTIVE"
+  if [ "$CWD_ACTIVE" != "$PROJECT_ACTIVE" ]; then
+    mkdir -p "$PROJECT_ROOT/.claude" 2>/dev/null || true
+    echo "$TICKET_NUMBER" > "$PROJECT_ACTIVE"
+  fi
 
   # Set env var for all subsequent Bash tool calls in this session
   if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
@@ -44,8 +59,11 @@ if [ -n "$TICKET_NUMBER" ]; then
     bash "$CWD/.claude/scripts/send-event.sh" "$TICKET_NUMBER" orchestrator agent_started &
   fi
 else
-  # No ticket branch — clear active ticket
-  : > "$ACTIVE_TICKET_FILE" 2>/dev/null || true
+  # No ticket branch — clear active ticket in both locations
+  : > "$CWD_ACTIVE" 2>/dev/null || true
+  if [ "$CWD_ACTIVE" != "$PROJECT_ACTIVE" ]; then
+    : > "$PROJECT_ACTIVE" 2>/dev/null || true
+  fi
 fi
 
 exit 0

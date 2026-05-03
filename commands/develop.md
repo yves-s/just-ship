@@ -42,7 +42,13 @@ if [ ! -d "$WORKTREE_DIR" ]; then
   [ -f "$REPO_ROOT/.claude/settings.json" ] && [ ! -f "$WORKTREE_DIR/.claude/settings.json" ] && cp "$REPO_ROOT/.claude/settings.json" "$WORKTREE_DIR/.claude/settings.json"
   echo "▶ worktree — .worktrees/T-$TICKET_NUMBER erstellt"
 fi
+# Write .active-ticket to BOTH locations: main repo (for main-context CWD) AND
+# worktree (for subagent CWD). Subagent hooks read $CWD/.claude/.active-ticket;
+# without the worktree copy, agent_started/completed events are silently dropped.
+# See T-1063 (.active-ticket worktree-aware sync).
 echo "$TICKET_NUMBER" > "$REPO_ROOT/.claude/.active-ticket"
+mkdir -p "$WORKTREE_DIR/.claude"
+echo "$TICKET_NUMBER" > "$WORKTREE_DIR/.claude/.active-ticket"
 ```
 
 ### Schritt 3 — Status auf in_progress (falls Pipeline konfiguriert)

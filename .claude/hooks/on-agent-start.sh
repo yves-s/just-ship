@@ -30,10 +30,32 @@ if [ -n "$AGENT_ID" ]; then
   echo "$AGENT_TYPE" > "$AGENT_MAP_DIR/$SAFE_ID"
 fi
 
-ACTIVE_TICKET_FILE="$CWD/.claude/.active-ticket"
-[ ! -f "$ACTIVE_TICKET_FILE" ] && exit 0
+# Resolve ticket number from .active-ticket — try CWD first, fall back to project root.
+# In a worktree, CWD/.claude/.active-ticket may be empty/missing while the main
+# repo's copy holds the value (or vice versa). The project-root fallback uses
+# git-common-dir to find the main repo from inside a worktree, mirroring the
+# logic in on-session-end.sh. See T-1063 (.active-ticket worktree-aware sync).
+read_active_ticket() {
+  local file="$1"
+  [ -f "$file" ] || return 1
+  local val
+  val=$(cat "$file" 2>/dev/null | tr -d '[:space:]')
+  [ -n "$val" ] || return 1
+  printf '%s' "$val"
+}
 
-TICKET_NUMBER=$(cat "$ACTIVE_TICKET_FILE" 2>/dev/null | tr -d '[:space:]')
+TICKET_NUMBER=$(read_active_ticket "$CWD/.claude/.active-ticket" || true)
+
+if [ -z "$TICKET_NUMBER" ]; then
+  GIT_COMMON=$(cd "$CWD" && git rev-parse --git-common-dir 2>/dev/null) || true
+  if [ -n "$GIT_COMMON" ] && [ "$GIT_COMMON" != ".git" ]; then
+    PROJECT_ROOT=$(cd "$GIT_COMMON/.." && pwd 2>/dev/null) || PROJECT_ROOT=""
+    if [ -n "$PROJECT_ROOT" ] && [ "$PROJECT_ROOT" != "$CWD" ]; then
+      TICKET_NUMBER=$(read_active_ticket "$PROJECT_ROOT/.claude/.active-ticket" || true)
+    fi
+  fi
+fi
+
 [ -z "$TICKET_NUMBER" ] && exit 0
 
 # Send event (async, silent fail)

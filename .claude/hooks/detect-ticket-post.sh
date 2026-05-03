@@ -34,15 +34,25 @@ else
   PROJECT_ROOT=$(cd "$GIT_COMMON/.." && pwd)
 fi
 
-ACTIVE_TICKET_FILE="$PROJECT_ROOT/.claude/.active-ticket"
-CURRENT=$(cat "$ACTIVE_TICKET_FILE" 2>/dev/null | tr -d '[:space:]') || true
+PROJECT_ACTIVE="$PROJECT_ROOT/.claude/.active-ticket"
+CWD_ACTIVE="$CWD/.claude/.active-ticket"
+CURRENT=$(cat "$PROJECT_ACTIVE" 2>/dev/null | tr -d '[:space:]') || true
 
-# Only write if value changed
+# Only write if value changed (avoids unnecessary disk I/O).
+# Mirror to both project root AND CWD so subagent hooks find the value
+# regardless of which CWD they execute under (T-1063 worktree-aware sync).
 if [ "$TICKET_NUMBER" != "$CURRENT" ]; then
   if [ -n "$TICKET_NUMBER" ]; then
-    echo "$TICKET_NUMBER" > "$ACTIVE_TICKET_FILE"
+    echo "$TICKET_NUMBER" > "$PROJECT_ACTIVE"
+    if [ "$CWD_ACTIVE" != "$PROJECT_ACTIVE" ]; then
+      mkdir -p "$CWD/.claude" 2>/dev/null || true
+      echo "$TICKET_NUMBER" > "$CWD_ACTIVE" 2>/dev/null || true
+    fi
   else
-    : > "$ACTIVE_TICKET_FILE" 2>/dev/null || true
+    : > "$PROJECT_ACTIVE" 2>/dev/null || true
+    if [ "$CWD_ACTIVE" != "$PROJECT_ACTIVE" ]; then
+      : > "$CWD_ACTIVE" 2>/dev/null || true
+    fi
   fi
 fi
 
