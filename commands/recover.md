@@ -67,6 +67,13 @@ prompt: |
      - Uncommitted Änderungen → ab Build-Check (siehe Phase 3 in deiner orchestrator.md).
      - Commits aber kein PR → ab Push/PR-Erstellung.
      - PR existiert → ab Automated QA.
+  4b. Sync `.active-ticket` IN BEIDE Orte (Hauptrepo + Worktree), damit Subagent-Hooks (`on-agent-start.sh`, `on-agent-stop.sh`) Events ans Board senden können — ohne diesen Sync ist die Resume-Telemetrie unsichtbar (T-1063):
+     ```bash
+     REPO_ROOT=$(git -C .worktrees/T-{N} rev-parse --git-common-dir 2>/dev/null | xargs -I{} dirname {} 2>/dev/null) || REPO_ROOT=$(pwd)
+     echo "{N}" > "$REPO_ROOT/.claude/.active-ticket"
+     mkdir -p ".worktrees/T-{N}/.claude"
+     echo "{N}" > ".worktrees/T-{N}/.claude/.active-ticket"
+     ```
   5. Spawne die jeweils nötigen Subagents (devops bei Build-Failure, qa für Verifikation, code-review wenn nötig). Push + PR + Status-Patch wie gewohnt.
   6. Beende mit Reporter-Voice: `recover — T-{N} fortgesetzt ab {Phase}`.
 
@@ -79,7 +86,12 @@ prompt: |
        [ -n "$BRANCH" ] && git branch -D "$BRANCH" 2>/dev/null || true
      done
      ```
-  5. `.claude/.active-ticket` löschen falls = {N}.
+  5. `.claude/.active-ticket` in beiden Orten leeren falls = {N} (Hauptrepo + Worktree, falls Worktree-Pfad noch existiert):
+     ```bash
+     REPO_ROOT=$(git rev-parse --show-toplevel)
+     [ "$(cat "$REPO_ROOT/.claude/.active-ticket" 2>/dev/null | tr -d '[:space:]')" = "{N}" ] && : > "$REPO_ROOT/.claude/.active-ticket"
+     # Worktree wurde in Schritt 3 entfernt — kein zusätzlicher Cleanup nötig.
+     ```
   6. Falls Pipeline: Ticket auf `ready_to_develop` zurücksetzen + `pipeline_status: null` via `board-api.sh patch`.
   7. STOPP. NICHT `/develop` selbst aufrufen — der User entscheidet, wann.
   8. Beende mit Reporter-Voice: `recover — T-{N} zurückgesetzt, bereit für /develop`.

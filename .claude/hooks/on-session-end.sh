@@ -33,13 +33,24 @@ else
   PROJECT_ROOT="$CWD"
 fi
 
-ACTIVE_TICKET_FILE="$PROJECT_ROOT/.claude/.active-ticket"
-[ ! -f "$ACTIVE_TICKET_FILE" ] && exit 0
+# Resolve ticket number — prefer project-root copy, fall back to CWD copy.
+# In a worktree, CWD has its own .active-ticket (T-1063 sync). Either location
+# may carry the active ticket; we read whichever has a value.
+PROJECT_ACTIVE="$PROJECT_ROOT/.claude/.active-ticket"
+CWD_ACTIVE="$CWD/.claude/.active-ticket"
 
-TICKET_NUMBER=$(cat "$ACTIVE_TICKET_FILE" 2>/dev/null | tr -d '[:space:]')
+TICKET_NUMBER=""
+if [ -f "$PROJECT_ACTIVE" ]; then
+  TICKET_NUMBER=$(cat "$PROJECT_ACTIVE" 2>/dev/null | tr -d '[:space:]')
+fi
+if [ -z "$TICKET_NUMBER" ] && [ -f "$CWD_ACTIVE" ]; then
+  TICKET_NUMBER=$(cat "$CWD_ACTIVE" 2>/dev/null | tr -d '[:space:]')
+fi
 
+# CRITICAL: send "completed" event BEFORE clearing .active-ticket. If clear
+# happens first, a parallel SubagentStop firing concurrently would see an
+# empty file and silently drop its event. Order matters here. (T-1063 AC#3)
 if [ -n "$TICKET_NUMBER" ]; then
-  # Send orchestrator completed event (sync — SessionEnd has short timeout)
   if [ -f "$PROJECT_ROOT/.claude/scripts/send-event.sh" ]; then
     bash "$PROJECT_ROOT/.claude/scripts/send-event.sh" "$TICKET_NUMBER" orchestrator completed
   fi
@@ -52,7 +63,12 @@ if [ -n "$TICKET_NUMBER" ]; then
   fi
 fi
 
-# Clean up active ticket
-: > "$ACTIVE_TICKET_FILE" 2>/dev/null || true
+# Clean up active ticket in BOTH locations (project root + worktree CWD).
+# Without the worktree cleanup, a subsequent session reusing the same worktree
+# would see a stale ticket number and emit events for the wrong ticket.
+[ -f "$PROJECT_ACTIVE" ] && : > "$PROJECT_ACTIVE" 2>/dev/null || true
+if [ "$CWD_ACTIVE" != "$PROJECT_ACTIVE" ] && [ -f "$CWD_ACTIVE" ]; then
+  : > "$CWD_ACTIVE" 2>/dev/null || true
+fi
 
 exit 0

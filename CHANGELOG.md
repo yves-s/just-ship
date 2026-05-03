@@ -1,5 +1,11 @@
 # Changelog
 
+## [T-1063] .active-ticket worktree-aware sync — Subagent-Telemetrie kommt am Board an — 2026-05-03
+
+**Bereiche:** Pipeline, Shared
+
+Behebt drei Bugs in derselben Kausalkette, die nach jedem `/develop`-Lauf zu leeren `assigned_agents`, `summary: null` und `total_tokens: 0` auf dem Board geführt haben. `commands/develop.md` schreibt `.active-ticket` jetzt in **beide** Orte (Hauptrepo + Worktree), damit Subagent-Hooks (`on-agent-start.sh`, `on-agent-stop.sh`) Telemetrie ans Board schicken können — egal aus welchem CWD sie feuern. Die Hooks haben zusätzlich einen Project-Root-Fallback bekommen (via `git rev-parse --git-common-dir`), der die Brücke zwischen Worktree-CWD und Hauptrepo-`.active-ticket` schließt. `commands/recover.md` syncht beim Resume ebenfalls beide Orte. `on-session-end.sh` sendet das `completed`-Event garantiert vor dem Löschen der Datei und räumt beide Orte auf. `detect-ticket.sh` und `detect-ticket-post.sh` schreiben konsistent in beide Orte. Neuer Test `active-ticket-sync.test.sh` mit 9 ACs deckt alle Pfade ab — alle bestehenden Bash-Tests bleiben grün (4 unrelated baseline failures unberührt). Folge-Ticket nötig falls die Server-Akkumulation in `assigned_agents`/`summary`/`total_tokens` trotz korrekter Events leer bleibt.
+
 ## [T-1043] Remove ~/.just-ship/config.json — config is project-local — 2026-05-03
 
 **Bereiche:** Pipeline, Shared, Docs
